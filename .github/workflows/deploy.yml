@@ -1,0 +1,29 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test -- --run
+      - run: npm run build
+      - name: Deploy Firebase
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "$FIREBASE_SERVICE_ACCOUNT" > "$HOME/firebase-service-account.json"
+            export GOOGLE_APPLICATION_CREDENTIALS="$HOME/firebase-service-account.json"
+            npx firebase-tools deploy --only hosting,firestore:rules,firestore:indexes --project "$GITHUB_REPOSITORY_OWNER"
+          else
+            echo "Missing Firebase credentials; skipping deployment."
+          fi

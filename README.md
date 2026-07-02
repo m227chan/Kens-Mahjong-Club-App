@@ -1,97 +1,49 @@
 # Ken's Mahjong Club Score Tracker
 
-A free, mobile-first web app for tracking scores in any Mahjong group. Works with any number of players. Syncs to Google Sheets.
+A mobile-first Mahjong club app rebuilt around Firebase Auth, Firestore, and a shared ELO engine.
 
-## Features
+## What changed
 
-- 🏆 Live leaderboard with dynamic titles
-- ➕ Score entry with zero-sum validation
-- 📊 Cumulative score and rank bump charts
-- 🀄 HK Mahjong fan→points calculator
-- 👤 Add new players at any time
+- Firebase-backed leaderboard and player records
+- Auth-required game entry and player creation
+- Shared ELO and title-band logic in one stats module
+- Dashboard, analytics, and seat-arrangement views
+- Migration script for importing the old sheet export
 
-## Title System (Dynamic)
+## Local setup
 
-Titles are assigned based on rank out of total players:
-
-| Rank        | Title    | Emoji |
-|-------------|----------|-------|
-| 1st         | Messiah  | 👑    |
-| 2nd         | Master   | 🏆    |
-| Middle      | Monk     | 🧘    |
-| 3rd to last | Minion   | 🪄    |
-| 2nd to last | Mongrel  | 🐶    |
-| Last        | Moron    | 🤡    |
-
-New players always start as Monk.
-
-## Setup Your Own Group
-
-### 1. Google Sheets Setup
-
-Create a sheet with this structure:
-```
-Row 1 (headers): Datetime | Alice | Bob | Charlie | Diana | ...
-```
-
-Add as many player columns as your group needs. Share the sheet with your service account email (Editor access).
-
-### 2. Google Service Account
-
-- Go to [console.cloud.google.com](https://console.cloud.google.com)
-- Create project → Enable Google Sheets API
-- Create Service Account → Download JSON key
-- Share your Google Sheet with the service account email
-
-### 3. Local Development
+1. Create a Firebase project.
+2. Enable Authentication with Google sign-in and Firestore.
+3. Copy [.env.example](.env.example) to .env.local and fill in your Firebase config values.
+4. Install dependencies:
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/Ken-s-Mahjong-Club-Score-Tracker
-cd Ken-s-Mahjong-Club-Score-Tracker
 npm install
-cp .env.example .env.local
-# Fill in your values in .env.local
+```
+
+5. Start the app:
+
+```bash
 npm run dev
 ```
 
-### 4. Deploy to Vercel (Free)
+## Deploy
 
-- Push repo to GitHub
-- Connect repo at [vercel.com](https://vercel.com)
-- Add environment variables:
-  - `GOOGLE_SERVICE_ACCOUNT_KEY` → paste your JSON key (stringified)
-  - `NEXT_PUBLIC_SHEET_ID` → your Google Sheet ID
-- Deploy → share the *.vercel.app URL with your group
-
-### 5. Add to Home Screen
-
-- **iOS Safari**: Share → Add to Home Screen
-- **Android Chrome**: Menu → Add to Home Screen
-
-## Example Data (for testing)
-
-Players: Alice, Bob, Charlie, Diana
-Sheet ID: `EXAMPLE_SHEET_ID_FOR_TESTING`
-
-*All example data — not real players or real sheets*
-
-## Development
+- Install the Firebase CLI.
+- Run `firebase login`.
+- Replace the project ID in [.firebaserc](.firebaserc).
+- Deploy hosting, rules, and indexes:
 
 ```bash
-npm run dev      # Start development server
-npm run build    # Build for production
-npm run test     # Run tests
-npm run lint     # Run ESLint
+firebase deploy --only hosting,firestore:rules,firestore:indexes
 ```
 
-## Architecture
+## Migration
 
-- **Frontend**: Next.js 14 (App Router), TypeScript, Tailwind CSS
-- **Backend**: Next.js API routes (serverless)
-- **Data**: Google Sheets API v4
-- **Charts**: Recharts
-- **Deployment**: Vercel (static export)
+Use the script with a game CSV and leaderboard CSV export:
 
-## License
+```bash
+npx tsx scripts/migrate-from-sheet.ts path/to/games.csv path/to/leaderboard.csv
+```
 
-MIT
+The migration refuses to run if the Firestore games collection already contains documents.
