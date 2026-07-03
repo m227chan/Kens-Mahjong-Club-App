@@ -28,11 +28,11 @@ function MiniBarChart({ data, color = '#667eea' }: { data: Array<{ label: string
   )
 }
 
-export default function AnalyticsPanel({ clubId }: { clubId: string }) {
+export default function AnalyticsPanel({ clubId, seasonNumber }: { clubId: string; seasonNumber?: number }) {
   const [playerStats, setPlayerStats] = useState<PlayerStatsDoc[]>([])
   const [players, setPlayers] = useState<PlayerDoc[]>([])
 
-  useEffect(() => subscribePlayerStats(clubId, (nextStats) => setPlayerStats(nextStats)), [clubId])
+  useEffect(() => subscribePlayerStats(clubId, (nextStats) => setPlayerStats(nextStats), seasonNumber), [clubId, seasonNumber])
   useEffect(() => subscribePlayers(clubId, (nextPlayers) => setPlayers(nextPlayers)), [clubId])
 
   const top = useMemo(() => {

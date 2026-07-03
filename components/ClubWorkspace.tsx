@@ -4,20 +4,25 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import AnalyticsPanel from '@/components/AnalyticsPanel'
 import DashboardContent from '@/components/DashboardContent'
+import GameLogsModal from '@/components/GameLogsModal'
 import { LeaderboardPanel } from '@/components/Leaderboard'
 import SessionManager from '@/components/SessionManager'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   createPlayer,
   ensureConfig,
+  ensureSeasons,
   removePlayer,
   resolveJoinRequest,
+  setActiveSeason,
+  startNewSeason,
   subscribeClub,
   subscribeClubMembers,
   subscribeJoinRequests,
-  subscribePlayers
+  subscribePlayers,
+  subscribeSeasons
 } from '@/lib/firestore'
-import type { ClubDoc, ClubMembershipDoc, JoinRequestDoc, PlayerDoc } from '@/lib/types'
+import type { ClubDoc, ClubMembershipDoc, JoinRequestDoc, PlayerDoc, SeasonDoc } from '@/lib/types'
 
 const iconChoices = ['🀄', '🎴', '🏆', '⭐', '🔥', '🌙', '🍀', '🐉', '🧧', '💎', 'A', 'B', 'C', 'J', 'K', 'M']
 
@@ -45,13 +50,19 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [copied, setCopied] = useState(false)
   const [rosterOpen, setRosterOpen] = useState(false)
   const [analyticsOpen, setAnalyticsOpen] = useState(false)
+  const [gameLogsOpen, setGameLogsOpen] = useState(false)
+  const [seasons, setSeasons] = useState<SeasonDoc[]>([])
+  const [seasonAction, setSeasonAction] = useState(false)
 
   const isManager = membership.role === 'manager'
   const usedIconKeys = new Set(players.map((player) => player.icon.trim().toLocaleLowerCase()))
+  const latestSeasonNumber = seasons.length ? seasons[seasons.length - 1].seasonNumber : club?.activeSeasonNumber ?? 1
+  const activeSeasonNumber = club?.activeSeasonNumber ?? latestSeasonNumber
 
   useEffect(() => subscribeClub(clubId, setClub), [clubId])
   useEffect(() => subscribeClubMembers(clubId, setMembers), [clubId])
   useEffect(() => subscribePlayers(clubId, setPlayers), [clubId])
+  useEffect(() => subscribeSeasons(clubId, setSeasons), [clubId])
   useEffect(() => {
     if (!isManager) {
       setJoinRequests([])
@@ -62,7 +73,8 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
 
   useEffect(() => {
     ensureConfig(clubId).catch(() => undefined)
-  }, [clubId])
+    ensureSeasons(clubId, user?.uid ?? 'system').catch(() => undefined)
+  }, [clubId, user?.uid])
 
   const addPlayer = async () => {
     setPlayerMessage(null)
@@ -114,6 +126,29 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
     window.setTimeout(() => setCopied(false), 1800)
   }
 
+  const changeSeason = async (value: string) => {
+    if (!user) return
+    if (value === 'new') {
+      if (!window.confirm('Start a new season? Current season data will remain available, and the active session will reset.')) return
+      setSeasonAction(true)
+      try {
+        await startNewSeason(clubId, { createdBy: user.uid })
+      } finally {
+        setSeasonAction(false)
+      }
+      return
+    }
+
+    const seasonNumber = Number(value)
+    if (!seasonNumber || seasonNumber === activeSeasonNumber) return
+    setSeasonAction(true)
+    try {
+      await setActiveSeason(clubId, seasonNumber)
+    } finally {
+      setSeasonAction(false)
+    }
+  }
+
   return (
     <main className="px-4 py-6">
       <div className="mb-5 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
@@ -124,6 +159,17 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           <h1 className="mt-2 text-2xl font-black text-slate-950">{club?.name ?? membership.clubName}</h1>
         </div>
         <div className="flex flex-wrap gap-2">
+          <select
+            value={activeSeasonNumber}
+            onChange={(event) => changeSeason(event.target.value)}
+            disabled={seasonAction}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+          >
+            {seasons.map((season) => (
+              <option key={season.id} value={season.seasonNumber}>{season.name}</option>
+            ))}
+            <option value="new">Start new season...</option>
+          </select>
           <button
             type="button"
             onClick={copyShare}
@@ -147,6 +193,13 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-indigo-500"
           >
             Analytics
+          </button>
+          <button
+            type="button"
+            onClick={() => setGameLogsOpen(true)}
+            className="rounded-lg bg-sky-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-sky-500"
+          >
+            Game logs
           </button>
         </div>
       </div>
@@ -194,11 +247,11 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             </div>
           </section>
 
-          <LeaderboardPanel clubId={clubId} />
+          <LeaderboardPanel clubId={clubId} seasonNumber={activeSeasonNumber} />
         </div>
 
         <aside className="xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto">
-          <SessionManager clubId={clubId} />
+          <SessionManager clubId={clubId} seasonNumber={activeSeasonNumber} />
         </aside>
       </div>
 
@@ -325,12 +378,22 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             </div>
             <div className="overflow-y-auto bg-slate-50 p-5">
               <div className="space-y-5">
-                <DashboardContent clubId={clubId} />
-                <AnalyticsPanel clubId={clubId} />
+                <DashboardContent clubId={clubId} seasonNumber={activeSeasonNumber} />
+                <AnalyticsPanel clubId={clubId} seasonNumber={activeSeasonNumber} />
               </div>
             </div>
           </div>
         </div>
+      ) : null}
+
+      {gameLogsOpen && user ? (
+        <GameLogsModal
+          clubId={clubId}
+          seasons={seasons}
+          currentSeason={activeSeasonNumber}
+          userId={user.uid}
+          onClose={() => setGameLogsOpen(false)}
+        />
       ) : null}
     </main>
   )

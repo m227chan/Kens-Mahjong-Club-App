@@ -14,12 +14,12 @@ function formatWinRate(wins: number, games: number) {
   return `${Math.round((wins / games) * 100)}%`
 }
 
-export function LeaderboardPanel({ clubId, compact = false }: { clubId: string; compact?: boolean }) {
+export function LeaderboardPanel({ clubId, seasonNumber, compact = false }: { clubId: string; seasonNumber?: number; compact?: boolean }) {
   const [players, setPlayers] = useState<PlayerDoc[]>([])
   const [stats, setStats] = useState<PlayerStatsDoc[]>([])
 
   useEffect(() => subscribePlayers(clubId, (nextPlayers) => setPlayers(nextPlayers)), [clubId])
-  useEffect(() => subscribePlayerStats(clubId, (nextStats) => setStats(nextStats)), [clubId])
+  useEffect(() => subscribePlayerStats(clubId, (nextStats) => setStats(nextStats), seasonNumber), [clubId, seasonNumber])
 
   const rows = useMemo(() => {
     return stats

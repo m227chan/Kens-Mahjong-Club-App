@@ -61,7 +61,7 @@ const initialWinState: WinState = {
   fan: null
 }
 
-export default function SessionManager({ clubId }: { clubId: string }) {
+export default function SessionManager({ clubId, seasonNumber }: { clubId: string; seasonNumber: number }) {
   const { user, loading, isAdmin } = useAuth()
   const [players, setPlayers] = useState<PlayerDoc[]>([])
   const [session, setSession] = useState<SessionState>(initialSession)
@@ -93,6 +93,7 @@ export default function SessionManager({ clubId }: { clubId: string }) {
     const playerUnsub = subscribePlayers(clubId, (nextPlayers) => setPlayers(nextPlayers))
     const sessionUnsub = subscribeActiveSession(
       clubId,
+      seasonNumber,
       (nextSession) => {
         if (nextSession && nextSession.isActive) {
           setSession({
@@ -127,7 +128,7 @@ export default function SessionManager({ clubId }: { clubId: string }) {
       playerUnsub()
       sessionUnsub()
     }
-  }, [clubId])
+  }, [clubId, seasonNumber])
 
   useEffect(() => {
     if (!toast) return
@@ -287,7 +288,8 @@ export default function SessionManager({ clubId }: { clubId: string }) {
         const sessionId = await createSession(clubId, {
           createdBy: user?.uid ?? 'anonymous',
           participants: setupParticipants,
-          tableCount: setupTableCount
+          tableCount: setupTableCount,
+          seasonNumber
         })
         setSession({ ...nextSession, id: sessionId })
       }
@@ -366,6 +368,7 @@ export default function SessionManager({ clubId }: { clubId: string }) {
       await createGame(clubId, {
         entries: Object.entries(scores).map(([playerId, score]) => ({ playerId, score })),
         createdBy: user.uid,
+        seasonNumber,
         tableId,
         winType: winState.winType === 'self' ? 'self_draw' : 'discard',
         loserPlayerId: winState.winType === 'discard' ? winState.loser : null,
@@ -397,6 +400,7 @@ export default function SessionManager({ clubId }: { clubId: string }) {
       await createGame(clubId, {
         entries: Object.entries(scores).map(([playerId, score]) => ({ playerId, score })),
         createdBy: user.uid,
+        seasonNumber,
         tableId,
         winType: 'draw',
         loserPlayerId: null,

@@ -17,7 +17,7 @@ function timestampMillis(value: GameDoc['datetime'] | EloEventDoc['datetime']) {
   return value?.toMillis?.() ?? 0
 }
 
-export default function DashboardContent({ clubId }: { clubId: string }) {
+export default function DashboardContent({ clubId, seasonNumber }: { clubId: string; seasonNumber?: number }) {
   const [games, setGames] = useState<GameDoc[]>([])
   const [playerStats, setPlayerStats] = useState<PlayerStatsDoc[]>([])
   const [players, setPlayers] = useState<PlayerDoc[]>([])
@@ -25,9 +25,9 @@ export default function DashboardContent({ clubId }: { clubId: string }) {
   const [gameRange, setGameRange] = useState(50)
 
   useEffect(() => subscribePlayers(clubId, (nextPlayers) => setPlayers(nextPlayers)), [clubId])
-  useEffect(() => subscribeGames(clubId, (nextGames) => setGames(nextGames)), [clubId])
-  useEffect(() => subscribePlayerStats(clubId, (nextStats) => setPlayerStats(nextStats)), [clubId])
-  useEffect(() => subscribeEloEvents(clubId, (nextEvents) => setEloEvents(nextEvents)), [clubId])
+  useEffect(() => subscribeGames(clubId, (nextGames) => setGames(nextGames), seasonNumber), [clubId, seasonNumber])
+  useEffect(() => subscribePlayerStats(clubId, (nextStats) => setPlayerStats(nextStats), seasonNumber), [clubId, seasonNumber])
+  useEffect(() => subscribeEloEvents(clubId, (nextEvents) => setEloEvents(nextEvents), seasonNumber), [clubId, seasonNumber])
 
   const topPlayers = useMemo(() => {
     return playerStats

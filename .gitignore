@@ -73,6 +73,8 @@ firebase-debug.log
 
 # Workspace metadata
 .specify/
+.agents/
+.codex/
 
 # Environment variables
 .env.local
