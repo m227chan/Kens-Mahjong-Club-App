@@ -9,12 +9,12 @@ function formatSigned(value: number) {
   return String(value)
 }
 
-export function LeaderboardPanel({ compact = false }: { compact?: boolean }) {
+export function LeaderboardPanel({ clubId, compact = false }: { clubId: string; compact?: boolean }) {
   const [players, setPlayers] = useState<PlayerDoc[]>([])
   const [stats, setStats] = useState<PlayerStatsDoc[]>([])
 
-  useEffect(() => subscribePlayers((nextPlayers) => setPlayers(nextPlayers)), [])
-  useEffect(() => subscribePlayerStats((nextStats) => setStats(nextStats)), [])
+  useEffect(() => subscribePlayers(clubId, (nextPlayers) => setPlayers(nextPlayers)), [clubId])
+  useEffect(() => subscribePlayerStats(clubId, (nextStats) => setStats(nextStats)), [clubId])
 
   const rows = useMemo(() => {
     return stats
@@ -93,7 +93,7 @@ export function LeaderboardPanel({ compact = false }: { compact?: boolean }) {
 export default function Leaderboard() {
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-4 px-4 py-6">
-      <LeaderboardPanel />
+      <div />
     </main>
   )
 }

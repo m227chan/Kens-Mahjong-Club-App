@@ -61,7 +61,7 @@ const initialWinState: WinState = {
   fan: null
 }
 
-export default function SessionManager() {
+export default function SessionManager({ clubId }: { clubId: string }) {
   const { user, loading, isAdmin } = useAuth()
   const [players, setPlayers] = useState<PlayerDoc[]>([])
   const [session, setSession] = useState<SessionState>(initialSession)
@@ -90,8 +90,9 @@ export default function SessionManager() {
   const dragSourceRef = useRef<string | null>(null)
 
   useEffect(() => {
-    const playerUnsub = subscribePlayers((nextPlayers) => setPlayers(nextPlayers))
+    const playerUnsub = subscribePlayers(clubId, (nextPlayers) => setPlayers(nextPlayers))
     const sessionUnsub = subscribeActiveSession(
+      clubId,
       (nextSession) => {
         if (nextSession && nextSession.isActive) {
           setSession({
@@ -117,7 +118,7 @@ export default function SessionManager() {
         setSession(initialSession)
         setSetupParticipants([])
         setSetupTableCount(1)
-        setSetupError('Unable to load sessions. Check Firestore rules for the sessions collection.')
+          setSetupError('Unable to load sessions for this club.')
         setPage('setup')
       }
     )
@@ -126,7 +127,7 @@ export default function SessionManager() {
       playerUnsub()
       sessionUnsub()
     }
-  }, [])
+  }, [clubId])
 
   useEffect(() => {
     if (!toast) return
@@ -231,7 +232,7 @@ export default function SessionManager() {
     setSession(nextSession)
     if (!nextSession.id) return
     try {
-      await updateSession(nextSession.id, {
+      await updateSession(clubId, nextSession.id, {
         tableCount: nextSession.tableCount,
         participants: nextSession.participants,
         tables: nextSession.tables,
@@ -275,7 +276,7 @@ export default function SessionManager() {
     setSavingSession(true)
     try {
       if (session.active && session.id) {
-        await updateSession(session.id, {
+        await updateSession(clubId, session.id, {
           tableCount: setupTableCount,
           participants: setupParticipants,
           tables: nextTables,
@@ -283,7 +284,7 @@ export default function SessionManager() {
         })
         setSession(nextSession)
       } else {
-        const sessionId = await createSession({
+        const sessionId = await createSession(clubId, {
           createdBy: user?.uid ?? 'anonymous',
           participants: setupParticipants,
           tableCount: setupTableCount
@@ -362,7 +363,7 @@ export default function SessionManager() {
 
     setSavingGameTable(tableId)
     try {
-      await createGame({
+      await createGame(clubId, {
         entries: Object.entries(scores).map(([playerId, score]) => ({ playerId, score })),
         createdBy: user.uid,
         tableId,
@@ -393,7 +394,7 @@ export default function SessionManager() {
 
     setSavingGameTable(tableId)
     try {
-      await createGame({
+      await createGame(clubId, {
         entries: Object.entries(scores).map(([playerId, score]) => ({ playerId, score })),
         createdBy: user.uid,
         tableId,
@@ -415,7 +416,7 @@ export default function SessionManager() {
     if (!window.confirm('Clear this session? Table assignments and participation will be reset.')) return
     if (session.id) {
       try {
-        await closeSession(session.id)
+        await closeSession(clubId, session.id)
       } catch {
         showToast('Unable to reset session.')
         return
@@ -700,10 +701,10 @@ export default function SessionManager() {
   const handleDragStart = (event: React.DragEvent<HTMLDivElement>, playerId: string, source: string) => {
     dragPlayerRef.current = playerId
     dragSourceRef.current = source
+    const chip = event.currentTarget.closest('.player-chip')
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('text/plain', playerId)
     setTimeout(() => {
-      const chip = event.currentTarget.closest('.player-chip')
       chip?.classList.add('dragging')
     }, 0)
     closeAllWinPanels()
@@ -1667,8 +1668,8 @@ export default function SessionManager() {
         </div>
       ) : null}
 
-      <div id="infoOverlay" style={{ display: infoOpen ? 'block' : 'none', position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 500, padding: 16, overflowY: 'auto' }}>
-        <div style={{ background: 'white', borderRadius: 14, overflow: 'hidden', maxWidth: 380, margin: '0 auto' }}>
+      <div id="infoOverlay" style={{ display: infoOpen ? 'block' : 'none', position: 'fixed', top: 72, right: 0, bottom: 0, left: 0, background: 'rgba(0,0,0,0.4)', zIndex: 10000, padding: 16, overflowY: 'auto' }}>
+        <div style={{ background: 'white', borderRadius: 14, overflow: 'hidden', maxWidth: 380, maxHeight: 'calc(100vh - 104px)', margin: '0 auto', transform: 'translateX(-32px)', display: 'flex', flexDirection: 'column' }}>
           <div style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', padding: '16px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <div style={{ fontSize: 16, fontWeight: 800, color: 'white' }}>🀄 Session Manager</div>
@@ -1676,7 +1677,7 @@ export default function SessionManager() {
             </div>
             <button type="button" onClick={() => setInfoOpen(false)} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, color: 'white', fontSize: 18, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
           </div>
-          <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto' }}>
             <div className="info-section">
               <div className="info-icon">📋</div>
               <div>

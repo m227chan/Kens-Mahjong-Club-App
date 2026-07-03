@@ -23,12 +23,12 @@ function MiniBarChart({ data, color = '#667eea' }: { data: Array<{ label: string
   )
 }
 
-export default function AnalyticsPanel() {
+export default function AnalyticsPanel({ clubId }: { clubId: string }) {
   const [playerStats, setPlayerStats] = useState<PlayerStatsDoc[]>([])
   const [players, setPlayers] = useState<PlayerDoc[]>([])
 
-  useEffect(() => subscribePlayerStats((nextStats) => setPlayerStats(nextStats)), [])
-  useEffect(() => subscribePlayers((nextPlayers) => setPlayers(nextPlayers)), [])
+  useEffect(() => subscribePlayerStats(clubId, (nextStats) => setPlayerStats(nextStats)), [clubId])
+  useEffect(() => subscribePlayers(clubId, (nextPlayers) => setPlayers(nextPlayers)), [clubId])
 
   const top = useMemo(() => {
     return [...playerStats].sort((a, b) => a.eloRank - b.eloRank).slice(0, 8)

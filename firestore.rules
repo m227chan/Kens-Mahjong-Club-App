@@ -3,6 +3,85 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
     function isAdmin() { return isSignedIn() && request.auth.token.admin == true; }
+    function isClubMember(clubId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/clubs/$(clubId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/clubs/$(clubId)/members/$(request.auth.uid)).data.active == true;
+    }
+    function isClubManager(clubId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/clubs/$(clubId))
+        && get(/databases/$(database)/documents/clubs/$(clubId)).data.managerUid == request.auth.uid;
+    }
+
+    match /users/{uid} {
+      allow read, create, update: if isSignedIn() && request.auth.uid == uid;
+      allow delete: if false;
+
+      match /clubs/{clubId} {
+        allow read: if isSignedIn() && request.auth.uid == uid;
+        allow create: if isSignedIn() && (request.auth.uid == uid || isClubManager(clubId));
+        allow update: if isSignedIn() && (request.auth.uid == uid || isClubManager(clubId));
+        allow delete: if false;
+      }
+    }
+
+    match /mail/{id} {
+      allow create: if isSignedIn();
+      allow read, update, delete: if false;
+    }
+
+    match /clubs/{clubId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.managerUid == request.auth.uid;
+      allow update: if isClubManager(clubId);
+      allow delete: if false;
+
+      match /members/{uid} {
+        allow read: if isClubMember(clubId) || (isSignedIn() && request.auth.uid == uid);
+        allow create: if isSignedIn() && (request.auth.uid == uid || isClubManager(clubId));
+        allow update: if isSignedIn() && (request.auth.uid == uid || isClubManager(clubId));
+        allow delete: if false;
+      }
+
+      match /joinRequests/{uid} {
+        allow read: if isClubManager(clubId) || (isSignedIn() && request.auth.uid == uid);
+        allow create, update: if isSignedIn() && (request.auth.uid == uid || isClubManager(clubId));
+        allow delete: if false;
+      }
+
+      match /players/{id} {
+        allow read: if isClubMember(clubId);
+        allow create, update: if isClubMember(clubId);
+        allow delete: if false;
+      }
+      match /games/{id} {
+        allow read: if isClubMember(clubId);
+        allow create, update: if isClubMember(clubId);
+        allow delete: if isClubManager(clubId);
+      }
+      match /eloEvents/{id} {
+        allow read: if isClubMember(clubId);
+        allow write: if isClubMember(clubId);
+      }
+      match /playerStats/{id} {
+        allow read: if isClubMember(clubId);
+        allow write: if isClubMember(clubId);
+      }
+      match /tableArrangements/{id} {
+        allow read: if isClubMember(clubId);
+        allow write: if isClubMember(clubId);
+      }
+      match /sessions/{id} {
+        allow read: if isClubMember(clubId);
+        allow create, update: if isClubMember(clubId);
+        allow delete: if isClubManager(clubId);
+      }
+      match /appConfig/{id} {
+        allow read: if isClubMember(clubId);
+        allow write: if isClubManager(clubId);
+      }
+    }
 
     match /players/{id} {
       allow read: if true;

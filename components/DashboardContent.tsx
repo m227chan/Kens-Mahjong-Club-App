@@ -7,16 +7,16 @@ import type { EloEventDoc, GameDoc, PlayerDoc, PlayerStatsDoc } from '@/lib/type
 
 const palette = ['#0A84FF', '#34D399', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#F97316', '#64748b']
 
-export default function DashboardContent() {
+export default function DashboardContent({ clubId }: { clubId: string }) {
   const [games, setGames] = useState<GameDoc[]>([])
   const [playerStats, setPlayerStats] = useState<PlayerStatsDoc[]>([])
   const [players, setPlayers] = useState<PlayerDoc[]>([])
   const [eloEvents, setEloEvents] = useState<EloEventDoc[]>([])
 
-  useEffect(() => subscribePlayers((nextPlayers) => setPlayers(nextPlayers)), [])
-  useEffect(() => subscribeGames((nextGames) => setGames(nextGames)), [])
-  useEffect(() => subscribePlayerStats((nextStats) => setPlayerStats(nextStats)), [])
-  useEffect(() => subscribeEloEvents((nextEvents) => setEloEvents(nextEvents)), [])
+  useEffect(() => subscribePlayers(clubId, (nextPlayers) => setPlayers(nextPlayers)), [clubId])
+  useEffect(() => subscribeGames(clubId, (nextGames) => setGames(nextGames)), [clubId])
+  useEffect(() => subscribePlayerStats(clubId, (nextStats) => setPlayerStats(nextStats)), [clubId])
+  useEffect(() => subscribeEloEvents(clubId, (nextEvents) => setEloEvents(nextEvents)), [clubId])
 
   const topPlayers = useMemo(() => {
     return playerStats
