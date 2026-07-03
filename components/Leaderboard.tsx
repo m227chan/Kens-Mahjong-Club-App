@@ -37,18 +37,18 @@ export function LeaderboardPanel({ compact = false }: { compact?: boolean }) {
   const visibleRows = compact ? rows.slice(0, 8) : rows
 
   return (
-    <section className="overflow-hidden rounded-lg border border-zinc-200/70 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <header className="border-b border-zinc-200/70 px-5 py-4 dark:border-zinc-800">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-500">Leaderboard</p>
+    <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <header className="border-b border-slate-200 px-5 py-4">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Leaderboard</p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
-          <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Current club standings</h2>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">{rows.length} ranked players</p>
+          <h2 className="text-lg font-bold text-slate-900">Current club standings</h2>
+          <p className="text-sm font-medium text-slate-500">{rows.length} ranked players</p>
         </div>
       </header>
 
       {visibleRows.length > 0 ? (
         <>
-          <div className="grid grid-cols-[48px_1fr_72px_72px] gap-3 border-b border-zinc-200 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:border-zinc-800 dark:text-zinc-400 sm:grid-cols-[60px_1.4fr_88px_104px_72px_72px]">
+          <div className="grid grid-cols-[48px_1fr_72px_72px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-500 sm:grid-cols-[60px_1.4fr_88px_104px_72px_72px]">
             <span>Rank</span>
             <span>Name</span>
             <span className="hidden sm:block">Points</span>
@@ -59,31 +59,31 @@ export function LeaderboardPanel({ compact = false }: { compact?: boolean }) {
           {visibleRows.map((row) => (
             <div
               key={row.playerId}
-              className="grid grid-cols-[48px_1fr_72px_72px] gap-3 border-b border-zinc-200/70 px-4 py-4 last:border-b-0 dark:border-zinc-800/70 sm:grid-cols-[60px_1.4fr_88px_104px_72px_72px]"
+              className="grid grid-cols-[48px_1fr_72px_72px] gap-3 border-b border-slate-200/70 px-4 py-4 last:border-b-0 sm:grid-cols-[60px_1.4fr_88px_104px_72px_72px]"
             >
-              <div className="flex items-center text-sm font-semibold text-zinc-700 dark:text-zinc-200">#{row.pointsRank || '-'}</div>
+              <div className="flex items-center text-sm font-bold text-slate-700">#{row.pointsRank || '-'}</div>
               <div className="flex min-w-0 items-center gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-sm font-semibold text-blue-700 dark:bg-blue-950 dark:text-blue-200">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-sm font-bold text-slate-700">
                   {row.icon}
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">{row.displayName}</p>
-                  <p className="truncate text-xs text-zinc-500">
+                  <p className="truncate text-sm font-bold text-slate-900">{row.displayName}</p>
+                  <p className="truncate text-xs text-slate-500">
                     {row.title} &middot; {row.eloRating} ELO &middot; {formatSigned(Math.round(row.last5EloDelta))} last 5
                   </p>
                 </div>
               </div>
-              <div className="hidden text-sm font-medium text-zinc-700 dark:text-zinc-200 sm:block">{row.totalPoints}</div>
-              <div className="hidden text-sm font-medium text-zinc-700 dark:text-zinc-200 sm:block">#{row.eloRank || '-'} &middot; {row.eloRating}</div>
-              <div className="text-sm font-medium text-zinc-700 dark:text-zinc-200">{row.gamesWon}</div>
-              <div className="text-sm font-medium text-zinc-700 dark:text-zinc-200">{row.gamesLost}</div>
+              <div className="hidden text-sm font-semibold text-slate-700 sm:block">{row.totalPoints}</div>
+              <div className="hidden text-sm font-semibold text-slate-700 sm:block">#{row.eloRank || '-'} &middot; {row.eloRating}</div>
+              <div className="text-sm font-semibold text-slate-700">{row.gamesWon}</div>
+              <div className="text-sm font-semibold text-slate-700">{row.gamesLost}</div>
             </div>
           ))}
         </>
       ) : (
         <div className="px-5 py-10 text-center">
-          <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">No leaderboard data yet.</p>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Add a game to create standings.</p>
+          <p className="text-sm font-bold text-slate-700">No leaderboard data yet.</p>
+          <p className="mt-1 text-sm text-slate-500">Record a game in the session manager to create standings.</p>
         </div>
       )}
     </section>

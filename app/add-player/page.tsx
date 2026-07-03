@@ -42,7 +42,7 @@ export default function AddPlayerPage() {
       setMessage('Player created.')
       setName('')
       setIcon('🧘')
-      router.push('/add-game')
+      router.push('/#session')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Unable to add player.')
     } finally {

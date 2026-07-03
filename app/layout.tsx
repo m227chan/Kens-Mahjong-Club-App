@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import BottomNavigation from '@/components/BottomNavigation'
 import { AuthProvider } from '@/contexts/AuthContext'
 import ThemeToggle from '@/components/ThemeToggle'
 
@@ -24,8 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <ThemeToggle />
               </div>
             </header>
-            <main className="flex-1 pb-24">{children}</main>
-            <BottomNavigation />
+            <main className="flex-1">{children}</main>
           </div>
         </AuthProvider>
       </body>

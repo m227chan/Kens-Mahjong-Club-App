@@ -82,15 +82,15 @@ export default function DashboardContent() {
   }, [bumpChartData, players, topPlayers])
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-[24px] border border-zinc-200/70 bg-white/80 p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/80">
-        <p className="text-sm font-medium uppercase tracking-[0.2em] text-blue-500">Dashboard</p>
-        <h1 className="mt-3 text-2xl font-semibold text-zinc-900 dark:text-zinc-100">Club performance at a glance</h1>
+    <div id="dashboard" className="space-y-5">
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Dashboard</p>
+        <h2 className="mt-2 text-lg font-bold text-slate-900">Club performance</h2>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-[24px] border border-zinc-200/70 bg-white/80 p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/80">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Cumulative score chart</h2>
+      <section className="grid gap-5 lg:grid-cols-2">
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="text-sm font-bold text-slate-800">Cumulative score chart</h3>
           <div className="mt-4 h-72">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={cumulativeData}>
@@ -113,9 +113,9 @@ export default function DashboardContent() {
           </div>
         </div>
 
-        <div className="rounded-[24px] border border-zinc-200/70 bg-white/80 p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/80">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">ELO rank bump chart</h2>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">Shows how top players&apos; rank changes across games.</p>
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="text-sm font-bold text-slate-800">ELO rank bump chart</h3>
+          <p className="mt-2 text-sm text-slate-500">Shows how top players&apos; rank changes across games.</p>
           <div className="mt-4 h-72">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={bumpDisplayData}>
