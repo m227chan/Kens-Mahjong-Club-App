@@ -8,15 +8,20 @@ function MiniBarChart({ data, color = '#667eea' }: { data: Array<{ label: string
   const max = Math.max(...data.map((entry) => Math.abs(entry.value)), 1)
 
   return (
-    <div className="mt-4 flex h-32 items-end gap-2">
+    <div className="mt-4 grid gap-3 rounded-lg border border-slate-200 bg-white p-3">
       {data.map((entry) => (
-        <div key={entry.label} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+        <div key={entry.label} className="grid grid-cols-[56px_1fr_48px] items-center gap-3">
+          <span className="truncate text-xs font-semibold text-slate-600">{entry.label}</span>
           <div
-            className="w-full rounded-t-md"
-            style={{ height: `${Math.max(10, (Math.abs(entry.value) / max) * 100)}%`, backgroundColor: color }}
+            className="h-2 rounded-full bg-slate-100"
             title={`${entry.label}: ${Math.round(entry.value * 10) / 10}`}
-          />
-          <span className="max-w-full truncate text-[10px] font-medium text-slate-500">{entry.label}</span>
+          >
+            <div
+              className="h-2 rounded-full"
+              style={{ width: `${entry.value === 0 ? 4 : Math.max(8, (Math.abs(entry.value) / max) * 100)}%`, backgroundColor: color }}
+            />
+          </div>
+          <span className="text-right text-xs font-bold text-slate-700">{Math.round(entry.value * 10) / 10}</span>
         </div>
       ))}
     </div>
@@ -31,7 +36,13 @@ export default function AnalyticsPanel({ clubId }: { clubId: string }) {
   useEffect(() => subscribePlayers(clubId, (nextPlayers) => setPlayers(nextPlayers)), [clubId])
 
   const top = useMemo(() => {
-    return [...playerStats].sort((a, b) => a.eloRank - b.eloRank).slice(0, 8)
+    return [...playerStats]
+      .sort((a, b) => {
+        const rankA = a.eloRank || Number.MAX_SAFE_INTEGER
+        const rankB = b.eloRank || Number.MAX_SAFE_INTEGER
+        return rankA - rankB || b.gamesPlayed - a.gamesPlayed || b.totalPoints - a.totalPoints
+      })
+      .slice(0, 8)
   }, [playerStats])
 
   const playerName = (playerId: string, short = false) => {
@@ -43,22 +54,26 @@ export default function AnalyticsPanel({ clubId }: { clubId: string }) {
     {
       title: 'Rank Alignment',
       value: top.map((stat) => ({ label: playerName(stat.playerId, true), value: Math.abs(stat.eloRank - stat.pointsRank) })),
-      color: '#667eea'
+      color: '#4f46e5',
+      description: 'Lower is better. Compares ELO rank to points rank.'
     },
     {
       title: 'ELO Headroom',
       value: top.map((stat) => ({ label: playerName(stat.playerId, true), value: Math.max(0, stat.eloPeak - stat.eloRating) })),
-      color: '#48bb78'
+      color: '#0f766e',
+      description: 'Distance from each player\'s peak rating.'
     },
     {
       title: 'Points / Game',
       value: top.map((stat) => ({ label: playerName(stat.playerId, true), value: stat.gamesPlayed ? stat.totalPoints / stat.gamesPlayed : 0 })),
-      color: '#f6ad55'
+      color: '#d97706',
+      description: 'Average point result per recorded game.'
     },
     {
       title: 'Last 5 ELO',
       value: top.map((stat) => ({ label: playerName(stat.playerId, true), value: stat.last5EloDelta })),
-      color: '#fc8181'
+      color: '#be123c',
+      description: 'Recent rating movement across the latest games.'
     }
   ]
 
@@ -74,6 +89,7 @@ export default function AnalyticsPanel({ clubId }: { clubId: string }) {
           {cards.map((card) => (
             <article key={card.title} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
               <h3 className="text-sm font-bold text-slate-800">{card.title}</h3>
+              <p className="mt-1 text-xs font-medium text-slate-500">{card.description}</p>
               <MiniBarChart data={card.value} color={card.color} />
             </article>
           ))}

@@ -9,6 +9,11 @@ function formatSigned(value: number) {
   return String(value)
 }
 
+function formatWinRate(wins: number, games: number) {
+  if (!games) return '0%'
+  return `${Math.round((wins / games) * 100)}%`
+}
+
 export function LeaderboardPanel({ clubId, compact = false }: { clubId: string; compact?: boolean }) {
   const [players, setPlayers] = useState<PlayerDoc[]>([])
   const [stats, setStats] = useState<PlayerStatsDoc[]>([])
@@ -47,39 +52,45 @@ export function LeaderboardPanel({ clubId, compact = false }: { clubId: string; 
       </header>
 
       {visibleRows.length > 0 ? (
-        <>
-          <div className="grid grid-cols-[48px_1fr_72px_72px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-500 sm:grid-cols-[60px_1.4fr_88px_104px_72px_72px]">
-            <span>Rank</span>
-            <span>Name</span>
-            <span className="hidden sm:block">Points</span>
-            <span className="hidden sm:block">ELO</span>
-            <span>Wins</span>
-            <span>Losses</span>
-          </div>
-          {visibleRows.map((row) => (
-            <div
-              key={row.playerId}
-              className="grid grid-cols-[48px_1fr_72px_72px] gap-3 border-b border-slate-200/70 px-4 py-4 last:border-b-0 sm:grid-cols-[60px_1.4fr_88px_104px_72px_72px]"
-            >
-              <div className="flex items-center text-sm font-bold text-slate-700">#{row.pointsRank || '-'}</div>
-              <div className="flex min-w-0 items-center gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-sm font-bold text-slate-700">
-                  {row.icon}
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-slate-900">{row.displayName}</p>
-                  <p className="truncate text-xs text-slate-500">
-                    {row.title} &middot; {row.eloRating} ELO &middot; {formatSigned(Math.round(row.last5EloDelta))} last 5
-                  </p>
-                </div>
-              </div>
-              <div className="hidden text-sm font-semibold text-slate-700 sm:block">{row.totalPoints}</div>
-              <div className="hidden text-sm font-semibold text-slate-700 sm:block">#{row.eloRank || '-'} &middot; {row.eloRating}</div>
-              <div className="text-sm font-semibold text-slate-700">{row.gamesWon}</div>
-              <div className="text-sm font-semibold text-slate-700">{row.gamesLost}</div>
+        <div className="overflow-x-auto">
+          <div className="min-w-[920px]">
+            <div className="grid grid-cols-[64px_minmax(260px,1.8fr)_88px_112px_76px_76px_84px_96px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+              <span>Rank</span>
+              <span>Name</span>
+              <span>Points</span>
+              <span>ELO</span>
+              <span>Games</span>
+              <span>Wins</span>
+              <span>Losses</span>
+              <span>Win ratio</span>
             </div>
-          ))}
-        </>
+            {visibleRows.map((row) => (
+              <div
+                key={row.playerId}
+                className="grid grid-cols-[64px_minmax(260px,1.8fr)_88px_112px_76px_76px_84px_96px] gap-3 border-b border-slate-200/70 px-4 py-4 last:border-b-0"
+              >
+                <div className="flex items-center text-sm font-bold text-slate-700">#{row.pointsRank || '-'}</div>
+                <div className="flex items-start gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-sm font-bold text-slate-700">
+                    {row.icon}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="break-words text-sm font-bold text-slate-900">{row.displayName}</p>
+                    <p className="break-words text-xs leading-5 text-slate-500">
+                      {row.title} &middot; {row.eloRating} ELO &middot; {formatSigned(Math.round(row.last5EloDelta))} last 5
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center text-sm font-semibold text-slate-700">{row.totalPoints}</div>
+                <div className="flex items-center text-sm font-semibold text-slate-700">#{row.eloRank || '-'} &middot; {row.eloRating}</div>
+                <div className="flex items-center text-sm font-semibold text-slate-700">{row.gamesPlayed}</div>
+                <div className="flex items-center text-sm font-semibold text-slate-700">{row.gamesWon}</div>
+                <div className="flex items-center text-sm font-semibold text-slate-700">{row.gamesLost}</div>
+                <div className="flex items-center text-sm font-semibold text-slate-700">{formatWinRate(row.gamesWon, row.gamesPlayed)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
       ) : (
         <div className="px-5 py-10 text-center">
           <p className="text-sm font-bold text-slate-700">No leaderboard data yet.</p>

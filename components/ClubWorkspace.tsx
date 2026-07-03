@@ -44,6 +44,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [joiningAction, setJoiningAction] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [rosterOpen, setRosterOpen] = useState(false)
+  const [analyticsOpen, setAnalyticsOpen] = useState(false)
 
   const isManager = membership.role === 'manager'
   const usedIconKeys = new Set(players.map((player) => player.icon.trim().toLocaleLowerCase()))
@@ -140,6 +141,13 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           >
             Roster
           </button>
+          <button
+            type="button"
+            onClick={() => setAnalyticsOpen(true)}
+            className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-indigo-500"
+          >
+            Analytics
+          </button>
         </div>
       </div>
 
@@ -178,9 +186,6 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                   {members.length} signed-in users, {players.length} tracked players. Open the roster to add, review, or remove players.
                 </p>
               </div>
-              <button type="button" onClick={() => setRosterOpen(true)} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white">
-                Open roster
-              </button>
             </div>
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
               <StatCard label="Tracked players" value={String(players.length)} tone="border-slate-200 bg-slate-50 text-slate-900" />
@@ -190,8 +195,6 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           </section>
 
           <LeaderboardPanel clubId={clubId} />
-          <DashboardContent clubId={clubId} />
-          <AnalyticsPanel clubId={clubId} />
         </div>
 
         <aside className="xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto">
@@ -302,6 +305,29 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                   </div>
                 ) : null}
               </section>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {analyticsOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
+          <div className="flex max-h-[92vh] w-full max-w-6xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-200 p-5">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">Analytics</p>
+                <h3 className="mt-2 text-xl font-black text-slate-950">{club?.name ?? membership.clubName} insights</h3>
+                <p className="mt-1 text-sm text-slate-500">Dashboard charts, ELO movement, and club analytics.</p>
+              </div>
+              <button type="button" onClick={() => setAnalyticsOpen(false)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">
+                Close
+              </button>
+            </div>
+            <div className="overflow-y-auto bg-slate-50 p-5">
+              <div className="space-y-5">
+                <DashboardContent clubId={clubId} />
+                <AnalyticsPanel clubId={clubId} />
+              </div>
             </div>
           </div>
         </div>
