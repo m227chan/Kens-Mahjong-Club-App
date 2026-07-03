@@ -55,6 +55,10 @@ service cloud.firestore {
         allow create, update: if isClubMember(clubId);
         allow delete: if false;
       }
+      match /playerIcons/{id} {
+        allow read: if isClubMember(clubId);
+        allow create, update, delete: if isClubMember(clubId);
+      }
       match /games/{id} {
         allow read: if isClubMember(clubId);
         allow create, update: if isClubMember(clubId);

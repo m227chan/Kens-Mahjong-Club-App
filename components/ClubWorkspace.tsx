@@ -19,6 +19,8 @@ import {
 } from '@/lib/firestore'
 import type { ClubDoc, ClubMembershipDoc, JoinRequestDoc, PlayerDoc } from '@/lib/types'
 
+const iconChoices = ['🀄', '🎴', '🏆', '⭐', '🔥', '🌙', '🍀', '🐉', '🧧', '💎', 'A', 'B', 'C', 'J', 'K', 'M']
+
 function StatCard({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
     <div className={`rounded-lg border p-4 ${tone}`}>
@@ -36,6 +38,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [players, setPlayers] = useState<PlayerDoc[]>([])
   const [playerName, setPlayerName] = useState('')
   const [playerIcon, setPlayerIcon] = useState('M')
+  const [iconPickerOpen, setIconPickerOpen] = useState(false)
   const [linkToMe, setLinkToMe] = useState(false)
   const [playerMessage, setPlayerMessage] = useState<string | null>(null)
   const [joiningAction, setJoiningAction] = useState<string | null>(null)
@@ -43,6 +46,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [rosterOpen, setRosterOpen] = useState(false)
 
   const isManager = membership.role === 'manager'
+  const usedIconKeys = new Set(players.map((player) => player.icon.trim().toLocaleLowerCase()))
 
   useEffect(() => subscribeClub(clubId, setClub), [clubId])
   useEffect(() => subscribeClubMembers(clubId, setMembers), [clubId])
@@ -66,6 +70,11 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
       return
     }
 
+    if (usedIconKeys.has(playerIcon.trim().toLocaleLowerCase())) {
+      setPlayerMessage('That icon or initial is already in use in this club.')
+      return
+    }
+
     try {
       await createPlayer(clubId, {
         displayName: playerName,
@@ -74,6 +83,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
       })
       setPlayerName('')
       setPlayerIcon('M')
+      setIconPickerOpen(false)
       setLinkToMe(false)
       setPlayerMessage('Player added.')
     } catch (error) {
@@ -213,7 +223,44 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                   </label>
                   <label className="text-sm font-bold text-slate-700">
                     Icon or initial
-                    <input value={playerIcon} onChange={(event) => setPlayerIcon(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-teal-500" />
+                    <div className="relative mt-2">
+                      <input
+                        value={playerIcon}
+                        onClick={() => setIconPickerOpen(true)}
+                        onFocus={() => setIconPickerOpen(true)}
+                        onChange={(event) => {
+                          setPlayerIcon(event.target.value.slice(0, 12))
+                          setPlayerMessage(null)
+                        }}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-teal-500"
+                      />
+                      {iconPickerOpen ? (
+                        <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 rounded-lg border border-slate-200 bg-white p-3 shadow-xl">
+                          <div className="grid grid-cols-8 gap-2">
+                            {iconChoices.map((choice) => {
+                              const used = usedIconKeys.has(choice.trim().toLocaleLowerCase())
+                              return (
+                                <button
+                                  key={choice}
+                                  type="button"
+                                  disabled={used}
+                                  onClick={() => {
+                                    setPlayerIcon(choice)
+                                    setPlayerMessage(null)
+                                    setIconPickerOpen(false)
+                                  }}
+                                  className={`flex h-8 items-center justify-center rounded-lg border text-sm font-black ${used ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-300' : 'border-slate-200 bg-white text-slate-800 hover:border-teal-300 hover:bg-teal-50'}`}
+                                  title={used ? 'Already in use' : 'Use this icon'}
+                                >
+                                  {choice}
+                                </button>
+                              )
+                            })}
+                          </div>
+                          <p className="mt-2 text-xs font-medium text-slate-500">You can also type a unique emoji or initial.</p>
+                        </div>
+                      ) : null}
+                    </div>
                   </label>
                   <button type="button" onClick={addPlayer} className="self-end rounded-lg bg-teal-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-teal-500">
                     Add player

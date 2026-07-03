@@ -51,6 +51,7 @@ coverage.xml
 
 # Next.js
 .next/
+.next-dev/
 out/
 
 # Node.js
@@ -62,7 +63,13 @@ yarn-error.log*
 
 # Generated output
 build.log
+build-full.txt
+build-output.log
+dev-server.log
+dev-server.err.log
 tsc-output.txt
+firebase-debug.log
+.firebase/
 
 # Workspace metadata
 .specify/
