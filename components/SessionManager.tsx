@@ -690,7 +690,7 @@ export default function SessionManager() {
             onClick={() => submitWin(tableId)}
             disabled={!canSubmit || savingGameTable === tableId}
           >
-            {savingGameTable === tableId ? 'Saving...' : 'Add Game ✓'}
+            {savingGameTable === tableId ? 'Saving...' : 'Save Result'}
           </button>
         </div>
       </>
