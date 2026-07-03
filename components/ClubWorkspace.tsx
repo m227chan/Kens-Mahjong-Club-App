@@ -51,6 +51,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [rosterOpen, setRosterOpen] = useState(false)
   const [analyticsOpen, setAnalyticsOpen] = useState(false)
   const [gameLogsOpen, setGameLogsOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [seasons, setSeasons] = useState<SeasonDoc[]>([])
   const [seasonAction, setSeasonAction] = useState(false)
 
@@ -128,17 +129,6 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
 
   const changeSeason = async (value: string) => {
     if (!user) return
-    if (value === 'new') {
-      if (!window.confirm('Start a new season? Current season data will remain available, and the active session will reset.')) return
-      setSeasonAction(true)
-      try {
-        await startNewSeason(clubId, { createdBy: user.uid })
-      } finally {
-        setSeasonAction(false)
-      }
-      return
-    }
-
     const seasonNumber = Number(value)
     if (!seasonNumber || seasonNumber === activeSeasonNumber) return
     setSeasonAction(true)
@@ -149,27 +139,43 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
     }
   }
 
+  const createNextSeason = async () => {
+    if (!user) return
+    if (!window.confirm('Start a new season? Current season data will remain available, and the active session will reset.')) return
+    setSeasonAction(true)
+    try {
+      await startNewSeason(clubId, { createdBy: user.uid })
+      setSettingsOpen(false)
+    } finally {
+      setSeasonAction(false)
+    }
+  }
+
   return (
     <main className="px-4 py-6">
       <div className="mb-5 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <Link href="/" className="text-sm font-bold text-blue-600 hover:text-blue-500">
-            Back to homepage
-          </Link>
-          <h1 className="mt-2 text-2xl font-black text-slate-950">{club?.name ?? membership.clubName}</h1>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Current club</p>
+          <h1 className="mt-1 text-2xl font-black text-slate-950">{club?.name ?? membership.clubName}</h1>
         </div>
         <div className="flex flex-wrap gap-2">
-          <select
-            value={activeSeasonNumber}
-            onChange={(event) => changeSeason(event.target.value)}
-            disabled={seasonAction}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
-          >
-            {seasons.map((season) => (
-              <option key={season.id} value={season.seasonNumber}>{season.name}</option>
-            ))}
-            <option value="new">Start new season...</option>
-          </select>
+          <label className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
+            <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Season</span>
+            <select
+              value={activeSeasonNumber}
+              onChange={(event) => changeSeason(event.target.value)}
+              disabled={seasonAction}
+              className="bg-transparent text-sm font-black text-slate-900 outline-none disabled:opacity-50"
+              aria-label="Season"
+            >
+              {seasons.some((season) => season.seasonNumber === activeSeasonNumber) ? null : (
+                <option value={activeSeasonNumber}>{activeSeasonNumber}</option>
+              )}
+              {seasons.map((season) => (
+                <option key={season.id} value={season.seasonNumber}>{season.seasonNumber}</option>
+              ))}
+            </select>
+          </label>
           <button
             type="button"
             onClick={copyShare}
@@ -201,8 +207,62 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           >
             Game logs
           </button>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="Settings"
+            title="Settings"
+            className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-950 text-lg font-bold text-white transition hover:bg-slate-800"
+          >
+            ⚙️
+          </button>
         </div>
       </div>
+
+      {settingsOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
+          <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white shadow-2xl">
+            <div className="border-b border-slate-200 p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Settings</p>
+                  <h3 className="mt-2 text-xl font-black text-slate-950">{club?.name ?? membership.clubName}</h3>
+                  <p className="mt-1 text-sm text-slate-500">Manage navigation and season controls for this club.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSettingsOpen(false)}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+            <div className="grid gap-3 p-5">
+              <Link
+                href="/"
+                className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-black text-blue-800 transition hover:bg-blue-100"
+              >
+                Back to homepage
+              </Link>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-black text-slate-900">Season controls</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Active season: Season {activeSeasonNumber}. New clubs start at Season 1 by default.
+                </p>
+                <button
+                  type="button"
+                  onClick={createNextSeason}
+                  disabled={seasonAction}
+                  className="mt-4 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-500 disabled:opacity-50"
+                >
+                  {seasonAction ? 'Starting season...' : 'Start new season'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_460px]">
         <div className="min-w-0 space-y-6">

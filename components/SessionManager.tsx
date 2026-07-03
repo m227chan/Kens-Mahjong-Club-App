@@ -942,8 +942,8 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
         }
 
         .header {
-          background: linear-gradient(135deg, var(--purple) 0%, #764ba2 100%);
-          color: white;
+          background: #ffffff;
+          color: #0f172a;
           padding: 12px 14px 10px;
           display: flex;
           align-items: center;
@@ -951,22 +951,24 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
           position: sticky;
           top: 0;
           z-index: 100;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+          border: 1px solid #e2e8f0;
+          border-radius: 10px 10px 0 0;
+          box-shadow: 0 1px 3px rgba(15,23,42,0.08);
         }
         .header h1 { font-size: 15px; font-weight: 800; letter-spacing: 0.3px; }
-        .header-sub { font-size: 10px; opacity: 0.8; margin-top: 1px; }
+        .header-sub { font-size: 10px; color: #64748b; margin-top: 1px; }
         .header-actions { display: flex; gap: 6px; }
         .btn-icon {
-          background: rgba(255,255,255,0.2);
-          border: none; border-radius: 6px;
-          color: white; padding: 5px 8px;
+          background: #f8fafc;
+          border: 1px solid #cbd5e1; border-radius: 6px;
+          color: #334155; padding: 5px 8px;
           font-size: 11px; font-weight: 600;
           cursor: pointer; transition: background 0.15s;
           white-space: nowrap;
         }
-        .btn-icon:hover { background: rgba(255,255,255,0.35); }
-        .btn-icon.danger { background: rgba(252,129,129,0.3); }
-        .btn-icon.danger:hover { background: rgba(252,129,129,0.5); }
+        .btn-icon:hover { background: #eef2ff; border-color: #a5b4fc; color: #3730a3; }
+        .btn-icon.danger { background: #fff1f2; border-color: #fecdd3; color: #be123c; }
+        .btn-icon.danger:hover { background: #ffe4e6; }
 
         .page { display: none; padding: 12px; }
         .page.active { display: block; }
@@ -1112,7 +1114,7 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
         }
         .table-name {
           font-size: 12px; font-weight: 700;
-          color: #2d3748; flex: 1;
+          color: #0f172a; flex: 1;
         }
         .table-status {
           font-size: 10px; font-weight: 600;
@@ -1156,7 +1158,7 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
 
         .btn-draw {
           flex: 1;
-          background: #e2e8f0; color: #4a5568;
+          background: #e2e8f0; color: #1e293b;
           border: none; border-radius: 6px;
           padding: 7px 8px; font-size: 11px;
           font-weight: 700; cursor: pointer;
@@ -1164,57 +1166,79 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
           min-width: 60px;
         }
         .btn-draw:hover { background: #bee3f8; color: #2b6cb0; }
+        .btn-draw:disabled {
+          background: #cbd5e1;
+          color: #334155;
+          cursor: not-allowed;
+          opacity: 1;
+        }
 
         .win-panel {
           padding: 8px;
-          background: #fffbeb;
-          border-top: 1px solid #faf089;
+          background: #fff7ed;
+          border-top: 1px solid #fed7aa;
+          color: #1f2937;
           display: none;
         }
         .win-panel.active { display: block; }
         .win-panel-title {
           font-size: 10px; font-weight: 700;
           text-transform: uppercase; letter-spacing: 0.5px;
-          color: #b7791f; margin-bottom: 6px;
+          color: #9a3412; margin-bottom: 6px;
         }
         .win-type-row {
           display: flex; gap: 5px; margin-bottom: 8px;
         }
         .win-type-btn {
           flex: 1; padding: 6px 4px;
-          border: 2px solid var(--border);
+          border: 2px solid #cbd5e1;
           border-radius: 6px; background: white;
+          color: #1e293b;
           font-size: 11px; font-weight: 700;
           cursor: pointer; transition: all 0.15s;
           text-align: center;
         }
-        .win-type-btn.selected { border-color: var(--gold); background: #fffbeb; }
+        .win-type-btn:disabled {
+          background: #f1f5f9;
+          border-color: #cbd5e1;
+          color: #64748b;
+          cursor: not-allowed;
+          opacity: 1;
+        }
+        .win-type-btn.selected { border-color: #f97316; background: #ffedd5; color: #9a3412; }
 
         .loser-row {
           margin-bottom: 8px; display: none;
         }
         .loser-row.visible { display: block; }
-        .loser-label { font-size: 10px; font-weight: 600; color: var(--gray); margin-bottom: 4px; }
+        .loser-label { font-size: 10px; font-weight: 700; color: #334155; margin-bottom: 4px; }
         .loser-chips { display: flex; gap: 4px; flex-wrap: wrap; }
         .loser-chip {
           padding: 4px 8px;
-          border: 1.5px solid var(--border);
+          border: 1.5px solid #cbd5e1;
           border-radius: 12px; background: white;
+          color: #1e293b;
           font-size: 11px; font-weight: 600;
           cursor: pointer; transition: all 0.15s;
+        }
+        .loser-chip:disabled {
+          background: #f8fafc;
+          color: #64748b;
+          cursor: not-allowed;
+          opacity: 1;
         }
         .loser-chip.selected { border-color: var(--red); background: #fff5f5; color: var(--red-dark); }
 
         .fan-row { margin-bottom: 8px; }
-        .fan-label { font-size: 10px; font-weight: 600; color: var(--gray); margin-bottom: 4px; display: flex; justify-content: space-between; }
+        .fan-label { font-size: 10px; font-weight: 700; color: #334155; margin-bottom: 4px; display: flex; justify-content: space-between; }
         .fan-chips { display: flex; gap: 3px; flex-wrap: wrap; }
         .fan-chip {
           padding: 4px 7px;
-          border: 1.5px solid var(--border);
+          border: 1.5px solid #cbd5e1;
           border-radius: 8px; background: white;
           font-size: 11px; font-weight: 700;
           cursor: pointer; transition: all 0.15s;
-          color: #4a5568;
+          color: #1e293b;
         }
         .fan-chip.selected { border-color: var(--purple); background: #ebf4ff; color: var(--purple-dark); }
 
@@ -1333,7 +1357,7 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
         .player-chip:hover .chip-icon { border-color: var(--purple); }
         .chip-name {
           font-size: 9px; font-weight: 700;
-          text-align: center; color: #4a5568;
+          text-align: center; color: #0f172a;
           margin-top: 3px;
           max-width: 52px;
           overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
