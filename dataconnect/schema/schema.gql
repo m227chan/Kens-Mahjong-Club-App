@@ -1,0 +1,36 @@
+type Player @table {
+  name: String!
+  email: String!
+  joinDate: Date!
+  avatarUrl: String
+  bio: String
+}
+
+type Session @table {
+  date: Date!
+  location: String!
+  status: String!
+  organizer: Player
+}
+
+type Game @table {
+  session: Session!
+  startTime: Timestamp!
+  tableNumber: Int
+  notes: String
+}
+
+type Result @table {
+  game: Game!
+  player: Player!
+  score: Int!
+  rank: Int
+  winningHandDetail: String
+}
+
+type ClubStat @table {
+  player: Player!
+  totalWins: Int!
+  totalPoints: Int!
+  rankPosition: Int
+}

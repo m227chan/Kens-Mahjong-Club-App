@@ -1,11 +1,18 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { createGame, subscribePlayers } from '@/lib/firestore'
+import {
+  closeSession,
+  createGame,
+  createSession,
+  subscribeActiveSession,
+  subscribePlayers,
+  updateSession
+} from '@/lib/firestore'
 import type { PlayerDoc } from '@/lib/types'
 
-const FAN_TO_POINTS: Record<number, number> = {
+const FAN_POINTS: Record<number, number> = {
   3: 8,
   4: 16,
   5: 24,
@@ -19,289 +26,1795 @@ const FAN_TO_POINTS: Record<number, number> = {
   13: 384
 }
 
-type WinType = 'self-draw' | 'discard' | 'draw'
+type WinType = 'self' | 'discard' | 'draw'
 
-type DraftTable = {
-  id: string
-  name: string
-  players: string[]
+type SessionState = {
+  id?: string
+  active: boolean
+  tableCount: number
+  participants: string[]
+  tables: Record<string, string[]>
+  sideline: string[]
+}
+
+type WinState = {
+  tableId: string | null
+  winner: string | null
+  winType: WinType | null
+  loser: string | null
+  fan: number | null
+}
+
+const initialSession: SessionState = {
+  active: false,
+  tableCount: 1,
+  participants: [],
+  tables: {},
+  sideline: []
+}
+
+const initialWinState: WinState = {
+  tableId: null,
+  winner: null,
+  winType: null,
+  loser: null,
+  fan: null
 }
 
 export default function SessionManager() {
   const { user, loading, isAdmin } = useAuth()
   const [players, setPlayers] = useState<PlayerDoc[]>([])
-  const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([])
-  const [tables, setTables] = useState<DraftTable[]>([])
-  const [tableCount, setTableCount] = useState(2)
-  const [fan, setFan] = useState(3)
-  const [winType, setWinType] = useState<WinType>('self-draw')
-  const [winnerId, setWinnerId] = useState<string>('')
-  const [discarderId, setDiscarderId] = useState<string>('')
-  const [notes, setNotes] = useState('')
-  const [message, setMessage] = useState<string | null>(null)
+  const [session, setSession] = useState<SessionState>(initialSession)
+  const [page, setPage] = useState<'loading' | 'setup' | 'session'>('loading')
+  const [setupParticipants, setSetupParticipants] = useState<string[]>([])
+  const [setupTableCount, setSetupTableCount] = useState(1)
+  const [setupSearch, setSetupSearch] = useState('')
+  const [tableSearch, setTableSearch] = useState('')
+  const [pickerTableId, setPickerTableId] = useState<string | null>(null)
+  const [pickerSearch, setPickerSearch] = useState('')
+  const [swapPickerTableId, setSwapPickerTableId] = useState<string | null>(null)
+  const [swapPickerPlayer, setSwapPickerPlayer] = useState<string | null>(null)
+  const [swapPickerSearch, setSwapPickerSearch] = useState('')
+  const [winState, setWinState] = useState<WinState>(initialWinState)
+  const [savingGameTable, setSavingGameTable] = useState<string | null>(null)
+  const [setupError, setSetupError] = useState<string | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+  const [flash, setFlash] = useState<{ scores: Record<string, number>; winner: string | null } | null>(null)
+  const [collapsedTables, setCollapsedTables] = useState<Record<string, boolean>>({})
+  const [sidelineCollapsed, setSidelineCollapsed] = useState(false)
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
+  const [infoOpen, setInfoOpen] = useState(false)
+  const [savingSession, setSavingSession] = useState(false)
 
-  useEffect(() => subscribePlayers((nextPlayers) => setPlayers(nextPlayers)), [])
+  const dragPlayerRef = useRef<string | null>(null)
+  const dragSourceRef = useRef<string | null>(null)
 
   useEffect(() => {
-    const nextTables = Array.from({ length: tableCount }, (_, index) => ({ id: `table-${index + 1}`, name: `Table ${index + 1}`, players: [] }))
-    setTables(nextTables)
-  }, [tableCount])
+    const playerUnsub = subscribePlayers((nextPlayers) => setPlayers(nextPlayers))
+    const sessionUnsub = subscribeActiveSession((nextSession) => {
+      if (nextSession && nextSession.isActive) {
+        setSession({
+          id: nextSession.id,
+          active: true,
+          tableCount: nextSession.tableCount,
+          participants: nextSession.participants,
+          tables: nextSession.tables,
+          sideline: nextSession.sideline
+        })
+        setSetupParticipants(nextSession.participants)
+        setSetupTableCount(nextSession.tableCount)
+        setPage('session')
+      } else {
+        setSession(initialSession)
+        setSetupParticipants([])
+        setSetupTableCount(1)
+        setPage('setup')
+      }
+    })
+
+    return () => {
+      playerUnsub()
+      sessionUnsub()
+    }
+  }, [])
 
   useEffect(() => {
-    setTables((current) =>
-      current.map((table) => ({
-        ...table,
-        players: table.players.filter((playerId) => selectedPlayerIds.includes(playerId))
-      }))
+    if (!toast) return
+    const timer = window.setTimeout(() => setToast(null), 2500)
+    return () => window.clearTimeout(timer)
+  }, [toast])
+
+  useEffect(() => {
+    if (!flash) return
+    const timer = window.setTimeout(() => setFlash(null), 2200)
+    return () => window.clearTimeout(timer)
+  }, [flash])
+
+  useEffect(() => {
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      if (!target.closest('#btnMenu') && !target.closest('#headerMenu')) {
+        setHeaderMenuOpen(false)
+      }
+    }
+    document.addEventListener('click', handleClick)
+    return () => document.removeEventListener('click', handleClick)
+  }, [])
+
+  const playerInfo = useCallback((playerId: string) => {
+    const player = players.find((item) => item.id === playerId)
+    return player ?? { id: playerId, displayName: playerId, icon: '👤' }
+  }, [players])
+
+  const shortName = (name: string) => {
+    if (!name) return ''
+    return name.length > 10 ? name.substring(0, 9) + '…' : name
+  }
+
+  const filteredSetupPlayers = useMemo(() => {
+    const query = setupSearch.toLowerCase().trim()
+    return players
+      .slice()
+      .sort((a, b) => a.displayName.localeCompare(b.displayName))
+      .filter((player) => player.displayName.toLowerCase().includes(query))
+  }, [players, setupSearch])
+
+  const setupCount = setupParticipants.length
+  const sessionHeaderLabel = `${session.participants.length} players · ${session.tableCount} table${session.tableCount !== 1 ? 's' : ''}`
+
+  const sessionParticipants = useMemo(() => {
+    return players.filter((player) => session.participants.includes(player.id))
+  }, [players, session.participants])
+
+  const sessionTables = useMemo(() => {
+    return Array.from({ length: session.tableCount }, (_, index) => session.tables[String(index + 1)] ?? [])
+  }, [session.tableCount, session.tables])
+
+  const assignedTablePlayers = sessionTables.flat()
+  const sessionSideline = session.sideline || []
+
+  const filteredTableCards = useMemo(() => {
+    const query = tableSearch.toLowerCase().trim()
+    return sessionTables.map((playersOnTable, index) => {
+      const tableId = String(index + 1)
+      const tableName = `Table ${tableId}`
+      const playerNames = playersOnTable.map((id) => playerInfo(id).displayName.toLowerCase())
+      const matches =
+        !query ||
+        tableName.toLowerCase().includes(query) ||
+        playerNames.some((name) => name.includes(query))
+      return { tableId, players: playersOnTable, visible: matches }
+    })
+  }, [playerInfo, sessionTables, tableSearch])
+
+  const dragContext = { player: dragPlayerRef.current, source: dragSourceRef.current }
+
+  const togglePlayerSetup = (playerId: string) => {
+    setSetupParticipants((current) =>
+      current.includes(playerId) ? current.filter((id) => id !== playerId) : [...current, playerId]
     )
-  }, [selectedPlayerIds])
-
-  const availablePlayers = useMemo(() => {
-    return players.filter((player) => selectedPlayerIds.includes(player.id))
-  }, [players, selectedPlayerIds])
-
-  const addPlayerToTable = (playerId: string, tableId: string) => {
-    setTables((current) => current.map((table) => {
-      if (table.id !== tableId) return table
-      if (table.players.length >= 4 || table.players.includes(playerId)) return table
-      return { ...table, players: [...table.players, playerId] }
-    }))
   }
 
-  const removePlayerFromTable = (playerId: string, tableId: string) => {
-    setTables((current) => current.map((table) => table.id === tableId ? { ...table, players: table.players.filter((id) => id !== playerId) } : table))
+  const selectTableCount = (value: number) => {
+    const nextCount = value < 1 ? 1 : value
+    setSetupTableCount(nextCount)
   }
 
-  const availableSideline = useMemo(() => {
-    const tablePlayers = tables.flatMap((table) => table.players)
-    return availablePlayers.filter((player) => !tablePlayers.includes(player.id))
-  }, [availablePlayers, tables])
-
-  const activeTable = useMemo(() => tables.find((table) => table.players.length === 4) ?? tables[0], [tables])
-  const activeTablePlayers = useMemo(() => {
-    return players.filter((player) => activeTable?.players.includes(player.id))
-  }, [players, activeTable])
-
-  const handleTogglePlayer = (playerId: string) => {
-    setSelectedPlayerIds((current) => current.includes(playerId) ? current.filter((id) => id !== playerId) : [...current, playerId])
+  const selectAllPlayers = () => {
+    setSetupParticipants(players.map((player) => player.id))
   }
 
-  useEffect(() => {
-    if (winType === 'draw') {
-      setWinnerId('')
-      setDiscarderId('')
-    }
-    if (winType === 'self-draw') {
-      setDiscarderId('')
-    }
-  }, [winType])
+  const clearAllPlayers = () => {
+    setSetupParticipants([])
+  }
 
-  const scorePreview = useMemo(() => {
-    const scores: Record<string, number> = {}
-    activeTablePlayers.forEach((player) => { scores[player.id] = 0 })
+  const showToast = (message: string) => {
+    setToast(message)
+  }
 
-    if (winType === 'draw') {
-      return scores
-    }
+  const showSetupError = (message: string) => {
+    setSetupError(message)
+    window.setTimeout(() => setSetupError(null), 3000)
+  }
 
-    const points = FAN_TO_POINTS[fan] ?? 0
-    if (winType === 'self-draw' && winnerId) {
-      scores[winnerId] = points * 3
-      activeTablePlayers.forEach((player) => {
-        if (player.id !== winnerId) scores[player.id] = -points
+  const persistSession = async (nextSession: SessionState) => {
+    setSession(nextSession)
+    if (!nextSession.id) return
+    try {
+      await updateSession(nextSession.id, {
+        tableCount: nextSession.tableCount,
+        participants: nextSession.participants,
+        tables: nextSession.tables,
+        sideline: nextSession.sideline
       })
-    } else if (winType === 'discard' && winnerId && discarderId) {
-      scores[winnerId] = points * 2
-      scores[discarderId] = -points * 2
-      activeTablePlayers.forEach((player) => {
-        if (!scores[player.id]) scores[player.id] = 0
+    } catch {
+      console.warn('Unable to persist session layout.')
+    }
+  }
+
+  const startSession = async () => {
+    if (setupParticipants.length < 4) {
+      showSetupError('Select at least 4 players.')
+      return
+    }
+
+    if (setupTableCount < 1) {
+      showSetupError('Select number of tables.')
+      return
+    }
+
+    const nextTables: Record<string, string[]> = {}
+    for (let i = 1; i <= setupTableCount; i += 1) {
+      const key = String(i)
+      const prev = session.active ? session.tables[key] || [] : []
+      nextTables[key] = prev.filter((playerId) => setupParticipants.includes(playerId))
+    }
+
+    const assigned = Object.values(nextTables).flat()
+    const sideline = setupParticipants.filter((playerId) => !assigned.includes(playerId))
+
+    const nextSession: SessionState = {
+      active: true,
+      id: session.id,
+      tableCount: setupTableCount,
+      participants: setupParticipants,
+      tables: nextTables,
+      sideline
+    }
+
+    setSavingSession(true)
+    try {
+      if (session.active && session.id) {
+        await updateSession(session.id, {
+          tableCount: setupTableCount,
+          participants: setupParticipants,
+          tables: nextTables,
+          sideline
+        })
+        setSession(nextSession)
+      } else {
+        const sessionId = await createSession({
+          createdBy: user?.uid ?? 'anonymous',
+          participants: setupParticipants,
+          tableCount: setupTableCount
+        })
+        setSession({ ...nextSession, id: sessionId })
+      }
+      setPage('session')
+    } catch (error) {
+      showSetupError(error instanceof Error ? error.message : 'Unable to start session.')
+    } finally {
+      setSavingSession(false)
+    }
+  }
+
+  const closeAllWinPanels = () => {
+    setWinState(initialWinState)
+  }
+
+  const openWinPanel = (tableId: string) => {
+    const playersOnTable = session.tables[tableId] || []
+    if (playersOnTable.length !== 4) return
+    setWinState({ tableId, winner: null, winType: null, loser: null, fan: null })
+  }
+
+  const setWinner = (tableId: string, playerId: string) => {
+    setWinState({ tableId, winner: playerId, winType: null, loser: null, fan: null })
+  }
+
+  const setWinType = (tableId: string, type: WinType) => {
+    setWinState((current) => ({ ...current, winType: type, loser: type === 'self' ? null : current.loser }))
+  }
+
+  const setLoser = (tableId: string, playerId: string) => {
+    setWinState((current) => ({ ...current, loser: playerId }))
+  }
+
+  const setFan = (tableId: string, value: number) => {
+    setWinState((current) => ({ ...current, fan: value }))
+  }
+
+  const calcScores = () => {
+    const { winner, winType: type, loser, fan: fanCount, tableId } = winState
+    if (!winner || !type || !fanCount || !tableId) return null
+    if (type === 'discard' && !loser) return null
+
+    const playersOnTable = session.tables[tableId] || []
+    const base = fanCount >= 13 ? 384 : FAN_POINTS[fanCount]
+    if (!base) return null
+
+    const scores: Record<string, number> = {}
+    const nonWinners = playersOnTable.filter((playerId) => playerId !== winner)
+
+    if (type === 'self') {
+      scores[winner] = base * 3
+      nonWinners.forEach((playerId) => {
+        scores[playerId] = -base
+      })
+    } else {
+      scores[winner] = base * 2
+      scores[loser!] = -base * 2
+      nonWinners.filter((playerId) => playerId !== loser).forEach((playerId) => {
+        scores[playerId] = 0
       })
     }
 
     return scores
-  }, [activeTablePlayers, fan, winType, winnerId, discarderId])
+  }
 
-  const handleSubmitGame = async () => {
+  const submitWin = async (tableId: string) => {
+    const scores = calcScores()
+    if (!scores) return
     if (!user) {
-      setMessage('Sign in to record games.')
+      showToast('Sign in to record games.')
       return
     }
 
-    if (!isAdmin) {
-      setMessage('Only admins can record session games.')
-      return
-    }
-
-    if (!winnerId && winType !== 'draw') {
-      setMessage('Select the round winner before recording the game.')
-      return
-    }
-
-    if (winType === 'discard' && !discarderId) {
-      setMessage('Select the discarder for a discard win.')
-      return
-    }
-
-    const table = tables.find((table) => table.players.length === 4)
-    if (!table) {
-      setMessage('Fill one table with exactly 4 players to record a game.')
-      return
-    }
-
-    const entries = table.players.map((playerId) => ({ playerId, score: scorePreview[playerId] ?? 0 }))
-    const totalScore = entries.reduce((sum, entry) => sum + entry.score, 0)
-    if (totalScore !== 0) {
-      setMessage('Score preview is invalid. Scores must sum to zero.')
-      return
-    }
-
+    setSavingGameTable(tableId)
     try {
       await createGame({
-        entries,
+        entries: Object.entries(scores).map(([playerId, score]) => ({ playerId, score })),
         createdBy: user.uid,
-        tableId: table.id,
-        winType: winType === 'self-draw' ? 'self_draw' : winType,
-        loserPlayerId: winType === 'discard' ? discarderId : null,
-        fan: winType === 'draw' ? null : fan,
-        notes: notes.trim() || null
+        tableId,
+        winType: winState.winType === 'self' ? 'self_draw' : 'discard',
+        loserPlayerId: winState.winType === 'discard' ? winState.loser : null,
+        fan: winState.winType === 'draw' ? null : winState.fan,
+        notes: null
       })
-      setMessage('Game recorded successfully.')
-      setWinnerId('')
-      setDiscarderId('')
-      setNotes('')
+      setFlash({ scores, winner: winState.winner })
+      closeAllWinPanels()
+      setWinState(initialWinState)
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Unable to save game.')
+      showToast(error instanceof Error ? error.message : 'Unable to save game.')
+    } finally {
+      setSavingGameTable(null)
     }
   }
 
-  return (
-    <aside className="space-y-6 rounded-[24px] border border-zinc-200/70 bg-white/80 p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/80 lg:w-[420px]">
-      <div>
-        <p className="text-sm font-medium uppercase tracking-[0.2em] text-blue-500">Session manager</p>
-        <h2 className="mt-3 text-xl font-semibold text-zinc-900 dark:text-zinc-100">Live game entry</h2>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">Select players, seat them and record a round from one table.</p>
-      </div>
+  const addDraw = async (tableId: string) => {
+    const playersOnTable = session.tables[tableId] || []
+    if (playersOnTable.length !== 4) return
 
-      <div className="space-y-4">
-        <div>
-          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Players</p>
-          <div className="mt-3 grid gap-2 max-h-40 overflow-auto">
-            {players.map((player) => (
-              <label key={player.id} className="flex items-center gap-3 rounded-2xl border border-zinc-200 px-3 py-2 text-sm text-zinc-700 dark:border-zinc-700 dark:text-zinc-200">
-                <input type="checkbox" checked={selectedPlayerIds.includes(player.id)} onChange={() => handleTogglePlayer(player.id)} />
-                <span>{player.displayName}</span>
-              </label>
-            ))}
-          </div>
-        </div>
+    const scores = Object.fromEntries(playersOnTable.map((playerId) => [playerId, 0])) as Record<string, number>
+    if (!user) {
+      showToast('Sign in to record games.')
+      return
+    }
 
-        <div>
-          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Table draft</p>
-          <div className="mt-3 grid gap-3">
-            {tables.map((table) => (
-              <div key={table.id} className="rounded-2xl border border-zinc-200 p-4 dark:border-zinc-700">
-                <div className="flex items-center justify-between text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                  <span>{table.name}</span>
-                  <span>{table.players.length}/4</span>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {table.players.map((playerId) => (
-                    <button
-                      key={playerId}
-                      type="button"
-                      onClick={() => removePlayerFromTable(playerId, table.id)}
-                      className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700 transition hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-                    >
-                      {players.find((player) => player.id === playerId)?.displayName ?? playerId} ✕
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-3 grid gap-2">
-                  {availableSideline.map((player) => (
-                    <button
-                      key={`${table.id}-${player.id}`}
-                      type="button"
-                      onClick={() => addPlayerToTable(player.id, table.id)}
-                      className="rounded-2xl border border-zinc-300 px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                    >
-                      {player.displayName}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+    setSavingGameTable(tableId)
+    try {
+      await createGame({
+        entries: Object.entries(scores).map(([playerId, score]) => ({ playerId, score })),
+        createdBy: user.uid,
+        tableId,
+        winType: 'draw',
+        loserPlayerId: null,
+        fan: null,
+        notes: null
+      })
+      setFlash({ scores, winner: null })
+      showToast('Draw saved.')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Unable to save draw.')
+    } finally {
+      setSavingGameTable(null)
+    }
+  }
 
-        <div className="space-y-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-950/50">
-          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Round details</p>
-          <div className="grid gap-3">
-            <label className="block text-sm text-zinc-700 dark:text-zinc-200">
-              Win type
-              <select value={winType} onChange={(event) => setWinType(event.target.value as WinType)} className="mt-2 w-full rounded-2xl border border-zinc-300 bg-white px-3 py-2 text-zinc-900 outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
-                <option value="self-draw">Self-draw</option>
-                <option value="discard">Discard win</option>
-                <option value="draw">Draw</option>
-              </select>
-            </label>
+  const confirmClearSession = async () => {
+    if (!window.confirm('Clear this session? Table assignments and participation will be reset.')) return
+    if (session.id) {
+      try {
+        await closeSession(session.id)
+      } catch {
+        showToast('Unable to reset session.')
+        return
+      }
+    }
+    setSession(initialSession)
+    setSetupParticipants([])
+    setSetupTableCount(1)
+    setPage('setup')
+    showToast('Session cleared!')
+  }
 
-            <label className="block text-sm text-zinc-700 dark:text-zinc-200">
-              Fan count
-              <input type="number" min={3} max={13} value={fan} onChange={(event) => setFan(Number(event.target.value) || 3)} className="mt-2 w-full rounded-2xl border border-zinc-300 bg-white px-3 py-2 text-zinc-900 outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100" />
-            </label>
+  const clearAllTables = async () => {
+    const nextSideline = [...session.sideline]
+    const nextTables: Record<string, string[]> = {}
 
-            <label className="block text-sm text-zinc-700 dark:text-zinc-200">
-              Winner
-              <select value={winnerId} onChange={(event) => setWinnerId(event.target.value)} className="mt-2 w-full rounded-2xl border border-zinc-300 bg-white px-3 py-2 text-zinc-900 outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
-                <option value="">Select winner</option>
-                {activeTablePlayers.map((player) => (
-                  <option key={player.id} value={player.id}>{player.displayName}</option>
-                ))}
-              </select>
-            </label>
+    for (let i = 1; i <= session.tableCount; i += 1) {
+      const key = String(i)
+      const playersOnTable = session.tables[key] || []
+      playersOnTable.forEach((playerId) => {
+        if (!nextSideline.includes(playerId)) {
+          nextSideline.push(playerId)
+        }
+      })
+      nextTables[key] = []
+    }
 
-            {winType === 'discard' && (
-              <label className="block text-sm text-zinc-700 dark:text-zinc-200">
-                Discarder
-                <select value={discarderId} onChange={(event) => setDiscarderId(event.target.value)} className="mt-2 w-full rounded-2xl border border-zinc-300 bg-white px-3 py-2 text-zinc-900 outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
-                  <option value="">Select discarder</option>
-                  {activeTablePlayers.filter((player) => player.id !== winnerId).map((player) => (
-                    <option key={player.id} value={player.id}>{player.displayName}</option>
-                  ))}
-                </select>
-              </label>
-            )}
+    const nextSession = { ...session, tables: nextTables, sideline: nextSideline }
+    await persistSession(nextSession)
+    showToast('All tables cleared.')
+  }
 
-            <label className="block text-sm text-zinc-700 dark:text-zinc-200">
-              Notes
-              <input type="text" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional notes" className="mt-2 w-full rounded-2xl border border-zinc-300 bg-white px-3 py-2 text-zinc-900 outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100" />
-            </label>
-          </div>
-        </div>
+  const clearSingleTable = async (tableId: string) => {
+    const playersOnTable = session.tables[tableId] || []
+    const nextSideline = [...session.sideline]
+    playersOnTable.forEach((playerId) => {
+      if (!nextSideline.includes(playerId)) nextSideline.push(playerId)
+    })
+    const nextTables = { ...session.tables, [tableId]: [] }
+    await persistSession({ ...session, tables: nextTables, sideline: nextSideline })
+    showToast('Table cleared.')
+  }
 
-        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-950/50">
-          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Score preview</p>
-          <div className="mt-3 grid gap-2">
-            {activeTablePlayers.map((player) => (
-              <div key={player.id} className="flex items-center justify-between rounded-2xl bg-white px-3 py-2 text-sm text-zinc-700 shadow-sm dark:bg-zinc-800 dark:text-zinc-200">
-                <span>{player.displayName}</span>
-                <span>{scorePreview[player.id] ?? 0}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+  const removeToSideline = async (tableId: string, playerId: string) => {
+    const nextTables = { ...session.tables, [tableId]: (session.tables[tableId] || []).filter((id) => id !== playerId) }
+    const nextSideline = session.sideline.includes(playerId) ? session.sideline : [...session.sideline, playerId]
+    await persistSession({ ...session, tables: nextTables, sideline: nextSideline })
+  }
 
+  const toggleTable = (tableId: string) => {
+    setCollapsedTables((current) => ({ ...current, [tableId]: !current[tableId] }))
+  }
+
+  const toggleSideline = () => {
+    setSidelineCollapsed((current) => !current)
+  }
+
+  const openPicker = (tableId: string) => {
+    setPickerTableId(tableId)
+    setPickerSearch('')
+  }
+
+  const closePicker = () => {
+    setPickerTableId(null)
+    setPickerSearch('')
+  }
+
+  const pickPlayer = async (playerId: string) => {
+    if (!pickerTableId) return
+    const playersOnTable = session.tables[pickerTableId] || []
+    if (playersOnTable.length >= 4) {
+      showToast('Table is full.')
+      return
+    }
+    if (playersOnTable.includes(playerId)) return
+
+    const nextTables = { ...session.tables, [pickerTableId]: [...playersOnTable, playerId] }
+    const nextSideline = session.sideline.filter((id) => id !== playerId)
+    await persistSession({ ...session, tables: nextTables, sideline: nextSideline })
+
+    if (nextTables[pickerTableId].length >= 4) {
+      closePicker()
+    }
+  }
+
+  const openSwapPicker = (tableId: string, playerId: string) => {
+    setSwapPickerTableId(tableId)
+    setSwapPickerPlayer(playerId)
+    setSwapPickerSearch('')
+  }
+
+  const closeSwapPicker = () => {
+    setSwapPickerTableId(null)
+    setSwapPickerPlayer(null)
+    setSwapPickerSearch('')
+  }
+
+  const doSwap = async (targetPlayerId: string) => {
+    if (!swapPickerTableId || !swapPickerPlayer) return
+    const sourceTable = swapPickerTableId
+    const sourcePlayer = swapPickerPlayer
+    const targetTable = Object.entries(session.tables).find(([, playersOnTable]) => playersOnTable.includes(targetPlayerId))?.[0] ?? null
+    const targetOnSideline = session.sideline.includes(targetPlayerId)
+
+    const nextTables = { ...session.tables }
+    nextTables[sourceTable] = nextTables[sourceTable].filter((id) => id !== sourcePlayer)
+
+    if (targetTable) {
+      nextTables[targetTable] = nextTables[targetTable].filter((id) => id !== targetPlayerId)
+      nextTables[targetTable].push(sourcePlayer)
+    }
+
+    if (targetOnSideline) {
+      const nextSideline = session.sideline.filter((id) => id !== targetPlayerId)
+      const nextSidelineWithSource = [...nextSideline, sourcePlayer]
+      nextTables[sourceTable] = [...nextTables[sourceTable], targetPlayerId]
+      await persistSession({ ...session, tables: nextTables, sideline: nextSidelineWithSource })
+      closeSwapPicker()
+      return
+    }
+
+    nextTables[sourceTable] = [...nextTables[sourceTable], targetPlayerId]
+    await persistSession({ ...session, tables: nextTables, sideline: session.sideline })
+    closeSwapPicker()
+  }
+
+  const setupPlayers = useMemo(() => {
+    const query = setupSearch.toLowerCase().trim()
+    return players
+      .slice()
+      .sort((a, b) => a.displayName.localeCompare(b.displayName))
+      .filter((player) => player.displayName.toLowerCase().includes(query))
+  }, [players, setupSearch])
+
+  const pickerPlayers = useMemo(() => {
+    const query = pickerSearch.toLowerCase().trim()
+    return session.sideline
+      .filter((playerId) => playerInfo(playerId).displayName.toLowerCase().includes(query))
+      .map((playerId) => playerInfo(playerId))
+  }, [pickerSearch, playerInfo, session.sideline])
+
+  const swapPickerPlayers = useMemo(() => {
+    const query = swapPickerSearch.toLowerCase().trim()
+    return session.participants
+      .filter((playerId) => playerId !== swapPickerPlayer)
+      .filter((playerId) => playerInfo(playerId).displayName.toLowerCase().includes(query))
+      .map((playerId) => playerInfo(playerId))
+  }, [playerInfo, session.participants, swapPickerPlayer, swapPickerSearch])
+
+  const renderWinPanel = (tableId: string) => {
+    const playersOnTable = session.tables[tableId] || []
+    const winnerChips = playersOnTable.map((playerId) => {
+      const info = playerInfo(playerId)
+      const selected = winState.winner === playerId
+      return (
         <button
+          key={playerId}
           type="button"
-          onClick={handleSubmitGame}
-          className="w-full rounded-2xl bg-blue-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={!user || loading || !isAdmin}
+          className={`loser-chip${selected ? ' selected' : ''}`}
+          onClick={() => setWinner(tableId, playerId)}
         >
-          Record game
+          {info.icon ?? '👤'} {shortName(info.displayName)}
         </button>
+      )
+    })
 
-        {message && <p className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-200">{message}</p>}
+    const others = playersOnTable.filter((playerId) => playerId !== winState.winner)
+    const loserChips = others.map((playerId) => {
+      const info = playerInfo(playerId)
+      const selected = winState.loser === playerId
+      return (
+        <button
+          key={playerId}
+          type="button"
+          className={`loser-chip${selected ? ' selected' : ''}`}
+          onClick={() => setLoser(tableId, playerId)}
+        >
+          {info.icon ?? '👤'} {shortName(info.displayName)}
+        </button>
+      )
+    })
+
+    const fanChips = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map((fanValue) => {
+      const selected = winState.fan === fanValue
+      return (
+        <button
+          key={fanValue}
+          type="button"
+          className={`fan-chip${selected ? ' selected' : ''}`}
+          onClick={() => setFan(tableId, fanValue)}
+        >
+          {fanValue}
+          {fanValue === 13 ? '+ 🔥' : ''}
+        </button>
+      )
+    })
+
+    const preview = calcScores()
+    const previewRows = preview
+      ? Object.entries(preview).map(([playerId, score]) => {
+          const info = playerInfo(playerId)
+          const cls = score > 0 ? 'pos' : score < 0 ? 'neg' : 'score-zero'
+          return (
+            <div key={playerId} className="score-preview-item">
+              <div className="score-preview-name">{info.icon ?? '👤'} {shortName(info.displayName)}</div>
+              <div className={`score-preview-val ${cls}`}>{score > 0 ? `+${score}` : score}</div>
+            </div>
+          )
+        })
+      : []
+
+    const canSubmit = Boolean(preview)
+    const selfSelected = winState.winType === 'self'
+    const discardSelected = winState.winType === 'discard'
+
+    return (
+      <>
+        <div className="win-panel-title">👑 Select Winner</div>
+        <div className="loser-row visible" style={{ marginBottom: 8 }}>
+          <div className="loser-label">Who won?</div>
+          <div className="loser-chips">{winnerChips}</div>
+        </div>
+
+        {winState.winner ? (
+          <>
+            <div className="win-type-row">
+              <button
+                type="button"
+                className={`win-type-btn${selfSelected ? ' selected' : ''}`}
+                onClick={() => setWinType(tableId, 'self')}
+              >
+                🀄 Self-draw<br />
+                <small style={{ fontWeight: 400, fontSize: 9 }}>自摸</small>
+              </button>
+              <button
+                type="button"
+                className={`win-type-btn${discardSelected ? ' selected' : ''}`}
+                onClick={() => setWinType(tableId, 'discard')}
+              >
+                🎴 Discard win
+              </button>
+            </div>
+
+            {discardSelected ? (
+              <div className="loser-row visible">
+                <div className="loser-label">Who discarded?</div>
+                <div className="loser-chips">{loserChips}</div>
+              </div>
+            ) : null}
+
+            {winState.winType ? (
+              <div className="fan-row">
+                <div className="fan-label">
+                  <span>Fan (3–13)</span>
+                  {winState.fan ? <span style={{ color: 'var(--purple)', fontWeight: 700 }}>{FAN_POINTS[winState.fan] ?? 384} pts base</span> : null}
+                </div>
+                <div className="fan-chips">{fanChips}</div>
+              </div>
+            ) : null}
+
+            <div className={`score-preview ${preview ? 'visible' : ''}`}>
+              <div className="score-preview-grid">{previewRows}</div>
+            </div>
+          </>
+        ) : null}
+
+        <div className="win-panel-actions">
+          <button type="button" className="btn-cancel-win" onClick={closeAllWinPanels}>✕ Cancel</button>
+          <button
+            type="button"
+            className="btn-submit-game"
+            onClick={() => submitWin(tableId)}
+            disabled={!canSubmit || savingGameTable === tableId}
+          >
+            {savingGameTable === tableId ? 'Saving...' : 'Add Game ✓'}
+          </button>
+        </div>
+      </>
+    )
+  }
+
+  const handleDragStart = (event: React.DragEvent<HTMLDivElement>, playerId: string, source: string) => {
+    dragPlayerRef.current = playerId
+    dragSourceRef.current = source
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', playerId)
+    setTimeout(() => {
+      const chip = event.currentTarget.closest('.player-chip')
+      chip?.classList.add('dragging')
+    }, 0)
+    closeAllWinPanels()
+  }
+
+  const handleDragEnd = () => {
+    document.querySelectorAll('.player-chip.dragging').forEach((el) => el.classList.remove('dragging'))
+    document.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'))
+  }
+
+  const handleDragOver = (event: React.DragEvent<HTMLElement>, zone: 'sideline' | 'table') => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    const target = event.currentTarget
+    if (zone === 'sideline') {
+      document.getElementById('sidelineArea')?.classList.add('drag-over')
+    } else {
+      target.classList.add('drag-over')
+    }
+  }
+
+  const handleDragLeave = (event: React.DragEvent<HTMLElement>, zone: 'sideline' | 'table') => {
+    event.currentTarget.classList.remove('drag-over')
+    if (zone === 'sideline') {
+      document.getElementById('sidelineArea')?.classList.remove('drag-over')
+    }
+  }
+
+  const handleDrop = async (event: React.DragEvent<HTMLElement>, zone: 'sideline' | 'table', tableId: string | null) => {
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.classList.remove('drag-over')
+    document.getElementById('sidelineArea')?.classList.remove('drag-over')
+
+    const playerId = dragPlayerRef.current
+    const source = dragSourceRef.current
+    dragPlayerRef.current = null
+    dragSourceRef.current = null
+    if (!playerId) return
+
+    if (zone === 'sideline') {
+      if (source === 'sideline') return
+      if (source) {
+        const nextTables = { ...session.tables }
+        nextTables[source] = (nextTables[source] || []).filter((id) => id !== playerId)
+        const nextSideline = session.sideline.includes(playerId) ? session.sideline : [...session.sideline, playerId]
+        await persistSession({ ...session, tables: nextTables, sideline: nextSideline })
+      }
+      return
+    }
+
+    if (!tableId) return
+    const targetPlayers = session.tables[tableId] || []
+    if (targetPlayers.includes(playerId)) return
+
+    const targetChip = (event.target as HTMLElement).closest('.player-chip') as HTMLElement | null
+    const targetPlayerId = targetChip?.dataset.player ?? null
+
+    const nextTables = { ...session.tables }
+    let nextSideline = session.sideline
+
+    if (targetPlayerId && targetPlayerId !== playerId) {
+      if (source === 'sideline') {
+        nextSideline = session.sideline.filter((id) => id !== playerId)
+        if (!nextSideline.includes(targetPlayerId)) {
+          nextSideline = [...nextSideline, targetPlayerId]
+        }
+      } else if (source && source !== tableId) {
+        nextTables[source] = (nextTables[source] || []).filter((id) => id !== playerId)
+        if (!nextTables[source].includes(targetPlayerId)) {
+          nextTables[source].push(targetPlayerId)
+        }
+      } else {
+        const sourceIdx = targetPlayers.indexOf(targetPlayerId)
+        const playerIdx = targetPlayers.indexOf(playerId)
+        if (playerIdx !== -1) nextTables[tableId][playerIdx] = targetPlayerId
+        if (sourceIdx !== -1) nextTables[tableId][sourceIdx] = playerId
+        await persistSession({ ...session, tables: nextTables, sideline: nextSideline })
+        return
+      }
+
+      const idx = targetPlayers.indexOf(targetPlayerId)
+      if (idx !== -1) {
+        nextTables[tableId] = [...targetPlayers]
+        nextTables[tableId][idx] = playerId
+      } else {
+        nextTables[tableId] = [...targetPlayers, playerId]
+      }
+    } else {
+      if (targetPlayers.length >= 4) {
+        showToast('Table is full (4/4)')
+        return
+      }
+      if (source === 'sideline') {
+        nextSideline = session.sideline.filter((id) => id !== playerId)
+      } else if (source && source !== tableId) {
+        nextTables[source] = (nextTables[source] || []).filter((id) => id !== playerId)
+      }
+      nextTables[tableId] = [...(nextTables[tableId] || []), playerId]
+    }
+
+    await persistSession({ ...session, tables: nextTables, sideline: nextSideline })
+  }
+
+  const pickerAvailable = useMemo(() => {
+    const query = pickerSearch.toLowerCase().trim()
+    return session.sideline.filter((playerId) => playerInfo(playerId).displayName.toLowerCase().includes(query))
+  }, [pickerSearch, playerInfo, session.sideline])
+
+  const swapPickerAvailable = useMemo(() => {
+    const query = swapPickerSearch.toLowerCase().trim()
+    return session.participants
+      .filter((playerId) => playerId !== swapPickerPlayer)
+      .filter((playerId) => playerInfo(playerId).displayName.toLowerCase().includes(query))
+  }, [playerInfo, session.participants, swapPickerPlayer, swapPickerSearch])
+
+  const renderSessionTables = () => {
+    return sessionTables.map((playersOnTable, index) => {
+      const tableId = String(index + 1)
+      const isValid = playersOnTable.length === 4
+      const tableName = `Table ${tableId}`
+      const visible = filteredTableCards.find((item) => item.tableId === tableId)?.visible ?? true
+      if (!visible) return null
+
+      return (
+        <div key={tableId} className={`table-card${isValid ? ' valid' : ''}`} id={`table-${tableId}`}>
+          {isValid ? (
+            <button className="clear-table-btn" type="button" onClick={() => clearSingleTable(tableId)}>✕</button>
+          ) : null}
+          <div className="table-header">
+            <span className="table-name" onClick={() => toggleTable(tableId)} style={{ cursor: 'pointer', userSelect: 'none', flex: 1 }}>
+              🀄 {tableName}
+            </span>
+            <span className={`table-status ${isValid ? 'valid' : 'waiting'}`}>
+              {isValid ? '✓ Ready' : `${playersOnTable.length}/4`}
+            </span>
+            <span id={`tableChevron-${tableId}`} onClick={() => toggleTable(tableId)} style={{ fontSize: 10, color: 'var(--gray)', marginLeft: 4, cursor: 'pointer' }}>
+              {collapsedTables[tableId] ? '▼' : '▲'}
+            </span>
+          </div>
+          <div id={`tableBody-${tableId}`} style={{ display: collapsedTables[tableId] ? 'none' : undefined }}>
+            <div
+              className="table-seats"
+              id={`seats-${tableId}`}
+              onDragOver={(event) => handleDragOver(event, 'table')}
+              onDragLeave={(event) => handleDragLeave(event, 'table')}
+              onDrop={(event) => handleDrop(event, 'table', tableId)}
+            >
+              {Array.from({ length: 4 }).map((_, seatIndex) => {
+                const playerId = playersOnTable[seatIndex]
+                if (playerId) {
+                  const info = playerInfo(playerId)
+                  return (
+                    <div key={seatIndex} className="seat-slot occupied" id={`seat-${tableId}-${seatIndex}`}>
+                      <div
+                        className="player-chip"
+                        draggable
+                        data-player={playerId}
+                        data-source={tableId}
+                        onDragStart={(event) => handleDragStart(event, playerId, tableId)}
+                        onDragEnd={handleDragEnd}
+                      >
+                        <button className="chip-remove-btn" type="button" onClick={() => removeToSideline(tableId, playerId)} title="Remove">
+                          ×
+                        </button>
+                        <div className="chip-icon">{info.icon ?? '👤'}</div>
+                        <div className="chip-name" title={info.displayName}>{shortName(info.displayName)}</div>
+                        <button className="chip-win-btn" type="button" onClick={() => setWinner(tableId, playerId)} title="Won!">
+                          👑
+                        </button>
+                        <button className="chip-swap-btn" type="button" onClick={() => openSwapPicker(tableId, playerId)} title="Swap">
+                          ⇄
+                        </button>
+                      </div>
+                    </div>
+                  )
+                }
+
+                return (
+                  <div
+                    key={seatIndex}
+                    className="seat-slot"
+                    id={`seat-${tableId}-${seatIndex}`}
+                    onDragOver={(event) => handleDragOver(event, 'table')}
+                    onDragLeave={(event) => handleDragLeave(event, 'table')}
+                    onDrop={(event) => handleDrop(event, 'table', tableId)}
+                    onClick={() => openPicker(tableId)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <span className="empty-seat-hint">+ Add</span>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="table-actions" id={`actions-${tableId}`}>
+              <button className="btn-draw" type="button" onClick={() => addDraw(tableId)} disabled={savingGameTable === tableId}>
+                {savingGameTable === tableId ? '⏳ Saving...' : '🤝 Draw (0 pts)'}
+              </button>
+              <button className="btn-draw" type="button" onClick={() => openWinPanel(tableId)} style={{ background: '#ebf4ff', color: '#3182ce' }}>
+                👑 Winner...
+              </button>
+            </div>
+            {winState.tableId === tableId ? <div className={`win-panel active`} id={`winPanel-${tableId}`}>{renderWinPanel(tableId)}</div> : <div className="win-panel" id={`winPanel-${tableId}`} />}
+          </div>
+        </div>
+      )
+    })
+  }
+
+  const sessionPlayersCount = session.participants.length
+  const sessionTableCount = session.tableCount
+
+  return (
+    <div>
+      <style jsx global>{`
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+        body { background: #f0f2f7; font-size: 13px; color: #1a202c; overflow-x: hidden; }
+        :root {
+          --purple: #667eea;
+          --purple-dark: #5568d3;
+          --green: #48bb78;
+          --green-dark: #38a169;
+          --red: #fc8181;
+          --red-dark: #e53e3e;
+          --gold: #f6ad55;
+          --gray: #718096;
+          --border: #e2e8f0;
+          --white: #ffffff;
+          --card-bg: #ffffff;
+          --radius: 10px;
+        }
+
+        .header {
+          background: linear-gradient(135deg, var(--purple) 0%, #764ba2 100%);
+          color: white;
+          padding: 12px 14px 10px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          position: sticky;
+          top: 0;
+          z-index: 100;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .header h1 { font-size: 15px; font-weight: 800; letter-spacing: 0.3px; }
+        .header-sub { font-size: 10px; opacity: 0.8; margin-top: 1px; }
+        .header-actions { display: flex; gap: 6px; }
+        .btn-icon {
+          background: rgba(255,255,255,0.2);
+          border: none; border-radius: 6px;
+          color: white; padding: 5px 8px;
+          font-size: 11px; font-weight: 600;
+          cursor: pointer; transition: background 0.15s;
+          white-space: nowrap;
+        }
+        .btn-icon:hover { background: rgba(255,255,255,0.35); }
+        .btn-icon.danger { background: rgba(252,129,129,0.3); }
+        .btn-icon.danger:hover { background: rgba(252,129,129,0.5); }
+
+        .page { display: none; padding: 12px; }
+        .page.active { display: block; }
+
+        .setup-card {
+          background: var(--card-bg);
+          border-radius: var(--radius);
+          border: 1px solid var(--border);
+          padding: 14px;
+          margin-bottom: 12px;
+        }
+        .setup-card h3 {
+          font-size: 11px; font-weight: 700;
+          text-transform: uppercase; letter-spacing: 0.6px;
+          color: var(--gray); margin-bottom: 10px;
+        }
+        .table-count-row {
+          display: flex; gap: 8px;
+        }
+        .table-count-btn {
+          flex: 1; padding: 10px 6px;
+          border: 2px solid var(--border);
+          border-radius: 8px; background: white;
+          font-size: 18px; cursor: pointer;
+          transition: all 0.15s; text-align: center;
+        }
+        .table-count-btn.selected {
+          border-color: var(--purple);
+          background: #ebf4ff;
+        }
+        .table-count-btn span { display: block; font-size: 10px; font-weight: 600; color: var(--gray); margin-top: 2px; }
+
+        .player-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 6px;
+          max-height: 340px;
+          overflow-y: auto;
+        }
+        .player-toggle {
+          border: 2px solid var(--border);
+          border-radius: 8px;
+          padding: 7px 4px;
+          cursor: pointer;
+          text-align: center;
+          transition: all 0.15s;
+          background: white;
+        }
+        .player-toggle .icon { font-size: 20px; display: block; }
+        .player-toggle .name { font-size: 10px; font-weight: 600; color: #4a5568; margin-top: 3px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .player-toggle.selected {
+          border-color: var(--purple);
+          background: #ebf4ff;
+        }
+        .player-toggle.selected .name { color: var(--purple-dark); }
+
+        .setup-footer {
+          display: flex; gap: 8px; align-items: center;
+        }
+        .selected-count {
+          font-size: 12px; color: var(--gray); font-weight: 600; flex: 1;
+        }
+        .btn-primary {
+          background: var(--purple); color: white;
+          border: none; border-radius: 8px;
+          padding: 10px 18px; font-size: 13px;
+          font-weight: 700; cursor: pointer;
+          transition: background 0.15s;
+        }
+        .btn-primary:hover:not(:disabled) { background: var(--purple-dark); }
+        .btn-primary:disabled { background: #cbd5e0; cursor: not-allowed; }
+        .btn-secondary {
+          background: #e2e8f0; color: #4a5568;
+          border: none; border-radius: 8px;
+          padding: 10px 14px; font-size: 12px;
+          font-weight: 700; cursor: pointer;
+        }
+        .btn-secondary:hover { background: #cbd5e0; }
+
+        #sessionPage {
+          display: none;
+          flex-direction: column;
+          height: calc(100vh - 48px);
+          padding: 0;
+          overflow: hidden;
+        }
+        #sessionPage.active {
+          display: flex;
+        }
+        .tables-scroll {
+          flex: 1;
+          overflow-y: auto;
+          padding: 12px 12px 0;
+          order: 2;
+        }
+        .sideline-section {
+          flex-shrink: 0;
+          padding: 10px;
+          border-bottom: 2px solid var(--border);
+          border-top: none;
+          background: var(--white);
+          border-radius: 0;
+          order: 1;
+        }
+
+        .section-label {
+          font-size: 10px; font-weight: 700;
+          text-transform: uppercase; letter-spacing: 0.6px;
+          color: var(--gray); margin-bottom: 8px;
+          display: flex; align-items: center; gap: 6px;
+        }
+        .section-label .badge {
+          background: var(--purple);
+          color: white; border-radius: 8px;
+          padding: 1px 6px; font-size: 9px;
+        }
+
+        .tables-container { margin-bottom: 10px; }
+
+        .table-card {
+          background: var(--card-bg);
+          border: 2px solid var(--border);
+          border-radius: var(--radius);
+          margin-bottom: 14px;
+          transition: border-color 0.2s, box-shadow 0.2s;
+          overflow: visible;
+          position: relative;
+        }
+        .table-card.valid {
+          border-color: var(--green);
+          box-shadow: 0 0 0 1px rgba(72,187,120,0.2);
+        }
+        .table-card.drag-over {
+          border-color: var(--purple);
+          box-shadow: 0 0 0 3px rgba(102,126,234,0.2);
+          background: #f0f4ff;
+        }
+
+        .table-header {
+          display: flex; align-items: center;
+          padding: 8px 10px 6px;
+          border-bottom: 1px solid #f0f0f0;
+        }
+        .table-name {
+          font-size: 12px; font-weight: 700;
+          color: #2d3748; flex: 1;
+        }
+        .table-status {
+          font-size: 10px; font-weight: 600;
+          padding: 2px 7px; border-radius: 8px;
+        }
+        .table-status.valid { background: #c6f6d5; color: #276749; }
+        .table-status.waiting { background: #e2e8f0; color: var(--gray); }
+
+        .table-seats {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 4px;
+          padding: 6px 8px;
+          min-height: 64px;
+        }
+
+        .seat-slot {
+          border: 1.5px dashed #cbd5e0;
+          border-radius: 7px;
+          min-height: 54px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.15s;
+          position: relative;
+        }
+        .seat-slot.occupied { border-style: solid; border-color: transparent; background: transparent; }
+        .seat-slot.drag-target {
+          border-color: var(--purple);
+          background: #f0f4ff;
+        }
+        .empty-seat-hint { font-size: 10px; color: #cbd5e0; font-weight: 600; }
+
+        .table-actions {
+          padding: 6px 8px 8px;
+          display: none;
+          gap: 5px;
+          flex-wrap: wrap;
+        }
+        .table-card.valid .table-actions { display: flex; }
+
+        .btn-draw {
+          flex: 1;
+          background: #e2e8f0; color: #4a5568;
+          border: none; border-radius: 6px;
+          padding: 7px 8px; font-size: 11px;
+          font-weight: 700; cursor: pointer;
+          transition: all 0.15s;
+          min-width: 60px;
+        }
+        .btn-draw:hover { background: #bee3f8; color: #2b6cb0; }
+
+        .win-panel {
+          padding: 8px;
+          background: #fffbeb;
+          border-top: 1px solid #faf089;
+          display: none;
+        }
+        .win-panel.active { display: block; }
+        .win-panel-title {
+          font-size: 10px; font-weight: 700;
+          text-transform: uppercase; letter-spacing: 0.5px;
+          color: #b7791f; margin-bottom: 6px;
+        }
+        .win-type-row {
+          display: flex; gap: 5px; margin-bottom: 8px;
+        }
+        .win-type-btn {
+          flex: 1; padding: 6px 4px;
+          border: 2px solid var(--border);
+          border-radius: 6px; background: white;
+          font-size: 11px; font-weight: 700;
+          cursor: pointer; transition: all 0.15s;
+          text-align: center;
+        }
+        .win-type-btn.selected { border-color: var(--gold); background: #fffbeb; }
+
+        .loser-row {
+          margin-bottom: 8px; display: none;
+        }
+        .loser-row.visible { display: block; }
+        .loser-label { font-size: 10px; font-weight: 600; color: var(--gray); margin-bottom: 4px; }
+        .loser-chips { display: flex; gap: 4px; flex-wrap: wrap; }
+        .loser-chip {
+          padding: 4px 8px;
+          border: 1.5px solid var(--border);
+          border-radius: 12px; background: white;
+          font-size: 11px; font-weight: 600;
+          cursor: pointer; transition: all 0.15s;
+        }
+        .loser-chip.selected { border-color: var(--red); background: #fff5f5; color: var(--red-dark); }
+
+        .fan-row { margin-bottom: 8px; }
+        .fan-label { font-size: 10px; font-weight: 600; color: var(--gray); margin-bottom: 4px; display: flex; justify-content: space-between; }
+        .fan-chips { display: flex; gap: 3px; flex-wrap: wrap; }
+        .fan-chip {
+          padding: 4px 7px;
+          border: 1.5px solid var(--border);
+          border-radius: 8px; background: white;
+          font-size: 11px; font-weight: 700;
+          cursor: pointer; transition: all 0.15s;
+          color: #4a5568;
+        }
+        .fan-chip.selected { border-color: var(--purple); background: #ebf4ff; color: var(--purple-dark); }
+
+        .score-preview {
+          background: linear-gradient(135deg, #667eea, #764ba2);
+          border-radius: 8px;
+          padding: 8px;
+          margin-bottom: 8px;
+          display: none;
+        }
+        .score-preview.visible { display: block; }
+        .score-preview-grid {
+          display: grid; grid-template-columns: 1fr 1fr;
+          gap: 4px;
+        }
+        .score-preview-item {
+          background: rgba(255,255,255,0.15);
+          border-radius: 5px; padding: 4px 6px;
+        }
+        .score-preview-name { font-size: 10px; color: rgba(255,255,255,0.8); }
+        .score-preview-val { font-size: 13px; font-weight: 800; }
+        .score-preview-val.pos { color: #68d391; }
+        .score-preview-val.neg { color: #fc8181; }
+        .score-preview-val.score-zero { color: rgba(255,255,255,0.5); }
+
+        .win-panel-actions { display: flex; gap: 5px; }
+        .btn-submit-game {
+          flex: 1; background: var(--purple); color: white;
+          border: none; border-radius: 6px;
+          padding: 8px; font-size: 12px;
+          font-weight: 700; cursor: pointer;
+          transition: all 0.15s;
+        }
+        .btn-submit-game:hover:not(:disabled) { background: var(--purple-dark); }
+        .btn-submit-game:disabled { background: #cbd5e0; cursor: not-allowed; }
+        .btn-cancel-win {
+          background: #e2e8f0; color: #4a5568;
+          border: none; border-radius: 6px;
+          padding: 8px 10px; font-size: 12px;
+          font-weight: 700; cursor: pointer;
+        }
+        .btn-cancel-win:hover { background: #cbd5e0; }
+
+        .score-flash {
+          position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+          background: rgba(72,187,120,0.92);
+          display: flex; flex-direction: column;
+          align-items: center; justify-content: center;
+          z-index: 999; color: white;
+          animation: flashIn 0.2s ease;
+          pointer-events: none;
+        }
+        @keyframes flashIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .flash-title { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+        .flash-scores { display: flex; flex-direction: column; gap: 4px; width: 80%; }
+        .flash-row { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.2); border-radius: 6px; padding: 5px 10px; font-weight: 700; font-size: 14px; }
+        .flash-score-val.pos { color: #68d391; }
+        .flash-score-val.neg { color: #fc8181; }
+
+        .sideline-section {
+          background: var(--card-bg);
+          border-radius: var(--radius);
+          border: 1px solid var(--border);
+          padding: 10px;
+        }
+        .sideline-area {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          min-height: 50px;
+          padding: 6px;
+          border: 2px dashed #e2e8f0;
+          border-radius: 8px;
+          transition: all 0.15s;
+          max-height: 160px;
+          overflow-y: auto;
+        }
+        .sideline-area.drag-over {
+          border-color: var(--purple);
+          background: #f0f4ff;
+        }
+        .sideline-empty {
+          font-size: 11px; color: #cbd5e0;
+          font-weight: 600; padding: 8px; width: 100%;
+          text-align: center;
+        }
+
+        .player-chip {
+          display: flex; flex-direction: column;
+          align-items: center;
+          width: 52px;
+          cursor: grab;
+          user-select: none;
+          transition: transform 0.1s, opacity 0.1s;
+          position: relative;
+        }
+        .player-chip:active { cursor: grabbing; }
+        .player-chip.dragging {
+          opacity: 0.4; transform: scale(0.9);
+        }
+        .player-chip.winner-candidate {
+          outline: 2px solid var(--gold);
+          outline-offset: 2px;
+          border-radius: 6px;
+        }
+
+        .chip-icon {
+          width: 40px; height: 40px;
+          background: linear-gradient(135deg, #ebf4ff, #e9d8fd);
+          border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 22px;
+          border: 2px solid var(--border);
+          transition: border-color 0.15s;
+        }
+        .player-chip:hover .chip-icon { border-color: var(--purple); }
+        .chip-name {
+          font-size: 9px; font-weight: 700;
+          text-align: center; color: #4a5568;
+          margin-top: 3px;
+          max-width: 52px;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+
+        .seat-slot .player-chip { width: 100%; padding: 4px 2px; }
+        .seat-slot .chip-icon { width: 32px; height: 32px; font-size: 16px; }
+        .seat-slot .chip-name { font-size: 9px; }
+
+        .toast {
+          position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+          background: #2d3748; color: white;
+          border-radius: 20px; padding: 8px 16px;
+          font-size: 12px; font-weight: 600;
+          z-index: 1000; display: none;
+          animation: toastIn 0.2s ease;
+        }
+        .toast.active {
+          display: block;
+        }
+        @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(8px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+        .loading-screen {
+          display: flex; flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          height: 200px; color: var(--gray);
+        }
+        .spinner {
+          width: 32px; height: 32px;
+          border: 3px solid var(--border);
+          border-top-color: var(--purple);
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+          margin-bottom: 10px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .divider { height: 1px; background: var(--border); margin: 10px 0; }
+        .error-msg { background: #fff5f5; color: #c53030; border-radius: 6px; padding: 8px 10px; font-size: 11px; margin-top: 6px; display: none; }
+
+        .menu-item {
+          display: block; width: 100%;
+          padding: 10px 14px; border: none;
+          background: white; text-align: left;
+          font-size: 13px; font-weight: 600;
+          cursor: pointer; color: #2d3748;
+          border-bottom: 1px solid #f0f0f0;
+        }
+        .menu-item:last-child { border-bottom: none; }
+        .menu-item:hover { background: #f7fafc; }
+        .danger-item { color: #e53e3e; }
+        .danger-item:hover { background: #fff5f5; }
+
+        .info-section {
+          display: flex;
+          gap: 12px;
+          align-items: flex-start;
+        }
+        .info-icon {
+          font-size: 20px;
+          width: 32px;
+          height: 32px;
+          background: #ebf4ff;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        .info-title {
+          font-size: 13px;
+          font-weight: 700;
+          color: #2d3748;
+          margin-bottom: 3px;
+        }
+        .info-body {
+          font-size: 12px;
+          color: #718096;
+          line-height: 1.5;
+        }
+
+        .chip-remove-btn {
+          position: absolute; top: -3px; left: -3px;
+          width: 14px; height: 14px;
+          background: rgba(0,0,0,0.25);
+          border-radius: 50%;
+          border: none; cursor: pointer;
+          font-size: 10px;
+          display: none;
+          align-items: center; justify-content: center;
+          font-weight: 700; color: white;
+          z-index: 10;
+          line-height: 1;
+          opacity: 0;
+          transition: opacity 0.15s, background 0.15s;
+        }
+        .chip-win-btn {
+          position: absolute; top: -4px; right: -4px;
+          width: 16px; height: 16px;
+          background: var(--gold);
+          border-radius: 50%;
+          border: none; cursor: pointer;
+          font-size: 9px; display: none;
+          align-items: center; justify-content: center;
+          font-weight: 700; color: white;
+          z-index: 10;
+          opacity: 0;
+          transition: opacity 0.15s;
+        }
+        .table-card.valid .player-chip .chip-remove-btn { display: flex; }
+        .table-card.valid .player-chip .chip-win-btn { display: flex; }
+        .table-card.valid .player-chip:hover .chip-remove-btn { opacity: 1; }
+        .table-card.valid .player-chip:hover .chip-win-btn { opacity: 1; }
+        .chip-remove-btn:hover { background: rgba(0,0,0,0.5) !important; }
+
+        .chip-swap-btn {
+          position: absolute; bottom: -4px; right: -4px;
+          width: 16px; height: 16px;
+          background: #667eea;
+          border-radius: 50%;
+          border: none; cursor: pointer;
+          font-size: 9px; display: none;
+          align-items: center; justify-content: center;
+          font-weight: 700; color: white;
+          z-index: 10;
+          opacity: 0;
+          transition: opacity 0.15s;
+        }
+        .table-card.valid .player-chip .chip-swap-btn { display: flex; }
+        .table-card.valid .player-chip:hover .chip-swap-btn { opacity: 1; }
+
+        .clear-table-btn {
+          position: absolute;
+          top: -10px;
+          left: -10px;
+          width: 22px;
+          height: 22px;
+          border: none;
+          border-radius: 50%;
+          background: #e2e8f0;
+          color: #718096;
+          font-size: 12px;
+          font-weight: 800;
+          line-height: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          z-index: 100;
+          opacity: 0;
+          transition:
+            opacity 0.15s,
+            background 0.15s,
+            transform 0.15s;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .table-card:hover .clear-table-btn {
+          opacity: 1;
+        }
+        .clear-table-btn:hover {
+          background: #fed7d7;
+          color: #c53030;
+          transform: scale(1.08);
+        }
+      `}</style>
+
+      <div className="header">
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 15, fontWeight: 800 }}>🀄 Session</div>
+          <div className="header-sub">{page === 'setup' ? (session.active ? 'Editing session' : 'New session') : sessionHeaderLabel}</div>
+        </div>
+        <div className="header-actions">
+          <button className="btn-icon" type="button" onClick={() => setInfoOpen((current) => !current)} id="btnInfo">?</button>
+          <button
+            className="btn-icon"
+            type="button"
+            onClick={() => setHeaderMenuOpen((current) => !current)}
+            id="btnMenu"
+            style={{ display: page === 'session' ? '' : 'none' }}
+          >
+            ⋯
+          </button>
+          {headerMenuOpen ? (
+            <div
+              id="headerMenu"
+              style={{
+                display: 'block',
+                position: 'absolute',
+                top: 44,
+                right: 10,
+                background: 'white',
+                borderRadius: 10,
+                boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                overflow: 'hidden',
+                zIndex: 200,
+                minWidth: 160
+              }}
+            >
+              <button type="button" onClick={() => { setPage('setup'); setHeaderMenuOpen(false) }} className="menu-item">⚙️ Edit Session</button>
+              <button type="button" onClick={() => { clearAllTables(); setHeaderMenuOpen(false) }} className="menu-item">⬇️ Clear All Tables</button>
+              <button type="button" onClick={() => { confirmClearSession(); setHeaderMenuOpen(false) }} className="menu-item danger-item">🗑 Reset Session</button>
+            </div>
+          ) : null}
+        </div>
       </div>
-    </aside>
+
+      <div id="loadingScreen" className={`page ${page === 'loading' ? 'active' : ''}`}>
+        <div className="loading-screen"><div className="spinner" />
+          <span>Loading session...</span>
+        </div>
+      </div>
+
+      <div id="setupPage" className={`page ${page === 'setup' ? 'active' : ''}`}>
+        <div className="setup-card">
+          <h3>📋 Number of Tables</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <input
+              type="number"
+              min={1}
+              max={99}
+              value={setupTableCount}
+              onChange={(event) => selectTableCount(Number(event.target.value) || 1)}
+              style={{ width: 70, padding: '8px 10px', border: '2px solid #e2e8f0', borderRadius: 8, fontSize: 18, fontWeight: 700, textAlign: 'center' }}
+            />
+            <span style={{ fontSize: 13, color: '#718096', fontWeight: 600 }}>tables</span>
+          </div>
+        </div>
+
+        <div className="setup-card">
+          <h3>👥 Select Participating Players</h3>
+          <input
+            type="text"
+            value={setupSearch}
+            onChange={(event) => setSetupSearch(event.target.value)}
+            placeholder="Search players…"
+            style={{ width: '100%', padding: '8px 10px', marginBottom: 8, border: '2px solid #e2e8f0', borderRadius: 8, fontSize: 13 }}
+          />
+          <div className="player-grid">
+            {setupPlayers.map((player) => (
+              <button
+                key={player.id}
+                type="button"
+                className={`player-toggle${setupParticipants.includes(player.id) ? ' selected' : ''}`}
+                onClick={() => togglePlayerSetup(player.id)}
+              >
+                <span className="icon">{player.icon || '👤'}</span>
+                <span className="name" title={player.displayName}>{player.displayName}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="setup-card" style={{ padding: '12px 14px' }}>
+          <div className="setup-footer">
+            <span className="selected-count">{setupCount} player{setupCount !== 1 ? 's' : ''} selected</span>
+            <button className="btn-secondary" type="button" onClick={selectAllPlayers}>All</button>
+            <button className="btn-primary" type="button" onClick={startSession} disabled={setupCount < 4 || setupTableCount < 1 || savingSession}>
+              {savingSession ? 'Saving...' : 'Start Session'}
+            </button>
+          </div>
+          {setupError ? <div className="error-msg" style={{ display: 'block' }}>{setupError}</div> : null}
+        </div>
+      </div>
+
+      <div id="sessionPage" className={`page ${page === 'session' ? 'active' : ''}`}>
+        <div className="tables-scroll">
+          <div style={{ paddingBottom: 8 }}>
+            <input
+              type="text"
+              value={tableSearch}
+              onChange={(event) => setTableSearch(event.target.value)}
+              placeholder="🔍 Search table or player…"
+              style={{ width: '100%', padding: '8px 10px', border: '2px solid #e2e8f0', borderRadius: 8, fontSize: 12, background: 'white' }}
+            />
+          </div>
+          <div className="tables-container">{renderSessionTables()}</div>
+        </div>
+
+        <div className="sideline-section">
+          <div className="section-label" onClick={toggleSideline} style={{ cursor: 'pointer', userSelect: 'none' }}>
+            🪑 Sideline
+            <span className="badge" id="sidelineCount">{sessionSideline.length}</span>
+            <span id="sidelineChevron" style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--gray)' }}>{sidelineCollapsed ? '▼' : '▲'}</span>
+          </div>
+          <div id="sidelineBody" style={{ display: sidelineCollapsed ? 'none' : 'block' }}>
+            <div
+              className={`sideline-area${dragContext.player ? ' drag-over' : ''}`}
+              id="sidelineArea"
+              onDragOver={(event) => handleDragOver(event, 'sideline')}
+              onDragLeave={(event) => handleDragLeave(event, 'sideline')}
+              onDrop={(event) => handleDrop(event, 'sideline', null)}
+            >
+              {sessionSideline.length === 0 ? (
+                <div className="sideline-empty" id="sidelineEmpty">All players at tables!</div>
+              ) : (
+                sessionSideline.map((playerId) => {
+                  const info = playerInfo(playerId)
+                  return (
+                    <div
+                      key={playerId}
+                      className="player-chip"
+                      draggable
+                      data-player={playerId}
+                      data-source="sideline"
+                      onDragStart={(event) => handleDragStart(event, playerId, 'sideline')}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <div className="chip-icon">{info.icon || '👤'}</div>
+                      <div className="chip-name" title={info.displayName}>{shortName(info.displayName)}</div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {toast ? <div className="toast active">{toast}</div> : null}
+      {flash ? (
+        <div className="score-flash">
+          <div className="flash-title">{flash.winner ? `👑 ${shortName(playerInfo(flash.winner).displayName)} wins!` : '🤝 Draw!'}</div>
+          <div className="flash-scores">
+            {Object.entries(flash.scores).map(([playerId, score]) => {
+              const info = playerInfo(playerId)
+              const cls = score > 0 ? 'pos' : score < 0 ? 'neg' : ''
+              return (
+                <div key={playerId} className="flash-row">
+                  <span>{info.icon || '👤'} {shortName(info.displayName)}</span>
+                  <span className={`flash-score-val ${cls}`}>{score > 0 ? `+${score}` : score}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      <div id="infoOverlay" style={{ display: infoOpen ? 'block' : 'none', position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 500, padding: 16, overflowY: 'auto' }}>
+        <div style={{ background: 'white', borderRadius: 14, overflow: 'hidden', maxWidth: 380, margin: '0 auto' }}>
+          <div style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', padding: '16px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: 'white' }}>🀄 Session Manager</div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>How it works</div>
+            </div>
+            <button type="button" onClick={() => setInfoOpen(false)} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, color: 'white', fontSize: 18, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+          </div>
+          <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className="info-section">
+              <div className="info-icon">📋</div>
+              <div>
+                <div className="info-title">What is a Session?</div>
+                <div className="info-body">A session is a single mahjong night. You choose which players are attending and how many tables are running. The session tracks who is seated where and records all games played during the night.</div>
+              </div>
+            </div>
+            <div className="info-section">
+              <div className="info-icon">🔢</div>
+              <div>
+                <div className="info-title">Number of Tables</div>
+                <div className="info-body">Set how many tables will be running simultaneously. Each table seats exactly 4 players. You can have as many tables as you need.</div>
+              </div>
+            </div>
+            <div className="info-section">
+              <div className="info-icon">👥</div>
+              <div>
+                <div className="info-title">Selecting Players</div>
+                <div className="info-body">Choose all players attending tonight. Anyone not selected won&apos;t appear in the session. You need at least 4 players to start. Use the search bar to find players quickly.</div>
+              </div>
+            </div>
+            <div className="info-section">
+              <div className="info-icon">🪑</div>
+              <div>
+                <div className="info-title">Sideline</div>
+                <div className="info-body">Players who are attending but not currently seated at a table sit on the sideline. Drag them to a table when they&apos;re ready to play, or drag them back to the sideline between rounds.</div>
+              </div>
+            </div>
+            <div className="info-section">
+              <div className="info-icon">🎴</div>
+              <div>
+                <div className="info-title">Recording a Game</div>
+                <div className="info-body">Once a table has 4 players it shows <strong>✓ Ready</strong>. After a game finishes, tap <strong>Winner...</strong> to record who won, the win type (self-draw or discard), and the fan count. Or tap <strong>Draw</strong> if no one won.</div>
+              </div>
+            </div>
+            <div className="info-section">
+              <div className="info-icon">🀄</div>
+              <div>
+                <div className="info-title">Fan Scoring</div>
+                <div className="info-body">Scores are based on fan count (3–13+). <strong>Self-draw:</strong> winner gets 3× base, each loser pays 1× base. <strong>Discard win:</strong> winner gets 2× base, the discarder pays 2× base, others pay nothing.</div>
+              </div>
+            </div>
+            <div style={{ background: '#f7fafc', borderRadius: 10, padding: '12px 14px' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#4a5568', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Fan → Base Points</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 4 }}>
+                {Object.entries(FAN_POINTS).map(([fanValue, points]) => (
+                  <div key={fanValue} style={{ background: 'white', borderRadius: 6, padding: '4px 6px', textAlign: 'center', border: '1px solid #e2e8f0' }}>
+                    <div style={{ fontSize: 10, color: '#718096' }}>{fanValue} fan</div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: '#667eea' }}>{points}</div>
+                  </div>
+                ))}
+                <div style={{ background: 'white', borderRadius: 6, padding: '4px 6px', textAlign: 'center', border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: 10, color: '#718096' }}>13+ fan</div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: '#667eea' }}>384</div>
+                </div>
+              </div>
+            </div>
+            <div className="info-section">
+              <div className="info-icon">⚙️</div>
+              <div>
+                <div className="info-title">Edit / Clear All Tables / Reset</div>
+                <div className="info-body"><strong>Edit</strong> lets you change which players are in the session or the number of tables. <strong>Clear All Tables</strong> moves everyone back to the sideline without ending the session. <strong>Reset Session</strong> wipes everything and starts fresh.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="pickerOverlay" style={{ display: pickerTableId ? 'flex' : 'none', position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 600, padding: 16, alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ background: 'white', borderRadius: 14, overflow: 'hidden', width: '100%', maxWidth: 340, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: 'white' }}>Add Player to Table {pickerTableId}</div>
+            <button type="button" onClick={closePicker} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, color: 'white', fontSize: 18, width: 30, height: 30, cursor: 'pointer' }}>×</button>
+          </div>
+          <div style={{ padding: '10px 12px', borderBottom: '1px solid #e2e8f0' }}>
+            <input
+              type="text"
+              value={pickerSearch}
+              onChange={(event) => setPickerSearch(event.target.value)}
+              placeholder="Search players…"
+              style={{ width: '100%', padding: '8px 10px', border: '2px solid #e2e8f0', borderRadius: 8, fontSize: 13 }}
+            />
+          </div>
+          <div id="pickerList" style={{ overflowY: 'auto', padding: '8px 12px', display: 'flex', flexWrap: 'wrap', gap: 8, minHeight: 80 }}>
+            {pickerAvailable.length === 0 ? null : pickerAvailable.map((playerId) => {
+              const info = playerInfo(playerId)
+              return (
+                <button
+                  key={playerId}
+                  type="button"
+                  onClick={() => pickPlayer(playerId)}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 60, cursor: 'pointer', padding: '6px 4px', borderRadius: 8, border: '2px solid #e2e8f0', background: 'white', transition: 'all 0.15s' }}
+                >
+                  <div style={{ width: 36, height: 36, background: 'linear-gradient(135deg,#ebf4ff,#e9d8fd)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>{info.icon || '👤'}</div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: '#4a5568', marginTop: 4, textAlign: 'center', maxWidth: 56, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortName(info.displayName)}</div>
+                </button>
+              )
+            })}
+          </div>
+          <div style={{ padding: '10px 12px', borderTop: '1px solid #e2e8f0', fontSize: 11, color: '#a0aec0', textAlign: 'center' }} id="pickerEmpty">
+            {pickerAvailable.length === 0 ? (pickerSearch ? 'No players match your search.' : 'No players on sideline.') : ''}
+          </div>
+        </div>
+      </div>
+
+      <div id="swapPickerOverlay" style={{ display: swapPickerTableId ? 'flex' : 'none', position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 700, padding: 16, alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ background: 'white', borderRadius: 14, overflow: 'hidden', width: '100%', maxWidth: 340, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: 'white' }}>Swap {swapPickerPlayer ? shortName(playerInfo(swapPickerPlayer).displayName) : ''}</div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 1 }}>Select a player to swap with</div>
+            </div>
+            <button type="button" onClick={closeSwapPicker} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, color: 'white', fontSize: 18, width: 30, height: 30, cursor: 'pointer' }}>×</button>
+          </div>
+          <div style={{ padding: '10px 12px', borderBottom: '1px solid #e2e8f0' }}>
+            <input
+              type="text"
+              value={swapPickerSearch}
+              onChange={(event) => setSwapPickerSearch(event.target.value)}
+              placeholder="Search players…"
+              style={{ width: '100%', padding: '8px 10px', border: '2px solid #e2e8f0', borderRadius: 8, fontSize: 13 }}
+            />
+          </div>
+          <div id="swapPickerList" style={{ overflowY: 'auto', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 6, minHeight: 80 }}>
+            {swapPickerAvailable.length === 0 ? <div id="swapPickerEmpty" style={{ padding: '6px 12px', fontSize: 11, color: '#a0aec0', textAlign: 'center' }}>No players match your search.</div> : swapPickerAvailable.map((playerId) => {
+              const info = playerInfo(playerId)
+              const location = session.tables && Object.entries(session.tables).find(([, playersOnTable]) => playersOnTable.includes(playerId))
+              const locationLabel = location ? `Table ${location[0]}` : 'Sideline'
+              const locationColor = location ? '#667eea' : '#48bb78'
+              return (
+                <button
+                  key={playerId}
+                  type="button"
+                  onClick={() => doSwap(playerId)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, border: '2px solid #e2e8f0', background: 'white', cursor: 'pointer', transition: 'all 0.15s' }}
+                >
+                  <div style={{ width: 36, height: 36, background: 'linear-gradient(135deg,#ebf4ff,#e9d8fd)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{info.icon || '👤'}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#2d3748' }}>{info.displayName}</div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: locationColor }}>{locationLabel}</div>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#a0aec0' }}>⇄</div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }

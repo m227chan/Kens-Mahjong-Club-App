@@ -1,27 +1,4 @@
 {
-  "indexes": [
-    {
-      "collectionGroup": "players",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "active", "order": "ASCENDING" },
-        { "fieldPath": "displayName", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "games",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "datetime", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "playerStats",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "eloRank", "order": "ASCENDING" }
-      ]
-    }
-  ],
+  "indexes": [],
   "fieldOverrides": []
 }

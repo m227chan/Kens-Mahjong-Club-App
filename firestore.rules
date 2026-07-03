@@ -26,6 +26,11 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isSignedIn();
     }
+    match /sessions/{id} {
+      allow read: if true;
+      allow create, update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
     match /appConfig/{id} {
       allow read: if true;
       allow write: if isAdmin();
