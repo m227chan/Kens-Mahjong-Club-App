@@ -91,26 +91,36 @@ export default function SessionManager() {
 
   useEffect(() => {
     const playerUnsub = subscribePlayers((nextPlayers) => setPlayers(nextPlayers))
-    const sessionUnsub = subscribeActiveSession((nextSession) => {
-      if (nextSession && nextSession.isActive) {
-        setSession({
-          id: nextSession.id,
-          active: true,
-          tableCount: nextSession.tableCount,
-          participants: nextSession.participants,
-          tables: nextSession.tables,
-          sideline: nextSession.sideline
-        })
-        setSetupParticipants(nextSession.participants)
-        setSetupTableCount(nextSession.tableCount)
-        setPage('session')
-      } else {
+    const sessionUnsub = subscribeActiveSession(
+      (nextSession) => {
+        if (nextSession && nextSession.isActive) {
+          setSession({
+            id: nextSession.id,
+            active: true,
+            tableCount: nextSession.tableCount,
+            participants: nextSession.participants,
+            tables: nextSession.tables,
+            sideline: nextSession.sideline
+          })
+          setSetupParticipants(nextSession.participants)
+          setSetupTableCount(nextSession.tableCount)
+          setPage('session')
+        } else {
+          setSession(initialSession)
+          setSetupParticipants([])
+          setSetupTableCount(1)
+          setPage('setup')
+        }
+      },
+      (error) => {
+        console.error('Unable to load active session.', error)
         setSession(initialSession)
         setSetupParticipants([])
         setSetupTableCount(1)
+        setSetupError('Unable to load sessions. Check Firestore rules for the sessions collection.')
         setPage('setup')
       }
-    })
+    )
 
     return () => {
       playerUnsub()
