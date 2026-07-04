@@ -12,7 +12,8 @@ The app distinguishes between users and players:
 
 ## Features
 
-- Email and Google sign-in through Firebase Authentication.
+- Google sign-in through Firebase Authentication.
+- Manager email notifications for join requests through a Vercel API route and Resend.
 - User homepage with personal stats across linked players in all joined clubs.
 - Create clubs with unique shareable club IDs.
 - Join clubs by club ID with manager approval.
@@ -30,14 +31,13 @@ The app distinguishes between users and players:
 
 ## Tech Stack
 
-- Next.js 14 App Router
+- Next.js 16 App Router
 - React 18
 - TypeScript
 - Tailwind CSS
 - Firebase Authentication
 - Cloud Firestore
-- Firebase Hosting
-- Firebase Cloud Functions
+- Vercel hosting and server routes
 - Recharts
 - Vitest
 
@@ -49,6 +49,7 @@ The app distinguishes between users and players:
 - npm
 - A Firebase project
 - Firebase CLI for deployment
+- A Resend API key for join-request email notifications
 
 ### Firebase Setup
 
@@ -79,7 +80,15 @@ On PowerShell, use:
 Copy-Item .env.example .env.local
 ```
 
-3. Fill in `.env.local` with your Firebase web app config.
+3. Fill in `.env.local` with your Firebase web app config and email settings:
+
+```env
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+RESEND_API_KEY=re_your_resend_key
+EMAIL_FROM="Ken's Mahjong Club <onboarding@resend.dev>"
+```
+
+Use your deployed Vercel URL for `NEXT_PUBLIC_APP_URL` in production. For production email, verify a sending domain in Resend and replace `EMAIL_FROM` with that domain's sender address.
 
 4. Start the development server:
 

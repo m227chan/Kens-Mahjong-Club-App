@@ -35,6 +35,7 @@ type UserLike = {
   email: string | null
   displayName: string | null
   photoURL?: string | null
+  getIdToken?: () => Promise<string>
 }
 
 type ImportGameInput = {
@@ -185,21 +186,28 @@ export async function requestToJoinClub(input: { clubId: string; user: UserLike;
   const batch = writeBatch(db)
   batch.set(requestRef, request, { merge: true })
 
-  if (club.managerEmail) {
-    const acceptUrl = `${input.appUrl ?? ''}/club/${encodeURIComponent(clubId)}?request=${encodeURIComponent(input.user.uid)}`
-    batch.set(doc(collection(db, 'mail')), {
-      clubId,
-      requesterUid: input.user.uid,
-      to: [club.managerEmail],
-      message: {
-        subject: `${input.user.displayName ?? input.user.email ?? 'Someone'} requested to join ${club.name}`,
-        html: `<p>${input.user.displayName ?? input.user.email ?? 'A user'} requested to join ${club.name}.</p><p><a href="${acceptUrl}">Open request</a></p>`
-      },
-      createdAt: Timestamp.now()
-    })
+  await batch.commit()
+
+  if (club.managerEmail && input.user.getIdToken) {
+    try {
+      const token = await input.user.getIdToken()
+      const response = await fetch('/api/send-join-request-email', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ clubId, appUrl: input.appUrl ?? '' })
+      })
+
+      if (!response.ok) {
+        console.warn('Join request email was not sent.', await response.text())
+      }
+    } catch (error) {
+      console.warn('Join request email was not sent.', error)
+    }
   }
 
-  await batch.commit()
   return 'requested'
 }
 

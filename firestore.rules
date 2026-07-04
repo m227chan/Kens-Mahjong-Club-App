@@ -27,15 +27,7 @@ service cloud.firestore {
     }
 
     match /mail/{id} {
-      allow create: if isSignedIn()
-        && request.resource.data.clubId is string
-        && request.resource.data.requesterUid == request.auth.uid
-        && request.resource.data.to is list
-        && request.resource.data.to.size() == 1
-        && exists(/databases/$(database)/documents/clubs/$(request.resource.data.clubId))
-        && request.resource.data.to[0] == get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data.managerEmail
-        && getAfter(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)/joinRequests/$(request.auth.uid)).data.status == 'pending';
-      allow read, update, delete: if false;
+      allow read, write: if false;
     }
 
     match /clubs/{clubId} {
