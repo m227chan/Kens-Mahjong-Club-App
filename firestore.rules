@@ -87,7 +87,15 @@ service cloud.firestore {
       }
       match /seasons/{id} {
         allow read: if isClubMember(clubId);
-        allow create, update: if isClubManager(clubId);
+        allow create: if isClubManager(clubId)
+          || (
+            isSignedIn()
+            && id == '1'
+            && request.resource.data.seasonNumber == 1
+            && request.resource.data.createdBy == request.auth.uid
+            && getAfter(/databases/$(database)/documents/clubs/$(clubId)).data.managerUid == request.auth.uid
+          );
+        allow update: if isClubManager(clubId);
         allow delete: if isClubManager(clubId);
       }
       match /tableArrangements/{id} {
