@@ -250,14 +250,20 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                 <p className="mt-1 text-sm text-slate-500">
                   Active season: Season {activeSeasonNumber}. New clubs start at Season 1 by default.
                 </p>
-                <button
-                  type="button"
-                  onClick={createNextSeason}
-                  disabled={seasonAction}
-                  className="mt-4 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-500 disabled:opacity-50"
-                >
-                  {seasonAction ? 'Starting season...' : 'Start new season'}
-                </button>
+                {isManager ? (
+                  <button
+                    type="button"
+                    onClick={createNextSeason}
+                    disabled={seasonAction}
+                    className="mt-4 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-500 disabled:opacity-50"
+                  >
+                    {seasonAction ? 'Starting season...' : 'Start new season'}
+                  </button>
+                ) : (
+                  <p className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600">
+                    Only the club manager can start a new season.
+                  </p>
+                )}
               </div>
             </div>
           </div>
