@@ -56,6 +56,47 @@ function normalizeName(value: string) {
   return value.trim().toLocaleLowerCase()
 }
 
+function parseCsvDate(value: string) {
+  const text = value.trim()
+  if (!text) return null
+
+  const nativeDate = new Date(text)
+  if (Number.isFinite(nativeDate.getTime())) return nativeDate
+
+  const match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/)
+  if (!match) return null
+
+  const [, dayText, monthText, yearText, hourText = '0', minuteText = '0', secondText = '0'] = match
+  const day = Number(dayText)
+  const month = Number(monthText)
+  const year = Number(yearText)
+  const hour = Number(hourText)
+  const minute = Number(minuteText)
+  const second = Number(secondText)
+  const parsed = new Date(year, month - 1, day, hour, minute, second)
+
+  if (
+    parsed.getFullYear() !== year
+    || parsed.getMonth() !== month - 1
+    || parsed.getDate() !== day
+    || parsed.getHours() !== hour
+    || parsed.getMinutes() !== minute
+    || parsed.getSeconds() !== second
+  ) {
+    return null
+  }
+
+  return parsed
+}
+
+function parseScore(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const normalized = trimmed.replace(/,/g, '')
+  const score = Number(normalized)
+  return Number.isFinite(score) ? score : null
+}
+
 function formatDate(game: GameDoc) {
   const date = game.datetime?.toDate?.()
   return date ? date.toLocaleString() : ''
@@ -174,6 +215,11 @@ export default function GameLogsModal({
     try {
       const rows = parseCsv(await file.text())
       const [headers, ...dataRows] = rows
+      if (!headers?.length) {
+        setImportMessage('That CSV does not have a header row.')
+        return
+      }
+
       const normalizedHeaders = headers.map((header) => normalizeName(header))
       const datetimeIndex = normalizedHeaders.indexOf('datetime')
       const seasonIndex = normalizedHeaders.indexOf('season')
@@ -183,7 +229,68 @@ export default function GameLogsModal({
         .filter((column) => column.name && !ignored.has(normalizeName(column.name)))
 
       const existingByName = new Map(players.map((player) => [normalizeName(player.displayName), player]))
-      const missingNames = Array.from(new Set(playerColumns.map((column) => column.name).filter((name) => !existingByName.has(normalizeName(name)))))
+      const parsedGamesByName: Array<{
+        datetime?: Timestamp
+        seasonNumber: number
+        entries: Array<{ playerName: string; score: number }>
+        notes: string
+      }> = []
+      const skippedRows: string[] = []
+
+      dataRows.forEach((row, index) => {
+        const rowNumber = index + 2
+        const dateText = datetimeIndex >= 0 ? row[datetimeIndex] ?? '' : ''
+        const date = dateText ? parseCsvDate(dateText) : null
+        if (dateText && !date) {
+          skippedRows.push(`row ${rowNumber}: invalid datetime`)
+          return
+        }
+
+        const scoredEntries = playerColumns
+          .map((column) => {
+            const score = parseScore(row[column.index] ?? '')
+            return score === null ? null : { playerName: column.name, score }
+          })
+          .filter((entry): entry is { playerName: string; score: number } => Boolean(entry))
+
+        let entries = scoredEntries
+        if (entries.length > 4) {
+          const nonZeroEntries = entries.filter((entry) => entry.score !== 0)
+          if (nonZeroEntries.length === 4) {
+            entries = nonZeroEntries
+          } else {
+            skippedRows.push(`row ${rowNumber}: ambiguous player list (${entries.length} filled scores, ${nonZeroEntries.length} non-zero)`)
+            return
+          }
+        }
+
+        if (entries.length !== 4) {
+          skippedRows.push(`row ${rowNumber}: expected 4 players, found ${entries.length}`)
+          return
+        }
+
+        const totalScore = entries.reduce((sum, entry) => sum + entry.score, 0)
+        if (totalScore !== 0) {
+          skippedRows.push(`row ${rowNumber}: scores sum to ${totalScore}`)
+          return
+        }
+
+        parsedGamesByName.push({
+          datetime: date ? Timestamp.fromDate(date) : undefined,
+          seasonNumber: seasonIndex >= 0 && row[seasonIndex] ? Number(row[seasonIndex]) || currentSeason : currentSeason,
+          entries,
+          notes: `Imported from CSV row ${rowNumber}`
+        })
+      })
+
+      if (parsedGamesByName.length === 0) {
+        const examples = skippedRows.slice(0, 4).join('; ')
+        setImportMessage(`No valid four-player games found. ${examples ? `Skipped examples: ${examples}.` : ''}`)
+        return
+      }
+
+      const requiredNames = Array.from(new Set(parsedGamesByName.flatMap((game) => game.entries.map((entry) => entry.playerName))))
+      const missingNames = requiredNames.filter((name) => !existingByName.has(normalizeName(name)))
 
       if (missingNames.length > 0) {
         const confirmed = window.confirm(`Import includes ${missingNames.length} new player(s):\n\n${missingNames.join(', ')}\n\nAdd them to this club and continue?`)
@@ -199,22 +306,16 @@ export default function GameLogsModal({
         }
       }
 
-      const parsedGames = dataRows.map((row) => {
-        const entries = playerColumns
-          .filter((column) => row[column.index] !== undefined && row[column.index] !== '')
-          .map((column) => {
-            const player = existingByName.get(normalizeName(column.name))
-            return player ? { playerId: player.id, score: Number(row[column.index] || 0) } : null
-          })
-          .filter((entry): entry is { playerId: string; score: number } => Boolean(entry))
-
-        return {
-          datetime: datetimeIndex >= 0 && row[datetimeIndex] ? Timestamp.fromDate(new Date(row[datetimeIndex])) : undefined,
-          seasonNumber: seasonIndex >= 0 && row[seasonIndex] ? Number(row[seasonIndex]) || currentSeason : currentSeason,
-          entries,
-          notes: 'Imported from CSV'
-        }
-      }).filter((game) => game.entries.length === 4)
+      const parsedGames = parsedGamesByName.map((game) => ({
+        datetime: game.datetime,
+        seasonNumber: game.seasonNumber,
+        entries: game.entries.map((entry) => {
+          const player = existingByName.get(normalizeName(entry.playerName))
+          if (!player) throw new Error(`Player ${entry.playerName} was not created.`)
+          return { playerId: player.id, score: entry.score }
+        }),
+        notes: game.notes
+      }))
 
       if (parsedGames.length === 0) {
         setImportMessage('No valid four-player games found in that CSV.')
@@ -222,7 +323,8 @@ export default function GameLogsModal({
       }
 
       await importGames(clubId, { games: parsedGames, createdBy: userId })
-      setImportMessage(`Imported ${parsedGames.length} game${parsedGames.length === 1 ? '' : 's'}.`)
+      const skippedText = skippedRows.length ? ` Skipped ${skippedRows.length} ambiguous or invalid row${skippedRows.length === 1 ? '' : 's'}.` : ''
+      setImportMessage(`Imported ${parsedGames.length} game${parsedGames.length === 1 ? '' : 's'}.${skippedText}`)
     } catch (error) {
       setImportMessage(error instanceof Error ? error.message : 'Unable to import CSV.')
     } finally {
