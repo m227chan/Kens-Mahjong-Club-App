@@ -13,6 +13,7 @@ import {
   where,
   writeBatch
 } from 'firebase/firestore'
+import type { DocumentData, DocumentReference } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { assignSeats, assignTitle, calculateRoundEloDeltas, computeGlobalRanks, type AppConfigLike } from '@/lib/stats-engine'
 import type {
@@ -34,6 +35,13 @@ type UserLike = {
   email: string | null
   displayName: string | null
   photoURL?: string | null
+}
+
+type ImportGameInput = {
+  datetime?: Timestamp
+  seasonNumber: number
+  entries: Array<{ playerId: string; score: number }>
+  notes?: string | null
 }
 
 function clubCollection(clubId: string, collectionName: string) {
@@ -567,23 +575,255 @@ export async function setActiveSeason(clubId: string, seasonNumber: number) {
 }
 
 export async function importGames(clubId: string, input: {
-  games: Array<{
-    datetime?: Timestamp
-    seasonNumber: number
-    entries: Array<{ playerId: string; score: number }>
-    notes?: string | null
-  }>
+  games: ImportGameInput[]
   createdBy: string
 }) {
-  for (const game of input.games) {
-    await createGame(clubId, {
-      entries: game.entries,
-      createdBy: input.createdBy,
-      seasonNumber: game.seasonNumber,
-      datetime: game.datetime,
-      winType: game.entries.every((entry) => entry.score === 0) ? 'draw' : undefined,
-      notes: game.notes ?? 'Imported from CSV'
+  if (input.games.length === 0) return
+
+  const normalizedGames = input.games
+    .map((game) => {
+      const entries = game.entries.map((entry) => ({
+        playerId: entry.playerId,
+        score: Number(entry.score)
+      }))
+      const seasonNumber = Math.max(1, Math.floor(game.seasonNumber ?? 1))
+      const datetime = game.datetime ?? Timestamp.now()
+      return { ...game, entries, seasonNumber, datetime }
     })
+    .sort((left, right) => left.datetime.toMillis() - right.datetime.toMillis())
+
+  normalizedGames.forEach((game, index) => {
+    if (game.entries.length !== 4) {
+      throw new Error(`Imported game ${index + 1} must include exactly 4 players.`)
+    }
+    if (new Set(game.entries.map((entry) => entry.playerId)).size !== 4) {
+      throw new Error(`Imported game ${index + 1} has a duplicate player.`)
+    }
+    const totalScore = game.entries.reduce((sum, entry) => sum + entry.score, 0)
+    if (totalScore !== 0) {
+      throw new Error(`Imported game ${index + 1} scores must sum to zero.`)
+    }
+  })
+
+  const affectedPlayerIds = Array.from(new Set(normalizedGames.flatMap((game) => game.entries.map((entry) => entry.playerId))))
+  const affectedSeasons = Array.from(new Set(normalizedGames.map((game) => game.seasonNumber)))
+  const now = Timestamp.now()
+  const configSnap = await getDoc(clubDoc(clubId, 'appConfig', 'settings'))
+  const config = (configSnap.exists() ? configSnap.data() : {}) as AppConfigDoc & AppConfigLike
+  const defaultStartingRating = config.eloStartingRating ?? 1500
+
+  const makeDefaultStats = (playerId: string, seasonNumber?: number): PlayerStatsDoc => {
+    const stats: PlayerStatsDoc = {
+      playerId,
+      totalPoints: 0,
+      gamesPlayed: 0,
+      gamesWon: 0,
+      gamesLost: 0,
+      winLossRatio: 0,
+      bestSingleGame: Number.NEGATIVE_INFINITY,
+      worstSingleGame: Number.POSITIVE_INFINITY,
+      eloRating: defaultStartingRating,
+      eloPeak: defaultStartingRating,
+      eloRank: 0,
+      pointsRank: 0,
+      last5EloDelta: 0,
+      recentEloDeltas: [],
+      daysAttended: 0,
+      lastPlayedAt: null,
+      updatedAt: now
+    }
+
+    if (seasonNumber !== undefined) stats.seasonNumber = seasonNumber
+    return stats
+  }
+
+  const allStatsSnapshot = await getDocs(query(clubCollection(clubId, 'playerStats')))
+  const allStats = new Map<string, PlayerStatsDoc>()
+  allStatsSnapshot.docs.forEach((docSnap) => {
+    allStats.set(docSnap.id, docSnap.data() as PlayerStatsDoc)
+  })
+
+  const seasonStatsSnapshot = await getDocs(query(clubCollection(clubId, 'seasonPlayerStats')))
+  const seasonStats = new Map<string, PlayerStatsDoc>()
+  seasonStatsSnapshot.docs.forEach((docSnap) => {
+    const stats = docSnap.data() as PlayerStatsDoc
+    if (affectedSeasons.includes(stats.seasonNumber ?? 1)) {
+      seasonStats.set(docSnap.id, stats)
+    }
+  })
+
+  const gameWrites: Array<{ ref: DocumentReference; data: GameDoc }> = []
+  const eloEventWrites: Array<{ ref: DocumentReference; data: EloEventDoc }> = []
+
+  const updateStats = (statsMap: Map<string, PlayerStatsDoc>, statsKey: string, playerId: string, seasonNumber: number | undefined, score: number, gameDatetime: Timestamp, result: ReturnType<typeof calculateRoundEloDeltas>[number]) => {
+    const current = statsMap.get(statsKey) ?? makeDefaultStats(playerId, seasonNumber)
+    const isWin = score > 0
+    const isLoss = score < 0
+    const gameDate = gameDatetime.toDate().toISOString().slice(0, 10)
+    const playedToday = current.lastPlayedAt === gameDate
+    const recentEloDeltas = [...(current.recentEloDeltas ?? []), result.delta].slice(-5)
+    const nextTotalPoints = current.totalPoints + score
+
+    statsMap.set(statsKey, {
+      ...current,
+      totalPoints: nextTotalPoints,
+      gamesPlayed: current.gamesPlayed + 1,
+      gamesWon: current.gamesWon + (isWin ? 1 : 0),
+      gamesLost: current.gamesLost + (isLoss ? 1 : 0),
+      winLossRatio: (current.gamesWon + (isWin ? 1 : 0)) / Math.max(1, current.gamesLost + (isLoss ? 1 : 0)),
+      bestSingleGame: Math.max(current.bestSingleGame, score),
+      worstSingleGame: Math.min(current.worstSingleGame, score),
+      eloRating: result.ratingAfter,
+      eloPeak: Math.max(current.eloPeak, result.ratingAfter),
+      last5EloDelta: recentEloDeltas.reduce((sum, delta) => sum + delta, 0),
+      recentEloDeltas,
+      daysAttended: current.daysAttended + (playedToday ? 0 : 1),
+      lastPlayedAt: gameDate,
+      updatedAt: now
+    })
+  }
+
+  normalizedGames.forEach((game) => {
+    const gameRef = doc(clubCollection(clubId, 'games'))
+    const gameId = gameRef.id
+    const winType = game.entries.every((entry) => entry.score === 0) ? 'draw' : 'self_draw'
+    const winnerPlayerId = winType === 'draw'
+      ? null
+      : game.entries.reduce((winner, current) => current.score > winner.score ? current : winner).playerId
+
+    const allTimeRoundEntries = game.entries.map((entry) => {
+      const stats = allStats.get(entry.playerId) ?? makeDefaultStats(entry.playerId)
+      return {
+        playerId: entry.playerId,
+        score: entry.score,
+        ratingBefore: stats.eloRating,
+        gamesPlayed: stats.gamesPlayed
+      }
+    })
+    const seasonRoundEntries = game.entries.map((entry) => {
+      const statsKey = `${game.seasonNumber}_${entry.playerId}`
+      const stats = seasonStats.get(statsKey) ?? makeDefaultStats(entry.playerId, game.seasonNumber)
+      return {
+        playerId: entry.playerId,
+        score: entry.score,
+        ratingBefore: stats.eloRating,
+        gamesPlayed: stats.gamesPlayed
+      }
+    })
+
+    const allTimeResults = calculateRoundEloDeltas(allTimeRoundEntries, config)
+    const seasonResults = calculateRoundEloDeltas(seasonRoundEntries, config)
+
+    game.entries.forEach((entry) => {
+      const allTimeResult = allTimeResults.find((result) => result.playerId === entry.playerId)!
+      const seasonResult = seasonResults.find((result) => result.playerId === entry.playerId)!
+      updateStats(allStats, entry.playerId, entry.playerId, undefined, entry.score, game.datetime, allTimeResult)
+      updateStats(seasonStats, `${game.seasonNumber}_${entry.playerId}`, entry.playerId, game.seasonNumber, entry.score, game.datetime, seasonResult)
+    })
+
+    gameWrites.push({
+      ref: gameRef,
+      data: {
+        id: gameId,
+        datetime: game.datetime,
+        createdBy: input.createdBy,
+        seasonNumber: game.seasonNumber,
+        tableId: null,
+        entries: game.entries,
+        winType,
+        winnerPlayerId,
+        loserPlayerId: null,
+        fan: null,
+        notes: game.notes ?? 'Imported from CSV'
+      }
+    })
+
+    seasonResults.forEach((result) => {
+      const eventRef = doc(clubCollection(clubId, 'eloEvents'))
+      eloEventWrites.push({
+        ref: eventRef,
+        data: {
+          id: eventRef.id,
+          gameId,
+          playerId: result.playerId,
+          datetime: game.datetime,
+          seasonNumber: game.seasonNumber,
+          ratingBefore: result.ratingBefore,
+          ratingAfter: result.ratingAfter,
+          delta: result.delta,
+          kFactor: result.kFactor,
+          marginMultiplier: result.marginMultiplier,
+          opponents: result.opponents
+        }
+      })
+    })
+  })
+
+  const touchedAllStats = affectedPlayerIds.map((playerId) => allStats.get(playerId) ?? makeDefaultStats(playerId))
+  const allRanks = computeGlobalRanks(touchedAllStats)
+  touchedAllStats.forEach((stats) => {
+    stats.eloRank = allRanks.eloRanks[stats.playerId] ?? 0
+    stats.pointsRank = allRanks.pointsRanks[stats.playerId] ?? 0
+  })
+
+  const touchedSeasonStats = Array.from(seasonStats.entries())
+    .filter(([key]) => affectedSeasons.some((seasonNumber) => key.startsWith(`${seasonNumber}_`)))
+    .map(([key, stats]) => ({ key, stats }))
+
+  affectedSeasons.forEach((seasonNumber) => {
+    const seasonItems = touchedSeasonStats.filter((item) => item.stats.seasonNumber === seasonNumber).map((item) => item.stats)
+    const ranks = computeGlobalRanks(seasonItems)
+    seasonItems.forEach((stats) => {
+      stats.eloRank = ranks.eloRanks[stats.playerId] ?? 0
+      stats.pointsRank = ranks.pointsRanks[stats.playerId] ?? 0
+    })
+  })
+
+  const playerTitleWrites = affectedPlayerIds.map((playerId) => {
+    const latestSeason = Math.max(...normalizedGames.filter((game) => game.entries.some((entry) => entry.playerId === playerId)).map((game) => game.seasonNumber))
+    const seasonStatsForPlayer = seasonStats.get(`${latestSeason}_${playerId}`)
+    return {
+      ref: clubDoc(clubId, 'players', playerId),
+      title: assignTitle(seasonStatsForPlayer?.totalPoints ?? 0, config.titleBands ?? [])
+    }
+  })
+
+  let batch = writeBatch(db)
+  let writeCount = 0
+  const commitIfNeeded = async (nextWrites = 1) => {
+    if (writeCount + nextWrites <= 450) return
+    await batch.commit()
+    batch = writeBatch(db)
+    writeCount = 0
+  }
+  const setInBatch = async (ref: DocumentReference, data: DocumentData, options?: { merge: true }) => {
+    await commitIfNeeded()
+    if (options) {
+      batch.set(ref, data, options)
+    } else {
+      batch.set(ref, data)
+    }
+    writeCount += 1
+  }
+
+  for (const game of gameWrites) {
+    await setInBatch(game.ref, game.data)
+  }
+  for (const event of eloEventWrites) {
+    await setInBatch(event.ref, event.data)
+  }
+  for (const stats of touchedAllStats) {
+    await setInBatch(clubDoc(clubId, 'playerStats', stats.playerId), stats)
+  }
+  for (const { key, stats } of touchedSeasonStats) {
+    await setInBatch(clubDoc(clubId, 'seasonPlayerStats', key), stats)
+  }
+  for (const write of playerTitleWrites) {
+    await setInBatch(write.ref, { title: write.title }, { merge: true })
+  }
+
+  if (writeCount > 0) {
+    await batch.commit()
   }
 }
 
