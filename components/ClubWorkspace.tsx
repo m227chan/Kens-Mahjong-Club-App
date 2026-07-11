@@ -189,7 +189,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Current club</p>
           <h1 className="mt-1 text-2xl font-black text-slate-950">{club?.name ?? membership.clubName}</h1>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="club-action-bar flex flex-wrap gap-2">
           <label className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
             <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Season</span>
             <select
@@ -251,7 +251,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
       </div>
 
       {settingsOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
+        <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
           <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white shadow-2xl">
             <div className="border-b border-slate-200 p-5">
               <div className="flex items-start justify-between gap-3">
@@ -375,8 +375,8 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
       </div>
 
       {rosterOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
-          <div className="flex max-h-[90vh] w-full max-w-5xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
+        <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
+          <div className="responsive-modal-panel flex max-h-[90vh] w-full max-w-5xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <div className="p-5 pb-0">
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-600">Club roster</p>
@@ -496,8 +496,8 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
       ) : null}
 
       {analyticsOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
-          <div className="flex max-h-[92vh] w-full max-w-6xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
+        <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
+          <div className="responsive-modal-panel flex max-h-[92vh] w-full max-w-6xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
             <div className="flex items-start justify-between gap-3 border-b border-slate-200 p-5">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">Analytics</p>

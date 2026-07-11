@@ -174,3 +174,30 @@ table,
   .home-skeleton { animation: none; }
 }
 html.dark .home-summary { background-image: linear-gradient(115deg,rgb(var(--bamboo)/.09),transparent 50%),radial-gradient(circle at 90% 0%,rgb(var(--gold)/.08),transparent 19rem); }
+/* Cross-platform interaction and layout safeguards */
+@media (max-width: 767px) {
+  .club-header { padding: .75rem 1rem; }
+  .club-action-bar { display:grid!important; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; }
+  .club-action-bar > * { min-height:44px; justify-content:center; text-align:center; }
+  .club-action-bar > label,.club-action-bar > button:nth-child(2) { grid-column:span 2; }
+  .responsive-modal { align-items:stretch!important; padding:0!important; }
+  .responsive-modal-panel { max-height:100dvh!important; height:100dvh; max-width:none!important; border:0!important; border-radius:0!important; }
+  .responsive-modal-panel > div:first-child { padding-top:max(1rem,env(safe-area-inset-top)); }
+  .home-dashboard { padding-inline:1rem; }
+  .home-summary .home-number { font-size:clamp(1.85rem,11vw,2.8rem); }
+  .home-club-card a,.home-club-card button,#club-actions button { min-height:44px; display:inline-flex; align-items:center; justify-content:center; }
+  #club-actions label > div { flex-direction:column; }
+  #club-actions input,#club-actions button { width:100%; min-height:44px; }
+  .session-manager .btn-icon,.session-manager .btn-draw,.session-manager .btn-primary,.session-manager .btn-secondary,.session-manager .btn-submit-game,.session-manager .btn-cancel-win,.session-manager .win-type-btn,.session-manager .loser-chip,.session-manager .fan-chip { min-height:44px; }
+  .session-manager .seat-slot { min-height:76px; }
+  .session-manager .empty-seat-hint { display:flex; min-height:44px; align-items:center; justify-content:center; width:100%; }
+  .session-manager .section-label,.session-manager .table-header { min-height:44px; }
+}
+@media (hover:none),(pointer:coarse) {
+  .session-manager .chip-remove-btn,.session-manager .chip-win-btn,.session-manager .chip-swap-btn,.session-manager .clear-table-btn { display:flex!important; opacity:1!important; min-width:24px; min-height:24px; }
+  .session-manager .player-chip { touch-action:pan-y; -webkit-user-select:none; user-select:none; }
+  .home-club-card:hover { transform:none; }
+}
+@media (min-width:768px) and (max-width:1279px) {
+  .home-club-wave { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}

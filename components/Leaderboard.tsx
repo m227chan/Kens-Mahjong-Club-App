@@ -53,7 +53,29 @@ export function LeaderboardPanel({ clubId, seasonNumber, compact = false }: { cl
       </header>
 
       {visibleRows.length > 0 ? (
-        <div className="overflow-x-auto">
+        <>
+          <div className="divide-y divide-slate-200 md:hidden">
+            {visibleRows.map((row, index) => (
+              <article key={row.playerId} className="p-4">
+                <div className="flex items-start gap-3">
+                  <span className="flex min-h-11 min-w-11 items-center justify-center rounded border border-slate-200 bg-slate-50 text-lg">{row.icon}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline justify-between gap-2"><h3 className="truncate text-base font-extrabold text-slate-950">{row.displayName}</h3><span className="font-mono text-xl font-bold text-[rgb(var(--cinnabar))]">#{row.pointsRank || index + 1}</span></div>
+                    <p className="mt-1 text-xs text-slate-500">{titleForStanding(index + 1, rows.length, row.gamesPlayed)}</p>
+                  </div>
+                </div>
+                <dl className="mt-4 grid grid-cols-3 gap-2 border-t border-slate-200 pt-3">
+                  <div><dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Points</dt><dd className="mt-1 font-mono text-sm font-bold text-slate-900">{row.totalPoints}</dd></div>
+                  <div><dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">ELO</dt><dd className="mt-1 font-mono text-sm font-bold text-slate-900">{row.eloRating}</dd></div>
+                  <div><dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Win rate</dt><dd className="mt-1 font-mono text-sm font-bold text-slate-900">{formatWinRate(row.gamesWon, row.gamesPlayed)}</dd></div>
+                  <div><dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Games</dt><dd className="mt-1 font-mono text-sm font-bold text-slate-900">{row.gamesPlayed}</dd></div>
+                  <div><dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Wins</dt><dd className="mt-1 font-mono text-sm font-bold text-slate-900">{row.gamesWon}</dd></div>
+                  <div><dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Losses</dt><dd className="mt-1 font-mono text-sm font-bold text-slate-900">{row.gamesLost}</dd></div>
+                </dl>
+              </article>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
           <div className="min-w-[920px]">
             <div className="grid grid-cols-[64px_minmax(260px,1.8fr)_88px_112px_76px_76px_84px_96px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
               <span>Rank</span>
@@ -78,7 +100,7 @@ export function LeaderboardPanel({ clubId, seasonNumber, compact = false }: { cl
                   <div className="min-w-0">
                     <p className="break-words text-sm font-bold text-slate-900">{row.displayName}</p>
                     <p className="break-words text-xs leading-5 text-slate-500">
-                      {titleForStanding(index + 1, rows.length, row.gamesPlayed)} &middot; {row.eloRating} ELO &middot; {formatSigned(Math.round(row.last5EloDelta))} last 5
+                      {titleForStanding(index + 1, rows.length, row.gamesPlayed)}
                     </p>
                   </div>
                 </div>
@@ -92,6 +114,7 @@ export function LeaderboardPanel({ clubId, seasonNumber, compact = false }: { cl
             ))}
           </div>
         </div>
+        </>
       ) : (
         <div className="px-5 py-10 text-center">
           <p className="text-sm font-bold text-slate-700">No leaderboard data yet.</p>
