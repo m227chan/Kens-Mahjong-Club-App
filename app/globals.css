@@ -229,3 +229,23 @@ html.dark .game-log-row td.text-slate-300 { color:rgb(var(--muted)/.45)!importan
 #pickerList button:hover,#swapPickerList button:hover { border-color:rgb(var(--bamboo))!important; background:rgb(var(--bamboo)/.08)!important; }
 .session-result-dialog .winner-choice.selected { border-color:rgb(var(--bamboo))!important; background:rgb(var(--bamboo))!important; color:#fff!important; }
 .session-result-dialog .discard-choice.selected { border-color:rgb(var(--cinnabar))!important; background:rgb(var(--cinnabar))!important; color:#fff!important; }
+/* Cheerful, viewport-centred saved-game announcement */
+.score-flash { position:fixed!important; inset:0!important; z-index:20000!important; display:flex!important; align-items:center!important; justify-content:center!important; padding:16px; pointer-events:none; overflow:hidden; background:rgb(0 0 0/.62)!important; animation:celebration-backdrop .22s ease-out both!important; }
+.score-flash-card { position:relative; width:min(420px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); overflow-y:auto; padding:clamp(22px,6vw,34px); border:1px solid rgb(var(--gold)); border-radius:8px; background:radial-gradient(circle at 50% 0%,rgb(var(--gold)/.16),transparent 45%),rgb(var(--surface)); color:rgb(var(--ink)); text-align:center; box-shadow:0 24px 80px rgb(0 0 0/.38),0 0 0 4px rgb(var(--gold)/.12); animation:celebration-card .58s cubic-bezier(.2,.85,.25,1) both; }
+.celebration-kicker { color:rgb(var(--cinnabar)); font-size:.68rem; font-weight:800; letter-spacing:.2em; text-transform:uppercase; }
+.celebration-winner-icon { display:flex; width:76px; height:88px; margin:16px auto 12px; align-items:center; justify-content:center; border:1px solid rgb(var(--line)); border-radius:7px; background:linear-gradient(145deg,rgb(var(--surface)),rgb(var(--surface-2))); font-size:2.4rem; box-shadow:4px 6px 0 rgb(var(--gold)/.2); animation:winner-tile .72s cubic-bezier(.2,.9,.25,1) .08s both; }
+.score-flash .flash-title { margin:0!important; color:rgb(var(--ink)); font-size:clamp(1.7rem,7vw,2.35rem); font-weight:800; letter-spacing:-.04em; }
+.celebration-subtitle { margin-top:5px; color:rgb(var(--muted)); font-size:.82rem; }
+.score-flash .flash-scores { width:100%!important; margin-top:20px; gap:6px!important; }
+.score-flash .flash-row { padding:9px 12px!important; border:1px solid rgb(var(--line)); border-radius:4px!important; background:rgb(var(--surface-2))!important; color:rgb(var(--ink)); font-size:.78rem!important; animation:score-row-in .32s ease-out both; }
+.score-flash .flash-row:nth-child(2){animation-delay:.05s}.score-flash .flash-row:nth-child(3){animation-delay:.1s}.score-flash .flash-row:nth-child(4){animation-delay:.15s}
+.score-flash .winner-row { border-color:rgb(var(--bamboo))!important; background:rgb(var(--bamboo)/.1)!important; font-weight:800; }
+.score-flash .flash-score-val.pos { color:rgb(var(--bamboo-bright))!important; }.score-flash .flash-score-val.neg { color:rgb(var(--cinnabar))!important; }
+.celebration-confetti { position:absolute; inset:0; pointer-events:none; }
+.celebration-confetti span { --angle:calc(var(--burst-index) * 45deg); position:absolute; left:50%; top:50%; font-size:1.4rem; opacity:0; animation:confetti-burst .9s cubic-bezier(.15,.75,.25,1) calc(var(--burst-index) * 22ms) both; }
+@keyframes celebration-backdrop{from{opacity:0}to{opacity:1}}
+@keyframes celebration-card{0%{opacity:0;transform:translateY(16px) scale(.94)}65%{transform:translateY(-3px) scale(1.01)}100%{opacity:1;transform:none}}
+@keyframes winner-tile{0%{opacity:0;transform:scale(.45) rotate(-10deg)}70%{transform:scale(1.08) rotate(2deg)}100%{opacity:1;transform:none}}
+@keyframes score-row-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes confetti-burst{0%{opacity:0;transform:translate(-50%,-50%) rotate(var(--angle)) translateY(0) scale(.4)}25%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) rotate(var(--angle)) translateY(-190px) scale(1.05)}}
+@media(prefers-reduced-motion:reduce){.score-flash,.score-flash-card,.celebration-winner-icon,.score-flash .flash-row,.celebration-confetti span{animation:none!important}.celebration-confetti{display:none}}

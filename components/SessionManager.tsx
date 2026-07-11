@@ -1737,24 +1737,31 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
       </div>
 
       {toast ? <div className="toast active">{toast}</div> : null}
-      {flash ? (
-        <div className="score-flash">
-          <div className="flash-title">{flash.winner ? `👑 ${shortName(playerInfo(flash.winner).displayName)} wins!` : '🤝 Draw!'}</div>
-          <div className="flash-scores">
-            {Object.entries(flash.scores).map(([playerId, score]) => {
-              const info = playerInfo(playerId)
-              const cls = score > 0 ? 'pos' : score < 0 ? 'neg' : ''
-              return (
-                <div key={playerId} className="flash-row">
-                  <span>{info.icon || '👤'} {shortName(info.displayName)}</span>
-                  <span className={`flash-score-val ${cls}`}>{score > 0 ? `+${score}` : score}</span>
-                </div>
-              )
-            })}
+      {flash && typeof document !== 'undefined' ? createPortal(
+        <div className="score-flash" role="status" aria-live="polite">
+          <div className="celebration-confetti" aria-hidden="true">
+            {['🀄', '🎉', '✨', '🎊', '🌸', '⭐', '🧧', '🍀'].map((symbol, index) => <span key={index} style={{ '--burst-index': index } as React.CSSProperties}>{symbol}</span>)}
           </div>
-        </div>
+          <div className="score-flash-card">
+            {flash.winner ? (
+              <>
+                <p className="celebration-kicker">Game recorded</p>
+                <div className="celebration-winner-icon">{playerInfo(flash.winner).icon || '🏆'}</div>
+                <div className="flash-title">{playerInfo(flash.winner).displayName} wins!</div>
+                <p className="celebration-subtitle">A winning hand for the table</p>
+              </>
+            ) : <div className="flash-title">🤝 Draw recorded</div>}
+            <div className="flash-scores">
+              {Object.entries(flash.scores).map(([playerId, score]) => {
+                const info = playerInfo(playerId)
+                const cls = score > 0 ? 'pos' : score < 0 ? 'neg' : ''
+                return <div key={playerId} className={`flash-row ${playerId === flash.winner ? 'winner-row' : ''}`}><span>{info.icon || '👤'} {shortName(info.displayName)}</span><span className={`flash-score-val ${cls}`}>{score > 0 ? `+${score}` : score}</span></div>
+              })}
+            </div>
+          </div>
+        </div>,
+        document.body
       ) : null}
-
       <div id="infoOverlay" style={{ display: infoOpen ? 'block' : 'none', position: 'fixed', top: 72, right: 0, bottom: 0, left: 0, background: 'rgba(0,0,0,0.4)', zIndex: 10000, padding: 16, overflowY: 'auto' }}>
         <div style={{ background: 'white', borderRadius: 14, overflow: 'hidden', maxWidth: 380, maxHeight: 'calc(100vh - 104px)', margin: '0 auto', transform: 'translateX(-32px)', display: 'flex', flexDirection: 'column' }}>
           <div style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', padding: '16px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
