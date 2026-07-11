@@ -318,6 +318,23 @@ export async function removePlayer(clubId: string, playerId: string) {
   await batch.commit()
 }
 
+export async function setPlayerAuthLink(clubId: string, playerId: string, uid: string, linked: boolean) {
+  const playerRef = clubDoc(clubId, 'players', playerId)
+  await runTransaction(db, async (transaction) => {
+    const playerSnap = await transaction.get(playerRef)
+    if (!playerSnap.exists()) throw new Error('Player not found.')
+    const player = playerSnap.data() as PlayerDoc
+    if (!linked && player.authUid !== uid) throw new Error('You can only unlink your own player profile.')
+    if (linked) {
+      const activePlayers = await getDocs(query(clubCollection(clubId, 'players'), where('active', '==', true)))
+      if (activePlayers.docs.some((snap) => snap.id !== playerId && (snap.data() as PlayerDoc).authUid === uid)) {
+        throw new Error('Your account is already linked to another player in this club.')
+      }
+      if (player.authUid && player.authUid !== uid) throw new Error('That player is already linked to another user.')
+    }
+    transaction.update(playerRef, { authUid: linked ? uid : null })
+  })
+}
 export async function updatePlayerIcon(clubId: string, playerId: string, nextIcon: string) {
   const playerRef = clubDoc(clubId, 'players', playerId)
   const next = normalizePlayerIcon(nextIcon, '🀄')
@@ -612,6 +629,88 @@ export async function setActiveSeason(clubId: string, seasonNumber: number) {
   await setDoc(doc(db, 'clubs', clubId), { activeSeasonNumber: seasonNumber }, { merge: true })
 }
 
+export async function deleteGameAndRebuild(clubId: string, gameId: string) {
+  const [gamesSnap, playersSnap, configSnap, allStatsSnap, seasonStatsSnap, eventsSnap] = await Promise.all([
+    getDocs(query(clubCollection(clubId, 'games'), orderBy('datetime'))),
+    getDocs(query(clubCollection(clubId, 'players'), where('active', '==', true))),
+    getDoc(clubDoc(clubId, 'appConfig', 'settings')),
+    getDocs(query(clubCollection(clubId, 'playerStats'))),
+    getDocs(query(clubCollection(clubId, 'seasonPlayerStats'))),
+    getDocs(query(clubCollection(clubId, 'eloEvents')))
+  ])
+  const target = gamesSnap.docs.find((snap) => snap.id === gameId)
+  if (!target) throw new Error('Game not found.')
+  const games = gamesSnap.docs.filter((snap) => snap.id !== gameId).map((snap) => ({ ...(snap.data() as GameDoc), id: snap.id }))
+  const config = (configSnap.exists() ? configSnap.data() : {}) as AppConfigDoc & AppConfigLike
+  const startingRating = config.eloStartingRating ?? 1500
+  const now = Timestamp.now()
+  const makeStats = (playerId: string, seasonNumber?: number): PlayerStatsDoc => ({
+    playerId, ...(seasonNumber === undefined ? {} : { seasonNumber }), totalPoints: 0, gamesPlayed: 0, gamesWon: 0, gamesLost: 0,
+    winLossRatio: 0, bestSingleGame: Number.NEGATIVE_INFINITY, worstSingleGame: Number.POSITIVE_INFINITY,
+    eloRating: startingRating, eloPeak: startingRating, eloRank: 0, pointsRank: 0, last5EloDelta: 0,
+    recentEloDeltas: [], daysAttended: 0, lastPlayedAt: null, updatedAt: now
+  })
+  const allStats = new Map<string, PlayerStatsDoc>()
+  const seasonStats = new Map<string, PlayerStatsDoc>()
+  const events: EloEventDoc[] = []
+
+  const applyGame = (map: Map<string, PlayerStatsDoc>, keyFor: (playerId: string) => string, game: GameDoc, seasonNumber?: number) => {
+    const round = game.entries.map((entry) => {
+      const current = map.get(keyFor(entry.playerId)) ?? makeStats(entry.playerId, seasonNumber)
+      return { playerId: entry.playerId, score: entry.score, ratingBefore: current.eloRating, gamesPlayed: current.gamesPlayed }
+    })
+    const results = calculateRoundEloDeltas(round, config)
+    game.entries.forEach((entry) => {
+      const key = keyFor(entry.playerId)
+      const current = map.get(key) ?? makeStats(entry.playerId, seasonNumber)
+      const result = results.find((item) => item.playerId === entry.playerId)!
+      const date = game.datetime.toDate().toISOString().slice(0, 10)
+      const recent = [...(current.recentEloDeltas ?? []), result.delta].slice(-5)
+      const wins = current.gamesWon + (entry.score > 0 ? 1 : 0)
+      const losses = current.gamesLost + (entry.score < 0 ? 1 : 0)
+      map.set(key, { ...current, totalPoints: current.totalPoints + entry.score, gamesPlayed: current.gamesPlayed + 1,
+        gamesWon: wins, gamesLost: losses, winLossRatio: wins / Math.max(1, losses),
+        bestSingleGame: Math.max(current.bestSingleGame, entry.score), worstSingleGame: Math.min(current.worstSingleGame, entry.score),
+        eloRating: result.ratingAfter, eloPeak: Math.max(current.eloPeak, result.ratingAfter), last5EloDelta: recent.reduce((sum, value) => sum + value, 0),
+        recentEloDeltas: recent, daysAttended: current.daysAttended + (current.lastPlayedAt === date ? 0 : 1), lastPlayedAt: date, updatedAt: now })
+    })
+    return results
+  }
+
+  games.forEach((game) => {
+    applyGame(allStats, (playerId) => playerId, game)
+    const seasonNumber = game.seasonNumber ?? 1
+    const results = applyGame(seasonStats, (playerId) => `${seasonNumber}_${playerId}`, game, seasonNumber)
+    results.forEach((result) => events.push({ id: '', gameId: game.id, playerId: result.playerId, datetime: game.datetime, seasonNumber,
+      ratingBefore: result.ratingBefore, ratingAfter: result.ratingAfter, delta: result.delta, kFactor: result.kFactor,
+      marginMultiplier: result.marginMultiplier, opponents: result.opponents }))
+  })
+
+  const rankMap = (items: PlayerStatsDoc[]) => {
+    const ranks = computeGlobalRanks(items)
+    items.forEach((stats) => { stats.eloRank = ranks.eloRanks[stats.playerId] ?? 0; stats.pointsRank = ranks.pointsRanks[stats.playerId] ?? 0 })
+  }
+  rankMap([...allStats.values()])
+  new Set([...seasonStats.values()].map((stats) => stats.seasonNumber ?? 1)).forEach((season) => rankMap([...seasonStats.values()].filter((stats) => stats.seasonNumber === season)))
+
+  const operations: Array<(batch: ReturnType<typeof writeBatch>) => void> = []
+  operations.push((batch) => batch.delete(target.ref))
+  allStatsSnap.docs.forEach((snap) => operations.push((batch) => batch.delete(snap.ref)))
+  seasonStatsSnap.docs.forEach((snap) => operations.push((batch) => batch.delete(snap.ref)))
+  eventsSnap.docs.forEach((snap) => operations.push((batch) => batch.delete(snap.ref)))
+  allStats.forEach((stats, id) => operations.push((batch) => batch.set(clubDoc(clubId, 'playerStats', id), stats)))
+  seasonStats.forEach((stats, id) => operations.push((batch) => batch.set(clubDoc(clubId, 'seasonPlayerStats', id), stats)))
+  events.forEach((event) => operations.push((batch) => { const ref = doc(clubCollection(clubId, 'eloEvents')); batch.set(ref, { ...event, id: ref.id }) }))
+  playersSnap.docs.forEach((snap) => {
+    const stats = [...seasonStats.values()].filter((item) => item.playerId === snap.id).sort((a, b) => (b.seasonNumber ?? 1) - (a.seasonNumber ?? 1))[0]
+    operations.push((batch) => batch.update(snap.ref, { title: assignTitle(stats?.totalPoints ?? 0, config.titleBands ?? []) }))
+  })
+  for (let index = 0; index < operations.length; index += 400) {
+    const batch = writeBatch(db)
+    operations.slice(index, index + 400).forEach((operation) => operation(batch))
+    await batch.commit()
+  }
+}
 export async function importGames(clubId: string, input: {
   games: ImportGameInput[]
   createdBy: string

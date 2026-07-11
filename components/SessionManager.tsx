@@ -579,7 +579,7 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
         <button
           key={playerId}
           type="button"
-          className={`loser-chip${selected ? ' selected' : ''}`}
+          className={`loser-chip winner-choice${selected ? ' selected winner-selected' : ''}`}
           onClick={() => setWinner(tableId, playerId)}
         >
           {info.icon ?? '👤'} {shortName(info.displayName)}
@@ -595,7 +595,7 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
         <button
           key={playerId}
           type="button"
-          className={`loser-chip${selected ? ' selected' : ''}`}
+          className={`loser-chip discard-choice${selected ? ' selected discard-selected' : ''}`}
           onClick={() => setLoser(tableId, playerId)}
         >
           {info.icon ?? '👤'} {shortName(info.displayName)}
@@ -1566,6 +1566,11 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
         .session-manager .win-type-btn,.session-manager .loser-chip,.session-manager .fan-chip { border-color:rgb(var(--line)); border-radius:3px; background:rgb(var(--surface)); color:rgb(var(--ink)); }
         .session-manager .win-type-btn.selected,.session-manager .fan-chip.selected { border-color:rgb(var(--bamboo)); background:rgb(var(--bamboo)/.1); color:rgb(var(--bamboo)); }
         .session-manager .score-preview { border-radius:3px; background:rgb(var(--ink)); }
+        .session-manager .winner-choice.selected,.session-manager .winner-selected { border-color:rgb(var(--bamboo))!important; background:rgb(var(--bamboo))!important; color:#fff!important; box-shadow:0 0 0 2px rgb(var(--bamboo)/.25)!important; }
+        .session-manager .discard-choice.selected,.session-manager .discard-selected { border-color:rgb(var(--cinnabar))!important; background:rgb(var(--cinnabar))!important; color:#fff!important; box-shadow:0 0 0 2px rgb(var(--cinnabar)/.22)!important; }
+        .session-manager #infoOverlay,.session-manager #pickerOverlay,.session-manager #swapPickerOverlay { position:fixed!important; inset:0!important; top:0!important; align-items:center!important; justify-content:center!important; overscroll-behavior:contain; }
+        .session-manager #infoOverlay[style*="display: block"] { display:flex!important; }
+        .session-manager #infoOverlay>div { transform:none!important; margin:auto!important; }
         .session-manager .menu-item { background:rgb(var(--surface)); color:rgb(var(--ink)); border-color:rgb(var(--line)); }
         .session-manager .menu-item:hover { background:rgb(var(--surface-2)); }
         .session-manager .spinner { border-color:rgb(var(--line)); border-top-color:rgb(var(--cinnabar)); }

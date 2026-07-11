@@ -201,3 +201,17 @@ html.dark .home-summary { background-image: linear-gradient(115deg,rgb(var(--bam
 @media (min-width:768px) and (max-width:1279px) {
   .home-club-wave { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
+.emoji-menu { width:224px!important; max-width:calc(100vw - 32px); overflow:hidden; box-sizing:border-box; }
+.emoji-picker { grid-template-columns:repeat(4,minmax(0,44px))!important; justify-content:center; align-items:center; }
+.emoji-picker button { width:44px!important; height:44px!important; min-width:44px; padding:0!important; border:1px solid transparent!important; border-radius:4px!important; background:transparent!important; font-size:1.25rem!important; box-shadow:none!important; }
+.emoji-picker button:hover:not(:disabled),.emoji-picker button:focus-visible { border-color:rgb(var(--bamboo))!important; background:rgb(var(--bamboo)/.08)!important; }
+.emoji-picker button:disabled { opacity:.16!important; cursor:not-allowed; }
+@media(max-width:640px){.emoji-menu{position:fixed!important; left:50%!important; right:auto!important; top:50%!important; transform:translate(-50%,-50%)!important; width:224px!important; z-index:80!important;}}
+.game-log-table thead th { background:rgb(var(--surface-2))!important; color:rgb(var(--ink))!important; border-color:rgb(var(--line))!important; }
+.game-log-row { background:rgb(var(--surface)); color:rgb(var(--ink)); }
+.game-log-row:nth-child(even) { background:rgb(var(--surface-2)); }
+.game-log-row td { border-color:rgb(var(--line)/.55)!important; }
+.game-log-row td:first-child,.game-log-row td:nth-child(2) { color:rgb(var(--muted))!important; }
+html.dark .game-log-row td.text-emerald-700 { color:rgb(var(--bamboo-bright))!important; }
+html.dark .game-log-row td.text-rose-700 { color:rgb(var(--cinnabar))!important; }
+html.dark .game-log-row td.text-slate-300 { color:rgb(var(--muted)/.45)!important; }

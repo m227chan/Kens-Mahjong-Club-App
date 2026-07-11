@@ -17,6 +17,7 @@ import {
   removePlayer,
   resolveJoinRequest,
   setActiveSeason,
+  setPlayerAuthLink,
   startNewSeason,
   updatePlayerIcon,
   subscribeClub,
@@ -114,6 +115,16 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
     }
   }
 
+  const togglePlayerLink = async (player: PlayerDoc) => {
+    if (!user) return
+    setPlayerMessage(null)
+    try {
+      await setPlayerAuthLink(clubId, player.id, user.uid, player.authUid !== user.uid)
+      setPlayerMessage(player.authUid === user.uid ? `Unlinked from ${player.displayName}.` : `You are now linked to ${player.displayName}.`)
+    } catch (error) {
+      setPlayerMessage(error instanceof Error ? error.message : 'Unable to update player link.')
+    }
+  }
   const changePlayerIcon = async (player: PlayerDoc, icon: string) => {
     setPlayerMessage(null)
     try {
@@ -369,7 +380,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           <LeaderboardPanel clubId={clubId} seasonNumber={activeSeasonNumber} />
         </div>
 
-        <aside className="xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto">
+        <aside className="order-first xl:order-none xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto">
           <SessionManager clubId={clubId} seasonNumber={activeSeasonNumber} />
         </aside>
       </div>
@@ -410,8 +421,8 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                         className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-teal-500"
                       />
                       {iconPickerOpen ? (
-                        <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 rounded-lg border border-slate-200 bg-white p-3 shadow-xl">
-                          <div className="grid grid-cols-8 gap-2">
+                        <div className="emoji-menu absolute right-0 top-[calc(100%+8px)] z-20 w-56 rounded border border-slate-200 bg-white p-3 shadow-xl">
+                          <div className="emoji-picker grid grid-cols-4 gap-1">
                             {iconChoices.map((choice) => {
                               const used = usedIconKeys.has(choice.trim().toLocaleLowerCase())
                               return (
@@ -424,7 +435,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                                     setPlayerMessage(null)
                                     setIconPickerOpen(false)
                                   }}
-                                  className={`flex h-8 items-center justify-center rounded-lg border text-sm font-black ${used ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-300' : 'border-slate-200 bg-white text-slate-800 hover:border-teal-300 hover:bg-teal-50'}`}
+                                  className={`flex h-11 w-11 items-center justify-center rounded border text-xl ${used ? 'cursor-not-allowed border-transparent opacity-20' : 'border-transparent bg-transparent hover:border-[rgb(var(--bamboo))] hover:bg-[rgb(var(--bamboo)/0.08)]'}`}
                                   title={used ? 'Already in use' : 'Use this icon'}
                                 >
                                   {choice}
@@ -455,29 +466,31 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                 </div>
                 <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   {players.map((player) => (
-                    <div key={player.id} className="relative flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 transition hover:border-slate-300 hover:bg-white">
+                    <div key={player.id} className="relative rounded-xl border border-slate-200 bg-slate-50 p-3 transition hover:border-slate-300 hover:bg-white">
                       <div className="flex min-w-0 items-center gap-3">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-sm font-black text-slate-700 shadow-sm">
+                        <button type="button" onClick={() => setEditingPlayerId(editingPlayerId === player.id ? null : player.id)} aria-label={`Change ${player.displayName} emoji`} title="Change emoji" className="flex h-11 w-11 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-lg text-slate-700 shadow-sm hover:border-[rgb(var(--bamboo))]">
                           {player.icon}
-                        </span>
+                        </button>
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-black text-slate-900">{player.displayName}</p>
-                          <p className="truncate text-xs text-slate-500">{player.authUid ? 'Linked user' : 'Tracked player'}</p>
+                          <p className="break-words text-sm font-black leading-5 text-slate-900">{player.displayName}</p>
+                          <p className="mt-0.5 text-xs text-slate-500">{player.authUid ? 'Linked user' : 'Tracked player'}</p>
                         </div>
                       </div>
-                      <div className="flex shrink-0 gap-1">
-                        <button type="button" onClick={() => setEditingPlayerId(editingPlayerId === player.id ? null : player.id)} className="rounded-lg border border-teal-200 px-2 py-1 text-xs font-bold text-teal-700 hover:bg-teal-50">
-                          Emoji
-                        </button>
-                        <button type="button" onClick={() => removePlayer(clubId, player.id)} className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-bold text-rose-700 hover:bg-rose-50">
-                          Remove
+                      <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-200 pt-3">
+                        {(!player.authUid || player.authUid === user?.uid) ? (
+                          <button type="button" onClick={() => togglePlayerLink(player)} className="min-h-9 rounded border border-amber-200 px-2 py-1 text-xs font-bold text-slate-700 hover:bg-amber-50">
+                            {player.authUid === user?.uid ? 'Unlink account' : 'Link account'}
+                          </button>
+                        ) : null}
+                        <button type="button" onClick={() => removePlayer(clubId, player.id)} aria-label={`Remove ${player.displayName}`} title="Remove player" className="flex h-9 w-9 items-center justify-center rounded border border-rose-200 text-lg font-bold text-rose-700 hover:bg-rose-50">
+                          ×
                         </button>
                       </div>
                       {editingPlayerId === player.id ? (
-                        <div className="absolute z-20 mt-24 grid w-64 grid-cols-8 gap-1 rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+                        <div className="emoji-picker emoji-menu absolute right-2 top-full z-20 mt-2 grid w-56 grid-cols-4 gap-1 rounded border border-slate-200 bg-white p-3 shadow-xl">
                           {iconChoices.map((choice) => {
                             const used = usedIconKeys.has(choice.toLocaleLowerCase()) && choice !== player.icon
-                            return <button key={choice} type="button" disabled={used} onClick={() => changePlayerIcon(player, choice)} className="flex h-7 items-center justify-center rounded-md hover:bg-teal-50 disabled:opacity-20">{choice}</button>
+                            return <button key={choice} type="button" disabled={used} onClick={() => changePlayerIcon(player, choice)} className="flex h-11 w-11 items-center justify-center rounded border border-transparent bg-transparent text-xl hover:border-[rgb(var(--bamboo))] hover:bg-[rgb(var(--bamboo)/0.08)] disabled:opacity-20">{choice}</button>
                           })}
                         </div>
                       ) : null}
@@ -524,6 +537,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           seasons={seasons}
           currentSeason={activeSeasonNumber}
           userId={user.uid}
+          canDeleteGames={isManager}
           onClose={() => setGameLogsOpen(false)}
         />
       ) : null}

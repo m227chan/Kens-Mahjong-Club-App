@@ -4,6 +4,7 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { Timestamp } from 'firebase/firestore'
 import {
   createPlayer,
+  deleteGameAndRebuild,
   importGames,
   subscribeActiveSession,
   subscribeGames,
@@ -109,12 +110,14 @@ export default function GameLogsModal({
   seasons,
   currentSeason,
   userId,
+  canDeleteGames,
   onClose
 }: {
   clubId: string
   seasons: SeasonDoc[]
   currentSeason: number
   userId: string
+  canDeleteGames: boolean
   onClose: () => void
 }) {
   const [players, setPlayers] = useState<PlayerDoc[]>([])
@@ -125,6 +128,7 @@ export default function GameLogsModal({
   const [selectedPlayerId, setSelectedPlayerId] = useState('')
   const [importMessage, setImportMessage] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
+  const [deletingGameId, setDeletingGameId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => subscribePlayers(clubId, setPlayers), [clubId])
@@ -200,6 +204,20 @@ export default function GameLogsModal({
     URL.revokeObjectURL(url)
   }
 
+  const removeGame = async (game: GameDoc) => {
+    if (!canDeleteGames) return
+    if (!window.confirm(`Delete the game from ${formatDate(game)}? Points, ELO, ranks, titles, and charts will be recalculated from the remaining games.`)) return
+    setDeletingGameId(game.id)
+    setImportMessage(null)
+    try {
+      await deleteGameAndRebuild(clubId, game.id)
+      setImportMessage('Game deleted. Club statistics were recalculated.')
+    } catch (error) {
+      setImportMessage(error instanceof Error ? error.message : 'Unable to delete game.')
+    } finally {
+      setDeletingGameId(null)
+    }
+  }
   const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
@@ -277,13 +295,8 @@ export default function GameLogsModal({
         })
       })
 
-      if (parsedGamesByName.length === 0) {
-        const examples = skippedRows.slice(0, 4).join('; ')
-        setImportMessage(`No valid four-player games found. ${examples ? `Skipped examples: ${examples}.` : ''}`)
-        return
-      }
 
-      const requiredNames = Array.from(new Set(parsedGamesByName.flatMap((game) => game.entries.map((entry) => entry.playerName))))
+      const requiredNames = Array.from(new Set(playerColumns.map((column) => column.name)))
       const missingNames = requiredNames.filter((name) => !existingByName.has(normalizeName(name)))
 
       if (missingNames.length > 0) {
@@ -300,6 +313,12 @@ export default function GameLogsModal({
         }
       }
 
+      if (parsedGamesByName.length === 0) {
+        const examples = skippedRows.slice(0, 4).join('; ')
+        const playerText = missingNames.length ? `Added ${missingNames.length} new player${missingNames.length === 1 ? '' : 's'} from the CSV headers. ` : ''
+        setImportMessage(`${playerText}No valid four-player games were found to import.${examples ? ` Skipped examples: ${examples}.` : ''}`)
+        return
+      }
       const parsedGames = parsedGamesByName.map((game) => ({
         datetime: game.datetime,
         seasonNumber: game.seasonNumber,
@@ -385,7 +404,7 @@ export default function GameLogsModal({
         </div>
 
         <div className="min-h-0 flex-1 overflow-auto p-4">
-          <table className="min-w-full border-separate border-spacing-0 text-sm">
+          <table className="game-log-table min-w-full border-separate border-spacing-0 text-sm">
             <thead>
               <tr>
                 <th className="sticky left-0 top-0 z-20 border-b border-slate-200 bg-slate-100 px-3 py-2 text-left font-black text-slate-700">Datetime</th>
@@ -393,13 +412,13 @@ export default function GameLogsModal({
                 {displayedPlayers.map((player) => (
                   <th key={player.id} className="sticky top-0 z-10 min-w-[120px] border-b border-slate-200 bg-slate-100 px-3 py-2 text-left font-black text-slate-700">{player.displayName}</th>
                 ))}
-              </tr>
+                {canDeleteGames ? <th className="sticky right-0 top-0 z-20 border-b border-slate-200 bg-slate-100 px-3 py-2 text-left font-black text-slate-700">Actions</th> : null}              </tr>
             </thead>
             <tbody>
               {displayedGames.map((game) => {
                 const scoreByPlayer = new Map(game.entries.map((entry) => [entry.playerId, entry.score]))
                 return (
-                  <tr key={game.id} className="odd:bg-white even:bg-slate-50">
+                  <tr key={game.id} className="game-log-row">
                     <td className="sticky left-0 z-10 whitespace-nowrap border-b border-slate-100 bg-inherit px-3 py-2 font-semibold text-slate-700">{formatDate(game)}</td>
                     <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2 text-slate-600">Season {game.seasonNumber ?? 1}</td>
                     {displayedPlayers.map((player) => {
@@ -410,7 +429,13 @@ export default function GameLogsModal({
                         </td>
                       )
                     })}
-                  </tr>
+                    {canDeleteGames ? (
+                      <td className="sticky right-0 border-b border-slate-100 bg-inherit px-3 py-2">
+                        <button type="button" onClick={() => removeGame(game)} disabled={deletingGameId === game.id} className="min-h-9 rounded border border-rose-200 px-3 py-1 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50">
+                          {deletingGameId === game.id ? 'Deleting…' : 'Delete'}
+                        </button>
+                      </td>
+                    ) : null}                  </tr>
                 )
               })}
             </tbody>
