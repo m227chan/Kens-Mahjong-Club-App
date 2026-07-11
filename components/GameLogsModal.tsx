@@ -10,6 +10,7 @@ import {
   subscribePlayers
 } from '@/lib/firestore'
 import type { GameDoc, PlayerDoc, SeasonDoc, SessionDoc } from '@/lib/types'
+import { randomUnusedPlayerEmoji } from '@/lib/players'
 
 type ViewMode = 'all' | 'session' | 'player'
 
@@ -102,13 +103,6 @@ function formatDate(game: GameDoc) {
   return date ? date.toLocaleString() : ''
 }
 
-function makeIcon(name: string, used: Set<string>) {
-  const base = (name.trim()[0] || 'P').toUpperCase()
-  const choices = [base, ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''), ...'123456789'.split('')]
-  const choice = choices.find((item) => !used.has(item.toLocaleLowerCase())) ?? `${base}${used.size + 1}`
-  used.add(choice.toLocaleLowerCase())
-  return choice
-}
 
 export default function GameLogsModal({
   clubId,
@@ -301,7 +295,7 @@ export default function GameLogsModal({
 
         const usedIcons = new Set(players.map((player) => player.icon.trim().toLocaleLowerCase()))
         for (const name of missingNames) {
-          const playerId = await createPlayer(clubId, { displayName: name, icon: makeIcon(name, usedIcons) })
+          const playerId = await createPlayer(clubId, { displayName: name, icon: randomUnusedPlayerEmoji(usedIcons) })
           existingByName.set(normalizeName(name), { id: playerId, displayName: name } as PlayerDoc)
         }
       }

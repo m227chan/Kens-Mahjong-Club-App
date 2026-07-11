@@ -5,7 +5,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { subscribeEloEvents, subscribeGames, subscribePlayerStats, subscribePlayers } from '@/lib/firestore'
 import type { EloEventDoc, GameDoc, PlayerDoc, PlayerStatsDoc } from '@/lib/types'
 
-const palette = ['#0A84FF', '#34D399', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#F97316', '#64748b']
+const palette = ['#18694f', '#b9392c', '#c18b30', '#28666e', '#744c24', '#8c3f65', '#4f772d', '#264653']
 const gameRangeOptions = [
   { label: 'Last 25', value: 25 },
   { label: 'Last 50', value: 50 },
@@ -137,9 +137,9 @@ export default function DashboardContent({ clubId, seasonNumber }: { clubId: str
             <div className="mt-4 h-80">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={cumulativeData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.2} />
-                  <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 12 }} />
-                  <YAxis tick={{ fill: '#64748b', fontSize: 12 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--line))" opacity={0.2} />
+                  <XAxis dataKey="label" tick={{ fill: 'rgb(var(--muted))', fontSize: 12 }} />
+                  <YAxis tick={{ fill: 'rgb(var(--muted))', fontSize: 12 }} />
                   <Tooltip />
                   {displayPlayers.map((player, index) => (
                     <Line
@@ -168,9 +168,9 @@ export default function DashboardContent({ clubId, seasonNumber }: { clubId: str
             <div className="mt-4 h-80">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={bumpDisplayData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.2} />
-                  <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 12 }} />
-                  <YAxis reversed tick={{ fill: '#64748b', fontSize: 12 }} allowDecimals={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--line))" opacity={0.2} />
+                  <XAxis dataKey="label" tick={{ fill: 'rgb(var(--muted))', fontSize: 12 }} />
+                  <YAxis reversed tick={{ fill: 'rgb(var(--muted))', fontSize: 12 }} allowDecimals={false} />
                   <Tooltip />
                   {displayPlayers.map((player, index) => (
                     <Line

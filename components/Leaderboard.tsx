@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { subscribePlayerStats, subscribePlayers } from '@/lib/firestore'
 import type { PlayerDoc, PlayerStatsDoc } from '@/lib/types'
+import { titleForStanding } from '@/lib/players'
 
 function formatSigned(value: number) {
   if (value > 0) return `+${value}`
@@ -42,7 +43,7 @@ export function LeaderboardPanel({ clubId, seasonNumber, compact = false }: { cl
   const visibleRows = compact ? rows.slice(0, 8) : rows
 
   return (
-    <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+    <section className="leaderboard-board overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
       <header className="border-b border-slate-200 px-5 py-4">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Leaderboard</p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
@@ -64,12 +65,12 @@ export function LeaderboardPanel({ clubId, seasonNumber, compact = false }: { cl
               <span>Losses</span>
               <span>Win ratio</span>
             </div>
-            {visibleRows.map((row) => (
+            {visibleRows.map((row, index) => (
               <div
                 key={row.playerId}
-                className="grid grid-cols-[64px_minmax(260px,1.8fr)_88px_112px_76px_76px_84px_96px] gap-3 border-b border-slate-200/70 px-4 py-4 last:border-b-0"
+                className="leaderboard-row grid grid-cols-[64px_minmax(260px,1.8fr)_88px_112px_76px_76px_84px_96px] gap-3 border-b border-slate-200/70 px-4 py-4 last:border-b-0 hover:bg-[rgb(var(--bamboo)/0.045)]"
               >
-                <div className="flex items-center text-sm font-bold text-slate-700">#{row.pointsRank || '-'}</div>
+                <div className="flex items-center font-display text-xl font-black text-[rgb(var(--cinnabar))]">#{row.pointsRank || '-'}</div>
                 <div className="flex items-start gap-3">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-sm font-bold text-slate-700">
                     {row.icon}
@@ -77,12 +78,12 @@ export function LeaderboardPanel({ clubId, seasonNumber, compact = false }: { cl
                   <div className="min-w-0">
                     <p className="break-words text-sm font-bold text-slate-900">{row.displayName}</p>
                     <p className="break-words text-xs leading-5 text-slate-500">
-                      {row.title} &middot; {row.eloRating} ELO &middot; {formatSigned(Math.round(row.last5EloDelta))} last 5
+                      {titleForStanding(index + 1, rows.length, row.gamesPlayed)} &middot; {row.eloRating} ELO &middot; {formatSigned(Math.round(row.last5EloDelta))} last 5
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center text-sm font-semibold text-slate-700">{row.totalPoints}</div>
-                <div className="flex items-center text-sm font-semibold text-slate-700">#{row.eloRank || '-'} &middot; {row.eloRating}</div>
+                <div className="flex items-center text-sm font-semibold text-slate-700">{row.eloRating}</div>
                 <div className="flex items-center text-sm font-semibold text-slate-700">{row.gamesPlayed}</div>
                 <div className="flex items-center text-sm font-semibold text-slate-700">{row.gamesWon}</div>
                 <div className="flex items-center text-sm font-semibold text-slate-700">{row.gamesLost}</div>

@@ -9,6 +9,7 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: { display: ['var(--font-sans)'], mono: ['var(--font-mono)'] },
       colors: {
         accent: '#667eea'
       }

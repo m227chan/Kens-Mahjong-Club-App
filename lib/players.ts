@@ -16,6 +16,32 @@ export const PLAYER_COLORS = [
   '#94A3B8', // slate
 ]
 
+export const PLAYER_EMOJIS = [
+  '🀄', '🃏', '🎴', '🏆', '⭐', '🔥', '🌙', '☘️',
+  '🐉', '🧧', '💎', '🦊', '🐼', '🦁', '🐯', '🦉',
+  '🌸', '🌺', '🌻', '🍀', '🌊', '⚡', '🌈', '🍊',
+  '🍉', '🍒', '🍑', '🥝', '🍭', '🍪', '🎲', '🧩'
+]
+
+export function randomUnusedPlayerEmoji(used: Set<string>) {
+  const available = PLAYER_EMOJIS.filter((emoji) => !used.has(emoji.toLocaleLowerCase()))
+  const pool = available.length ? available : PLAYER_EMOJIS
+  const emoji = pool[Math.floor(Math.random() * pool.length)]
+  used.add(emoji.toLocaleLowerCase())
+  return emoji
+}
+
+export function titleForStanding(rank: number, totalPlayers: number, gamesPlayed: number) {
+  if (!gamesPlayed) return 'Unranked'
+  if (rank === 1) return 'Champion'
+  if (rank === 2) return 'Master'
+  if (rank === 3) return 'Contender'
+  if (rank <= Math.max(4, Math.ceil(totalPlayers * 0.1))) return 'Expert'
+  if (rank <= Math.ceil(totalPlayers * 0.35)) return 'Strategist'
+  if (rank <= Math.ceil(totalPlayers * 0.7)) return 'Competitor'
+  return 'Apprentice'
+}
+
 // Colors cycle if player count exceeds palette length
 export function assignPlayerColors(
   playerNames: string[]

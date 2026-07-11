@@ -922,10 +922,9 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
   const sessionTableCount = session.tableCount
 
   return (
-    <div>
+    <div className="session-manager">
       <style jsx global>{`
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-        body { background: #f0f2f7; font-size: 13px; color: #1a202c; overflow-x: hidden; }
+
         :root {
           --purple: #667eea;
           --purple-dark: #5568d3;
@@ -1523,6 +1522,55 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
           color: #c53030;
           transform: scale(1.08);
         }
+        /* Clubhouse session system */
+        .session-manager { --purple:rgb(var(--bamboo)); --purple-dark:rgb(var(--bamboo-bright)); --green:rgb(var(--bamboo)); --green-dark:rgb(var(--bamboo-bright)); --red:rgb(var(--cinnabar)); --red-dark:rgb(var(--cinnabar)); --gold:rgb(var(--gold)); --gray:rgb(var(--muted)); --border:rgb(var(--line)); --white:rgb(var(--surface)); --card-bg:rgb(var(--surface)); --radius:4px; color:rgb(var(--ink)); font-family:var(--font-sans),sans-serif; overflow:hidden; border:1px solid rgb(var(--line)); border-radius:4px; background:rgb(var(--canvas)/.58); box-shadow:5px 6px 0 rgb(var(--shadow)/.07); }
+        .session-manager .header { position:relative; top:auto; padding:16px 18px; border:0; border-bottom:3px double rgb(var(--line)); border-radius:0; background:rgb(var(--surface)); box-shadow:none; }
+        .session-manager .header>div:first-child>div:first-child { font-family:var(--font-sans),sans-serif; font-size:22px!important; letter-spacing:-.02em; }
+        .session-manager .header-sub { margin-top:4px; color:rgb(var(--muted)); font-size:10px; letter-spacing:.08em; text-transform:uppercase; }
+        .session-manager .btn-icon { min-width:38px; min-height:38px; border:1px solid rgb(var(--line)); border-radius:3px; background:rgb(var(--surface-2)); color:rgb(var(--ink)); box-shadow:2px 2px 0 rgb(var(--shadow)/.07); }
+        .session-manager .btn-icon:hover { border-color:rgb(var(--cinnabar)); background:rgb(var(--cinnabar)/.06); color:rgb(var(--cinnabar)); }
+        .session-manager #sessionPage { height:min(720px,calc(100vh - 128px)); background:transparent; }
+        .session-manager .tables-scroll { padding:14px; background:transparent; }
+        .session-manager input[type=text],.session-manager input[type=number] { border:1px solid rgb(var(--line))!important; border-radius:3px!important; background:rgb(var(--surface))!important; color:rgb(var(--ink))!important; box-shadow:inset 3px 0 0 rgb(var(--bamboo)); outline:none; }
+        .session-manager input:focus { border-color:rgb(var(--bamboo))!important; box-shadow:inset 3px 0 0 rgb(var(--cinnabar)),0 0 0 2px rgb(var(--bamboo)/.12); }
+        .session-manager .sideline-section { order:1; margin:12px 12px 0; padding:12px; border:1px solid rgb(var(--line)); border-left:4px solid rgb(var(--gold)); border-radius:3px; background:rgb(var(--surface-2)); box-shadow:none; }
+        .session-manager .section-label { margin:0 0 10px; color:rgb(var(--ink)); font-size:10px; letter-spacing:.16em; }
+        .session-manager .section-label .badge { border-radius:2px; padding:2px 7px; background:rgb(var(--cinnabar)); }
+        .session-manager .sideline-area { min-height:74px; padding:10px; gap:12px; border:1px dashed rgb(var(--line)); border-radius:2px; background:rgb(var(--surface)); }
+        .session-manager .table-card { border:1px solid rgb(var(--line)); border-left:4px solid rgb(var(--muted)); border-radius:3px; background:rgb(var(--surface)); box-shadow:4px 4px 0 rgb(var(--shadow)/.06); overflow:visible; }
+        .session-manager .table-card.valid { border-color:rgb(var(--line)); border-left-color:rgb(var(--bamboo)); box-shadow:4px 4px 0 rgb(var(--bamboo)/.12); }
+        .session-manager .table-card.drag-over { border-color:rgb(var(--cinnabar)); background:rgb(var(--cinnabar)/.04); }
+        .session-manager .table-header { min-height:46px; padding:10px 12px; border-bottom:1px solid rgb(var(--line)); background:rgb(var(--surface-2)); }
+        .session-manager .table-name { font-family:var(--font-sans),sans-serif; font-size:17px; color:rgb(var(--ink)); }
+        .session-manager .table-status { border-radius:2px; padding:4px 8px; text-transform:uppercase; letter-spacing:.08em; }
+        .session-manager .table-status.valid { background:rgb(var(--bamboo)); color:rgb(var(--surface)); }
+        .session-manager .table-status.waiting { background:rgb(var(--line)/.45); color:rgb(var(--muted)); }
+        .session-manager .table-seats { gap:8px; padding:12px; min-height:150px; }
+        .session-manager .seat-slot { min-height:66px; border:1px dashed rgb(var(--line)); border-radius:2px; background:rgb(var(--surface-2)/.55); }
+        .session-manager .seat-slot.occupied { border:1px solid transparent; background:transparent; }
+        .session-manager .player-chip { width:64px; }
+        .session-manager .chip-icon { width:44px; height:54px; border-radius:4px; border:1px solid rgb(var(--line)); background:linear-gradient(145deg,rgb(var(--surface)),rgb(var(--surface-2))); color:rgb(var(--ink)); box-shadow:2px 3px 0 rgb(var(--shadow)/.08); font-size:20px; }
+        .session-manager .seat-slot .chip-icon { width:40px; height:48px; border-radius:4px; font-size:18px; }
+        .session-manager .chip-name,.session-manager .player-toggle .name { color:rgb(var(--ink)); font-size:9px; margin-top:6px; }
+        .session-manager .player-chip:hover .chip-icon { border-color:rgb(var(--cinnabar)); transform:translateY(-1px); }
+        .session-manager .table-actions { padding:10px 12px 12px; gap:8px; border-top:1px solid rgb(var(--line)); }
+        .session-manager .btn-draw,.session-manager .btn-secondary,.session-manager .btn-cancel-win { border:1px solid rgb(var(--line)); border-radius:3px; background:rgb(var(--surface-2)); color:rgb(var(--ink)); }
+        .session-manager .btn-draw:hover { border-color:rgb(var(--gold)); background:rgb(var(--gold)/.1); color:rgb(var(--ink)); }
+        .session-manager .btn-primary,.session-manager .btn-submit-game { border-radius:3px; background:rgb(var(--bamboo)); color:rgb(var(--surface)); box-shadow:2px 2px 0 rgb(var(--shadow)/.12); }
+        .session-manager .setup-card { border-radius:3px; border-color:rgb(var(--line)); background:rgb(var(--surface)); box-shadow:3px 3px 0 rgb(var(--shadow)/.05); }
+        .session-manager .setup-card h3 { color:rgb(var(--ink)); letter-spacing:.14em; }
+        .session-manager .player-toggle { border:1px solid rgb(var(--line)); border-radius:3px; background:rgb(var(--surface-2)); }
+        .session-manager .player-toggle.selected { border-color:rgb(var(--bamboo)); background:rgb(var(--bamboo)/.1); box-shadow:inset 0 -3px 0 rgb(var(--bamboo)); }
+        .session-manager .win-panel { border-top-color:rgb(var(--gold)); background:rgb(var(--gold)/.09); color:rgb(var(--ink)); }
+        .session-manager .win-panel-title { color:rgb(var(--cinnabar)); }
+        .session-manager .win-type-btn,.session-manager .loser-chip,.session-manager .fan-chip { border-color:rgb(var(--line)); border-radius:3px; background:rgb(var(--surface)); color:rgb(var(--ink)); }
+        .session-manager .win-type-btn.selected,.session-manager .fan-chip.selected { border-color:rgb(var(--bamboo)); background:rgb(var(--bamboo)/.1); color:rgb(var(--bamboo)); }
+        .session-manager .score-preview { border-radius:3px; background:rgb(var(--ink)); }
+        .session-manager .menu-item { background:rgb(var(--surface)); color:rgb(var(--ink)); border-color:rgb(var(--line)); }
+        .session-manager .menu-item:hover { background:rgb(var(--surface-2)); }
+        .session-manager .spinner { border-color:rgb(var(--line)); border-top-color:rgb(var(--cinnabar)); }
+        html.dark .session-manager .header,html.dark .session-manager .table-name,html.dark .session-manager .chip-name,html.dark .session-manager .section-label,html.dark .session-manager .setup-card h3 { color:rgb(var(--ink))!important; }
+        @media(max-width:640px){.session-manager #sessionPage{height:calc(100vh - 112px)}.session-manager .tables-scroll{padding:10px}.session-manager .sideline-section{margin:10px 10px 0}}
       `}</style>
 
       <div className="header">

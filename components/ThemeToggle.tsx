@@ -23,9 +23,11 @@ export default function ThemeToggle() {
   return (
     <button
       onClick={toggleTheme}
-      className="rounded-full border border-zinc-300/70 bg-white/80 px-3 py-2 text-sm font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-100"
+      aria-label={enabled ? 'Switch to light theme' : 'Switch to dark theme'}
+      title={enabled ? 'Switch to light theme' : 'Switch to dark theme'}
+      className="group flex h-11 w-11 items-center justify-center rounded-full border border-[rgb(var(--line))] bg-[rgb(var(--surface))] text-lg text-[rgb(var(--ink))] shadow-[3px_3px_0_rgb(var(--shadow)/0.08)] hover:border-[rgb(var(--cinnabar))]"
     >
-      {enabled ? '☀️' : '🌙'}
+      {enabled ? '☀' : '☾'}
     </button>
   )
 }

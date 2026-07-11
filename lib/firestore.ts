@@ -318,6 +318,36 @@ export async function removePlayer(clubId: string, playerId: string) {
   await batch.commit()
 }
 
+export async function updatePlayerIcon(clubId: string, playerId: string, nextIcon: string) {
+  const playerRef = clubDoc(clubId, 'players', playerId)
+  const next = normalizePlayerIcon(nextIcon, '🀄')
+  const nextKey = playerIconKey(next)
+
+  await runTransaction(db, async (transaction) => {
+    const playerSnap = await transaction.get(playerRef)
+    if (!playerSnap.exists()) throw new Error('Player not found.')
+    const player = playerSnap.data() as PlayerDoc
+    if (player.iconKey === nextKey) return
+    const nextRef = clubDoc(clubId, 'playerIcons', nextKey)
+    const existing = await transaction.get(nextRef)
+    if (existing.exists()) throw new Error('That emoji is already in use in this club.')
+    transaction.set(nextRef, { icon: next, playerId, createdAt: Timestamp.now() })
+    transaction.update(playerRef, { icon: next, iconKey: nextKey })
+    if (player.iconKey) transaction.delete(clubDoc(clubId, 'playerIcons', player.iconKey))
+  })
+}
+
+export async function deleteClub(clubId: string, managerUid: string) {
+  const members = await getDocs(query(clubCollection(clubId, 'members'), where('active', '==', true)))
+  const batch = writeBatch(db)
+  batch.set(doc(db, 'clubs', clubId), { active: false, deletedAt: Timestamp.now(), deletedBy: managerUid }, { merge: true })
+  members.docs.forEach((memberDoc) => {
+    const member = memberDoc.data() as ClubMembershipDoc
+    batch.set(memberDoc.ref, { active: false }, { merge: true })
+    batch.set(doc(db, 'users', member.uid, 'clubs', clubId), { active: false }, { merge: true })
+  })
+  await batch.commit()
+}
 export async function createGame(clubId: string, input: {
   entries: Array<{ playerId: string; score: number }>
   createdBy: string

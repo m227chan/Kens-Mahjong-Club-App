@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { subscribePlayerStats, subscribePlayers } from '@/lib/firestore'
 import type { PlayerDoc, PlayerStatsDoc } from '@/lib/types'
 
-function MiniBarChart({ data, color = '#667eea' }: { data: Array<{ label: string; value: number }>; color?: string }) {
+function MiniBarChart({ data, color = '#18694f' }: { data: Array<{ label: string; value: number }>; color?: string }) {
   const max = Math.max(...data.map((entry) => Math.abs(entry.value)), 1)
 
   return (
@@ -54,25 +54,25 @@ export default function AnalyticsPanel({ clubId, seasonNumber }: { clubId: strin
     {
       title: 'Rank Alignment',
       value: top.map((stat) => ({ label: playerName(stat.playerId, true), value: Math.abs(stat.eloRank - stat.pointsRank) })),
-      color: '#4f46e5',
+      color: '#18694f',
       description: 'Lower is better. Compares ELO rank to points rank.'
     },
     {
       title: 'ELO Headroom',
       value: top.map((stat) => ({ label: playerName(stat.playerId, true), value: Math.max(0, stat.eloPeak - stat.eloRating) })),
-      color: '#0f766e',
+      color: '#28666e',
       description: 'Distance from each player\'s peak rating.'
     },
     {
       title: 'Points / Game',
       value: top.map((stat) => ({ label: playerName(stat.playerId, true), value: stat.gamesPlayed ? stat.totalPoints / stat.gamesPlayed : 0 })),
-      color: '#d97706',
+      color: '#c18b30',
       description: 'Average point result per recorded game.'
     },
     {
       title: 'Last 5 ELO',
       value: top.map((stat) => ({ label: playerName(stat.playerId, true), value: stat.last5EloDelta })),
-      color: '#be123c',
+      color: '#b9392c',
       description: 'Recent rating movement across the latest games.'
     }
   ]

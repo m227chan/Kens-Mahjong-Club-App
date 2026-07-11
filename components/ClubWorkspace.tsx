@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import AnalyticsPanel from '@/components/AnalyticsPanel'
 import DashboardContent from '@/components/DashboardContent'
@@ -10,12 +11,14 @@ import SessionManager from '@/components/SessionManager'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   createPlayer,
+  deleteClub,
   ensureConfig,
   ensureSeasons,
   removePlayer,
   resolveJoinRequest,
   setActiveSeason,
   startNewSeason,
+  updatePlayerIcon,
   subscribeClub,
   subscribeClubMembers,
   subscribeJoinRequests,
@@ -23,8 +26,9 @@ import {
   subscribeSeasons
 } from '@/lib/firestore'
 import type { ClubDoc, ClubMembershipDoc, JoinRequestDoc, PlayerDoc, SeasonDoc } from '@/lib/types'
+import { PLAYER_EMOJIS, randomUnusedPlayerEmoji } from '@/lib/players'
 
-const iconChoices = ['🀄', '🎴', '🏆', '⭐', '🔥', '🌙', '🍀', '🐉', '🧧', '💎', 'A', 'B', 'C', 'J', 'K', 'M']
+const iconChoices = PLAYER_EMOJIS
 
 function StatCard({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
@@ -37,12 +41,13 @@ function StatCard({ label, value, tone }: { label: string; value: string; tone: 
 
 export default function ClubWorkspace({ clubId, membership }: { clubId: string; membership: ClubMembershipDoc }) {
   const { user } = useAuth()
+  const router = useRouter()
   const [club, setClub] = useState<ClubDoc | null>(null)
   const [members, setMembers] = useState<ClubMembershipDoc[]>([])
   const [joinRequests, setJoinRequests] = useState<JoinRequestDoc[]>([])
   const [players, setPlayers] = useState<PlayerDoc[]>([])
   const [playerName, setPlayerName] = useState('')
-  const [playerIcon, setPlayerIcon] = useState('M')
+  const [playerIcon, setPlayerIcon] = useState(() => randomUnusedPlayerEmoji(new Set()))
   const [iconPickerOpen, setIconPickerOpen] = useState(false)
   const [linkToMe, setLinkToMe] = useState(false)
   const [playerMessage, setPlayerMessage] = useState<string | null>(null)
@@ -54,6 +59,10 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [seasons, setSeasons] = useState<SeasonDoc[]>([])
   const [seasonAction, setSeasonAction] = useState(false)
+  const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [deleteConfirmName, setDeleteConfirmName] = useState('')
+  const [deletingClub, setDeletingClub] = useState(false)
 
   const isManager = membership.role === 'manager'
   const usedIconKeys = new Set(players.map((player) => player.icon.trim().toLocaleLowerCase()))
@@ -96,7 +105,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         authUid: linkToMe ? user?.uid ?? null : null
       })
       setPlayerName('')
-      setPlayerIcon('M')
+      setPlayerIcon(randomUnusedPlayerEmoji(new Set(players.map((player) => player.icon.toLocaleLowerCase()))))
       setIconPickerOpen(false)
       setLinkToMe(false)
       setPlayerMessage('Player added.')
@@ -105,6 +114,28 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
     }
   }
 
+  const changePlayerIcon = async (player: PlayerDoc, icon: string) => {
+    setPlayerMessage(null)
+    try {
+      await updatePlayerIcon(clubId, player.id, icon)
+      setEditingPlayerId(null)
+      setPlayerMessage(`${player.displayName}'s emoji was updated.`)
+    } catch (error) {
+      setPlayerMessage(error instanceof Error ? error.message : 'Unable to update emoji.')
+    }
+  }
+
+  const confirmDeleteClub = async () => {
+    if (!user || !club || deleteConfirmName !== club.name) return
+    setDeletingClub(true)
+    try {
+      await deleteClub(clubId, user.uid)
+      router.replace('/')
+    } catch (error) {
+      setPlayerMessage(error instanceof Error ? error.message : 'Unable to delete club.')
+      setDeletingClub(false)
+    }
+  }
   const approveRequest = async (request: JoinRequestDoc, approved: boolean) => {
     if (!user || !club) return
     setJoiningAction(request.uid)
@@ -265,6 +296,28 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                   </p>
                 )}
               </div>
+              {isManager ? (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+                  <p className="text-sm font-black text-rose-950">Delete club</p>
+                  <p className="mt-1 text-sm text-rose-700">Remove this club from every member&apos;s active clubs. Game history will no longer be accessible.</p>
+                  <button type="button" onClick={() => setDeleteConfirmOpen(true)} className="mt-4 rounded-lg bg-rose-700 px-4 py-2 text-sm font-bold text-white hover:bg-rose-600">Delete club</button>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteConfirmOpen && club ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-rose-600">Permanent action</p>
+            <h3 className="mt-2 text-xl font-black text-slate-950">Delete {club.name}?</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-600">Type <strong>{club.name}</strong> exactly to confirm. The club will disappear for every member.</p>
+            <input autoFocus value={deleteConfirmName} onChange={(event) => setDeleteConfirmName(event.target.value)} className="mt-4 w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-rose-500" placeholder={club.name} />
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => { setDeleteConfirmOpen(false); setDeleteConfirmName('') }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700">Cancel</button>
+              <button type="button" onClick={confirmDeleteClub} disabled={deleteConfirmName !== club.name || deletingClub} className="rounded-lg bg-rose-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">{deletingClub ? 'Deleting...' : 'Delete club'}</button>
             </div>
           </div>
         </div>
@@ -344,7 +397,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                     <input value={playerName} onChange={(event) => setPlayerName(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-teal-500" />
                   </label>
                   <label className="text-sm font-bold text-slate-700">
-                    Icon or initial
+                    Player emoji
                     <div className="relative mt-2">
                       <input
                         value={playerIcon}
@@ -379,7 +432,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                               )
                             })}
                           </div>
-                          <p className="mt-2 text-xs font-medium text-slate-500">You can also type a unique emoji or initial.</p>
+                          <p className="mt-2 text-xs font-medium text-slate-500">Choose a unique emoji for this player.</p>
                         </div>
                       ) : null}
                     </div>
@@ -402,7 +455,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                 </div>
                 <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   {players.map((player) => (
-                    <div key={player.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <div key={player.id} className="relative flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 transition hover:border-slate-300 hover:bg-white">
                       <div className="flex min-w-0 items-center gap-3">
                         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-sm font-black text-slate-700 shadow-sm">
                           {player.icon}
@@ -412,9 +465,22 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                           <p className="truncate text-xs text-slate-500">{player.authUid ? 'Linked user' : 'Tracked player'}</p>
                         </div>
                       </div>
-                      <button type="button" onClick={() => removePlayer(clubId, player.id)} className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-bold text-rose-700 hover:bg-rose-50">
-                        Remove
-                      </button>
+                      <div className="flex shrink-0 gap-1">
+                        <button type="button" onClick={() => setEditingPlayerId(editingPlayerId === player.id ? null : player.id)} className="rounded-lg border border-teal-200 px-2 py-1 text-xs font-bold text-teal-700 hover:bg-teal-50">
+                          Emoji
+                        </button>
+                        <button type="button" onClick={() => removePlayer(clubId, player.id)} className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-bold text-rose-700 hover:bg-rose-50">
+                          Remove
+                        </button>
+                      </div>
+                      {editingPlayerId === player.id ? (
+                        <div className="absolute z-20 mt-24 grid w-64 grid-cols-8 gap-1 rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+                          {iconChoices.map((choice) => {
+                            const used = usedIconKeys.has(choice.toLocaleLowerCase()) && choice !== player.icon
+                            return <button key={choice} type="button" disabled={used} onClick={() => changePlayerIcon(player, choice)} className="flex h-7 items-center justify-center rounded-md hover:bg-teal-50 disabled:opacity-20">{choice}</button>
+                          })}
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                 </div>

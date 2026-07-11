@@ -1,7 +1,11 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { Manrope, JetBrains_Mono } from 'next/font/google'
 import { AuthProvider } from '@/contexts/AuthContext'
 import ThemeToggle from '@/components/ThemeToggle'
+
+const manrope = Manrope({ subsets: ['latin'], variable: '--font-sans' })
+const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' })
 
 export const metadata: Metadata = {
   title: 'Ken\'s Mahjong Club Score Tracker',
@@ -10,15 +14,15 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen bg-zinc-50 text-zinc-900 transition-colors duration-200 dark:bg-zinc-950 dark:text-zinc-100">
+    <html lang="en" suppressHydrationWarning className={`${manrope.variable} ${jetbrainsMono.variable}`}>
+      <body className="club-atmosphere min-h-screen">
         <AuthProvider>
-          <div className="mx-auto flex min-h-screen max-w-7xl flex-col">
-            <header className="sticky top-0 z-20 border-b border-zinc-200/70 bg-white/80 px-4 py-3 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/70">
+          <div className="relative mx-auto flex min-h-screen max-w-[1500px] flex-col">
+            <header className="club-header sticky top-0 z-40 px-5 py-4 backdrop-blur-xl">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-blue-500">Ken&apos;s Mahjong Club</p>
-                  <h1 className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Score tracker</h1>
+                  <p className="brand-kicker text-[10px] font-bold uppercase tracking-[0.42em]">Ken&apos;s Mahjong Club</p>
+                  <h1 className="font-display text-lg font-black leading-none">Score tracker</h1>
                 </div>
                 <ThemeToggle />
               </div>
