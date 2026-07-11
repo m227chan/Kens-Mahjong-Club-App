@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   closeSession,
@@ -911,7 +912,9 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
                 👑 Winner...
               </button>
             </div>
-            {winState.tableId === tableId ? <div className={`win-panel active`} id={`winPanel-${tableId}`}>{renderWinPanel(tableId)}</div> : <div className="win-panel" id={`winPanel-${tableId}`} />}
+            {winState.tableId === tableId && typeof document !== 'undefined'
+              ? createPortal(<div className="win-panel active session-result-dialog" id={`winPanel-${tableId}`}>{renderWinPanel(tableId)}</div>, document.body)
+              : <div className="win-panel" id={`winPanel-${tableId}`} />}
           </div>
         </div>
       )
@@ -1575,7 +1578,10 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
         .session-manager .menu-item:hover { background:rgb(var(--surface-2)); }
         .session-manager .spinner { border-color:rgb(var(--line)); border-top-color:rgb(var(--cinnabar)); }
         html.dark .session-manager .header,html.dark .session-manager .table-name,html.dark .session-manager .chip-name,html.dark .session-manager .section-label,html.dark .session-manager .setup-card h3 { color:rgb(var(--ink))!important; }
-        @media(max-width:640px){.session-manager #sessionPage{height:calc(100vh - 112px)}.session-manager .tables-scroll{padding:10px}.session-manager .sideline-section{margin:10px 10px 0}}
+        @media(max-width:640px){
+          .session-manager #sessionPage{height:calc(100dvh - 112px)}.session-manager .tables-scroll{padding:10px}.session-manager .sideline-section{margin:10px 10px 0}
+          .session-result-dialog { display:block!important; position:fixed!important; left:50%!important; top:50%!important; transform:translate(-50%,-50%)!important; width:min(420px,calc(100vw - 24px))!important; max-height:calc(100dvh - 24px)!important; overflow-y:auto!important; z-index:12000!important; padding:16px!important; border:1px solid rgb(var(--line))!important; border-radius:6px!important; background:rgb(var(--surface))!important; color:rgb(var(--ink))!important; box-shadow:0 0 0 100vmax rgb(0 0 0/.68),0 20px 60px rgb(0 0 0/.35)!important; overscroll-behavior:contain; }
+        }
       `}</style>
 
       <div className="header">

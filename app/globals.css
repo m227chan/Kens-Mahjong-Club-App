@@ -215,3 +215,17 @@ html.dark .home-summary { background-image: linear-gradient(115deg,rgb(var(--bam
 html.dark .game-log-row td.text-emerald-700 { color:rgb(var(--bamboo-bright))!important; }
 html.dark .game-log-row td.text-rose-700 { color:rgb(var(--cinnabar))!important; }
 html.dark .game-log-row td.text-slate-300 { color:rgb(var(--muted)/.45)!important; }
+.session-result-dialog { display:block!important; position:fixed!important; left:50%!important; top:50%!important; transform:translate(-50%,-50%)!important; width:min(460px,calc(100vw - 32px))!important; max-height:calc(100dvh - 32px)!important; overflow-y:auto!important; z-index:12000!important; padding:16px!important; border:1px solid rgb(var(--line))!important; border-radius:6px!important; background:rgb(var(--surface))!important; color:rgb(var(--ink))!important; box-shadow:0 0 0 100vmax rgb(0 0 0/.68),0 20px 60px rgb(0 0 0/.35)!important; overscroll-behavior:contain; }
+/* Viewport-centred session dialogs */
+#infoOverlay,#pickerOverlay,#swapPickerOverlay { position:fixed!important; inset:0!important; width:100vw!important; height:100dvh!important; padding:clamp(12px,3vw,24px)!important; align-items:center!important; justify-content:center!important; background:rgb(0 0 0/.68)!important; overscroll-behavior:contain; }
+#infoOverlay[style*="display: block"] { display:flex!important; }
+#infoOverlay>div,#pickerOverlay>div,#swapPickerOverlay>div { width:min(420px,100%)!important; max-width:420px!important; max-height:calc(100dvh - 24px)!important; margin:auto!important; transform:none!important; border:1px solid rgb(var(--line))!important; border-radius:6px!important; background:rgb(var(--surface))!important; color:rgb(var(--ink))!important; box-shadow:0 20px 60px rgb(0 0 0/.35)!important; }
+#infoOverlay>div>div:first-child,#pickerOverlay>div>div:first-child,#swapPickerOverlay>div>div:first-child { min-height:60px; padding:14px 16px!important; background:rgb(var(--bamboo))!important; color:#fff!important; border-bottom:3px double rgb(var(--line))!important; }
+#infoOverlay>div>div:first-child button,#pickerOverlay>div>div:first-child button,#swapPickerOverlay>div>div:first-child button { width:44px!important; height:44px!important; border:1px solid rgb(255 255 255/.45)!important; border-radius:4px!important; background:rgb(255 255 255/.12)!important; color:#fff!important; }
+#infoOverlay .info-title,#infoOverlay .info-body,#pickerOverlay #pickerEmpty,#swapPickerOverlay #swapPickerEmpty { color:rgb(var(--ink))!important; }
+#infoOverlay .info-icon { border:1px solid rgb(var(--line)); background:rgb(var(--surface-2))!important; }
+#pickerOverlay input,#swapPickerOverlay input { border:1px solid rgb(var(--line))!important; border-radius:4px!important; background:rgb(var(--surface))!important; color:rgb(var(--ink))!important; }
+#pickerList button,#swapPickerList button { min-height:52px; border:1px solid rgb(var(--line))!important; border-radius:4px!important; background:rgb(var(--surface-2))!important; color:rgb(var(--ink))!important; }
+#pickerList button:hover,#swapPickerList button:hover { border-color:rgb(var(--bamboo))!important; background:rgb(var(--bamboo)/.08)!important; }
+.session-result-dialog .winner-choice.selected { border-color:rgb(var(--bamboo))!important; background:rgb(var(--bamboo))!important; color:#fff!important; }
+.session-result-dialog .discard-choice.selected { border-color:rgb(var(--cinnabar))!important; background:rgb(var(--cinnabar))!important; color:#fff!important; }
