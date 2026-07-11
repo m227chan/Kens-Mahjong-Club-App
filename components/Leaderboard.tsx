@@ -76,8 +76,8 @@ export function LeaderboardPanel({ clubId, seasonNumber, compact = false }: { cl
             ))}
           </div>
           <div className="hidden overflow-x-auto md:block">
-          <div className="min-w-[920px]">
-            <div className="grid grid-cols-[64px_minmax(260px,1.8fr)_88px_112px_76px_76px_84px_96px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+          <div className="min-w-[1020px]">
+            <div className="grid grid-cols-[64px_minmax(280px,1.8fr)_88px_112px_76px_76px_84px_116px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
               <span>Rank</span>
               <span>Name</span>
               <span>Points</span>
@@ -90,7 +90,7 @@ export function LeaderboardPanel({ clubId, seasonNumber, compact = false }: { cl
             {visibleRows.map((row, index) => (
               <div
                 key={row.playerId}
-                className="leaderboard-row grid grid-cols-[64px_minmax(260px,1.8fr)_88px_112px_76px_76px_84px_96px] gap-3 border-b border-slate-200/70 px-4 py-4 last:border-b-0 hover:bg-[rgb(var(--bamboo)/0.045)]"
+                className="leaderboard-row grid grid-cols-[64px_minmax(280px,1.8fr)_88px_112px_76px_76px_84px_116px] gap-3 border-b border-slate-200/70 px-4 py-4 last:border-b-0 hover:bg-[rgb(var(--bamboo)/0.045)]"
               >
                 <div className="flex items-center font-display text-xl font-black text-[rgb(var(--cinnabar))]">#{row.pointsRank || '-'}</div>
                 <div className="flex items-start gap-3">
