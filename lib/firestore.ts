@@ -1061,8 +1061,22 @@ export async function loadAnalyticsEloEvents(clubId: string, gameCount: number, 
 }
 
 export async function getClubGameCount(clubId: string) {
-  const snapshot = await getCountFromServer(clubCollection(clubId, 'games'))
-  return snapshot.data().count
+  const cacheKey = `mahjong:game-count:${clubId}`
+  let cached: { count: number; savedAt: number } | null = null
+  try {
+    cached = JSON.parse(window.localStorage.getItem(cacheKey) ?? 'null') as { count: number; savedAt: number } | null
+    if (cached && Date.now() - cached.savedAt < 60 * 60_000) return cached.count
+  } catch { /* Storage can be unavailable in privacy modes. */ }
+
+  try {
+    const snapshot = await getCountFromServer(clubCollection(clubId, 'games'))
+    const count = snapshot.data().count
+    try { window.localStorage.setItem(cacheKey, JSON.stringify({ count, savedAt: Date.now() })) } catch { /* best-effort cache */ }
+    return count
+  } catch (error) {
+    if (cached) return cached.count
+    throw error
+  }
 }
 
 export function subscribePlayerStats(clubId: string, callback: (stats: Array<PlayerStatsDoc & { id: string }>) => void, seasonNumber?: number) {

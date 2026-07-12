@@ -50,15 +50,31 @@ export async function ensureUniversalMembership(uid: string) {
   const user = await adminAuth.getUser(uid)
   const email = cleanEmail(user.email ?? '')
   const kenManager = Boolean(KEN_MANAGERS[email])
+  const desiredRole = kenManager ? 'manager' : 'member'
+  const clubRef = adminDb.doc(pathOf('clubs', KEN))
+  const memberRef = adminDb.doc(pathOf('clubs', KEN, 'members', uid))
+  const userClubRef = adminDb.doc(pathOf('users', uid, 'clubs', KEN))
+  const pendingQuery = email
+    ? adminDb.collection('pendingManagerGrants').where('emailNormalized', '==', email).where('status', '==', 'pending')
+    : null
+  const [club, member, userClub, pending] = await Promise.all([
+    clubRef.get(), memberRef.get(), userClubRef.get(), pendingQuery?.get() ?? Promise.resolve(null)
+  ])
+
+  const membershipCurrent = club.exists
+    && member.exists && member.get('active') === true && member.get('role') === desiredRole
+    && userClub.exists && userClub.get('active') === true && userClub.get('role') === desiredRole
+  if (membershipCurrent && (pending?.empty ?? true)) return { clubId: KEN, role: desiredRole }
+
   const batch = adminDb.batch()
 
-  batch.set(adminDb.doc(pathOf('clubs', KEN)), {
+  batch.set(clubRef, {
     id: KEN,
     name: KEN_NAME,
     managerUid: 'universal',
     managerEmail: 'chankendall@gmail.com',
     managerDisplayName: 'Kendall',
-    createdAt: FieldValue.serverTimestamp(),
+    ...(club.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
     activeSeasonNumber: 2,
     active: true,
     universal: true
@@ -73,9 +89,6 @@ export async function ensureUniversalMembership(uid: string) {
   }, { merge: true })
   addMembership(batch, KEN, KEN_NAME, user, kenManager ? 'manager' : 'member', true)
 
-  const pending = email
-    ? await adminDb.collection('pendingManagerGrants').where('emailNormalized', '==', email).where('status', '==', 'pending').get()
-    : null
   for (const grant of pending?.docs ?? []) {
     const data = grant.data()
     const club = await adminDb.doc(pathOf('clubs', data.clubId)).get()
@@ -89,7 +102,7 @@ export async function ensureUniversalMembership(uid: string) {
   }
   await batch.commit()
   if (email) await linkKenPlayer(email, user.uid)
-  return { clubId: KEN, role: kenManager ? 'manager' : 'member' }
+  return { clubId: KEN, role: desiredRole }
 }
 
 export async function promoteManager(callerUid: string, clubIdInput: string, emailInput: string) {

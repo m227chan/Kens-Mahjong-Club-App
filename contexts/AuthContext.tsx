@@ -58,12 +58,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         if (nextUser) {
           const tokenResult = await nextUser.getIdTokenResult()
-          const token = await nextUser.getIdToken()
-          const enrollment = await fetch('/api/ensure-universal-membership', {
-            method: 'POST',
-            headers: { Authorization: 'Bearer ' + token }
-          })
-          if (!enrollment.ok) console.warn('Universal club enrollment will retry on the next sign-in.')
+          const enrollmentKey = `mahjong:universal-enrollment:v2:${nextUser.uid}`
+          let alreadyEnrolled = false
+          try { alreadyEnrolled = window.localStorage.getItem(enrollmentKey) === 'complete' } catch { /* private storage mode */ }
+          if (!alreadyEnrolled) {
+            const token = await nextUser.getIdToken()
+            const enrollment = await fetch('/api/ensure-universal-membership', {
+              method: 'POST',
+              headers: { Authorization: 'Bearer ' + token }
+            })
+            if (enrollment.ok) {
+              try { window.localStorage.setItem(enrollmentKey, 'complete') } catch { /* best-effort cache */ }
+            } else {
+              console.warn('Universal club enrollment will retry on the next sign-in.')
+            }
+          }
           setIsAdmin(Boolean(tokenResult.claims.admin))
           setAuthError(null)
         } else {
