@@ -273,3 +273,76 @@ html.dark .game-log-row td.text-slate-300 { color:rgb(var(--muted)/.45)!importan
 @keyframes score-row-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @keyframes confetti-burst{0%{opacity:0;transform:translate(-50%,-50%) rotate(var(--angle)) translateY(0) scale(.4)}25%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) rotate(var(--angle)) translateY(-190px) scale(1.05)}}
 @media(prefers-reduced-motion:reduce){.score-flash,.score-flash-card,.celebration-winner-icon,.score-flash .flash-row,.celebration-confetti span{animation:none!important}.celebration-confetti{display:none}}
+/* Welcoming, interactive sign-in screen */
+.login-welcome{position:relative;isolation:isolate;min-height:calc(100dvh - 76px);display:grid;align-items:center;overflow:hidden;padding:clamp(2.5rem,7vw,6.5rem) clamp(1rem,5vw,5.5rem)}
+.login-welcome::before{content:"";position:absolute;inset:0;z-index:-2;background:radial-gradient(circle at 12% 5%,rgb(var(--gold)/.18),transparent 34rem),radial-gradient(circle at 88% 88%,rgb(var(--bamboo)/.13),transparent 30rem)}
+.login-welcome-grid{position:relative;z-index:2;width:min(1160px,100%);margin:auto;display:grid;grid-template-columns:minmax(0,1.16fr) minmax(320px,.72fr);align-items:center;gap:clamp(3rem,8vw,8.5rem)}
+.login-intro{max-width:680px}.login-eyebrow{display:flex;align-items:center;gap:.65rem;margin:0 0 1.25rem;color:rgb(var(--cinnabar));font-size:.73rem;font-weight:800;letter-spacing:.19em;text-transform:uppercase}.login-eyebrow span{font-size:1.15rem}
+.login-intro h1{max-width:660px;margin:0;color:rgb(var(--ink));font-size:clamp(2.8rem,5.7vw,5.5rem);font-weight:800;line-height:.96;letter-spacing:-.065em;text-wrap:balance}.login-lede{max-width:590px;margin:1.5rem 0 0;color:rgb(var(--muted));font-size:clamp(1rem,1.5vw,1.18rem);line-height:1.75}
+.login-feature-list{display:grid;gap:0;max-width:620px;margin:2.35rem 0 0;padding:0;list-style:none;border-top:1px solid rgb(var(--line))}.login-feature-list li{display:grid;grid-template-columns:42px 1fr;gap:1rem;padding:1rem 0;border-bottom:1px solid rgb(var(--line))}.login-feature-list li>span{padding-top:.12rem;color:rgb(var(--cinnabar));font-family:var(--font-mono),ui-monospace,monospace;font-size:.7rem;font-weight:800}.login-feature-list strong{display:block;color:rgb(var(--ink));font-size:.92rem}.login-feature-list p{margin:.25rem 0 0;color:rgb(var(--muted));font-size:.82rem;line-height:1.55}
+.login-card{position:relative;padding:clamp(1.7rem,4vw,2.7rem);border:1px solid rgb(var(--line));border-top:3px solid rgb(var(--bamboo));border-radius:var(--radius-panel);background:linear-gradient(145deg,rgb(var(--surface-1)/.97),rgb(var(--surface-2)/.96));box-shadow:7px 9px 0 rgb(var(--shadow)/.08),0 28px 75px rgb(var(--shadow)/.16);backdrop-filter:blur(14px)}
+.login-card-mark{display:grid;width:58px;height:68px;place-items:center;margin-bottom:1.6rem;border:1px solid rgb(var(--line));border-radius:6px;background:rgb(var(--surface));color:rgb(var(--cinnabar));font-family:serif;font-size:1.8rem;font-weight:800;box-shadow:3px 4px 0 rgb(var(--gold)/.2)}.login-card-kicker{margin:0 0 .55rem;color:rgb(var(--bamboo));font-size:.69rem;font-weight:800;letter-spacing:.17em;text-transform:uppercase}.login-card h2{margin:0;color:rgb(var(--ink));font-size:clamp(1.9rem,3vw,2.45rem);font-weight:800;letter-spacing:-.045em}.login-card-copy{margin:.8rem 0 1.65rem;color:rgb(var(--muted));font-size:.91rem;line-height:1.65}
+.login-google-button{display:flex;width:100%;min-height:52px;align-items:center;justify-content:center;gap:.75rem;border:1px solid rgb(var(--bamboo));border-radius:4px;background:rgb(var(--bamboo));color:white;font-size:.9rem;font-weight:800;box-shadow:0 8px 24px rgb(var(--bamboo)/.18);transition:transform 150ms ease,background 150ms ease,box-shadow 150ms ease}.login-google-button:hover:not(:disabled){transform:translateY(-2px);background:rgb(var(--bamboo-bright));box-shadow:0 12px 28px rgb(var(--bamboo)/.23)}.login-google-button:focus-visible{outline:3px solid rgb(var(--gold));outline-offset:3px}.login-google-button:disabled{cursor:wait;opacity:.62}.google-mark{display:grid;width:25px;height:25px;place-items:center;border-radius:50%;background:white;color:#4285f4;font-family:Arial,sans-serif;font-size:.88rem;font-weight:800}
+.login-privacy{margin:1.1rem 0 0;color:rgb(var(--muted));font-size:.7rem;line-height:1.55;text-align:center}.login-error{margin:1rem 0 0;padding:.8rem;border:1px solid rgb(var(--cinnabar)/.45);border-radius:4px;background:rgb(var(--cinnabar)/.08);color:rgb(var(--cinnabar));font-size:.78rem;line-height:1.5}
+.login-tile-field{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none;contain:layout paint}.login-floating-tile{--tile-size:54px;position:absolute;display:grid;width:var(--tile-size);height:calc(var(--tile-size)*1.18);place-items:center;border:1px solid rgb(var(--ink)/.35);border-radius:calc(var(--tile-size)*.1);background:linear-gradient(145deg,rgb(var(--surface)),rgb(var(--surface-2)));color:rgb(var(--ink));font-family:serif;font-size:calc(var(--tile-size)*.42);font-weight:800;opacity:.075;box-shadow:4px 5px 0 rgb(var(--shadow)/.12);transform:translate3d(-50%,-50%,0);will-change:transform,opacity}.login-floating-tile::after{content:"";position:absolute;inset:5px;border:1px solid rgb(var(--line)/.65);border-radius:2px}.login-floating-tile span{position:relative;z-index:1}.login-floating-tile .tile-red{color:rgb(var(--cinnabar))}.login-floating-tile .tile-green{color:rgb(var(--bamboo))}
+html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/.38)}
+@media(max-width:820px){.login-welcome{min-height:calc(100dvh - 70px);align-items:start;padding:2.25rem 1rem 3.5rem}.login-welcome-grid{grid-template-columns:1fr;gap:2.2rem}.login-intro h1{font-size:clamp(2.55rem,12vw,4rem)}.login-lede{font-size:.98rem}.login-feature-list{margin-top:1.65rem}.login-card{width:min(100%,480px);margin:auto}.login-floating-tile{transform:translate3d(-50%,-50%,0) scale(.82)}}
+@media(prefers-reduced-motion:reduce){.login-floating-tile{will-change:auto}.login-google-button{transition:none}.login-google-button:hover:not(:disabled){transform:none}}
+/* Independent ambient tile lifecycles; the anchor remains available for proximity displacement. */
+.login-tile-anchor{
+  --tile-size:54px;
+  position:absolute;
+  width:var(--tile-size);
+  height:calc(var(--tile-size)*1.18);
+  pointer-events:none;
+  will-change:transform;
+}
+.login-animated-tile{
+  display:grid;
+  width:100%;
+  height:100%;
+  place-items:center;
+  border:1px solid rgb(var(--ink)/.35);
+  border-radius:calc(var(--tile-size)*.1);
+  background:linear-gradient(145deg,rgb(var(--surface)),rgb(var(--surface-2)));
+  color:rgb(var(--ink));
+  font-family:serif;
+  font-size:calc(var(--tile-size)*.42);
+  font-weight:800;
+  opacity:0;
+  box-shadow:4px 5px 0 rgb(var(--shadow)/.12);
+  transform:translate3d(-50%,-50%,0);
+  animation:login-tile-cycle var(--tile-duration) linear var(--tile-delay) infinite;
+  will-change:transform,opacity;
+}
+.login-animated-tile::after{content:"";position:absolute;inset:5px;border:1px solid rgb(var(--line)/.65);border-radius:2px}
+.login-animated-tile span{position:relative;z-index:1}
+.login-animated-tile .tile-red{color:rgb(var(--cinnabar))}
+.login-animated-tile .tile-green{color:rgb(var(--bamboo))}
+@keyframes login-tile-cycle{
+  0%{opacity:0;transform:translate3d(-50%,-35%,0) rotate(-5deg)}
+  10%{opacity:.07}
+  24%{opacity:.12}
+  46%{opacity:.08;transform:translate3d(calc(-50% + var(--drift-x)),calc(-50% + var(--drift-y)),0) rotate(var(--tile-rotation))}
+  52%{opacity:0;transform:translate3d(calc(-50% + var(--drift-x)),calc(-50% + var(--drift-y)),0) rotate(var(--tile-rotation))}
+  53%{opacity:0;transform:translate3d(calc(-50% + var(--return-x)),calc(-50% + var(--return-y)),0) rotate(-10deg)}
+  64%{opacity:.065}
+  78%{opacity:.115}
+  94%{opacity:.055;transform:translate3d(calc(-50% + var(--return-x)),calc(-50% + var(--return-y)),0) rotate(7deg)}
+  100%{opacity:0;transform:translate3d(-50%,-35%,0) rotate(-5deg)}
+}
+@media(max-width:820px){.login-tile-anchor{scale:.82}}
+/* The user explicitly requested this ambient layer to remain animated even when
+   a device reports reduced motion. Keep the motion slow and low-opacity. */
+@media(prefers-reduced-motion:reduce){
+  .login-tile-anchor{will-change:transform}
+  .login-animated-tile{
+    animation-name:login-tile-cycle!important;
+    animation-duration:var(--tile-duration)!important;
+    animation-delay:var(--tile-delay)!important;
+    animation-timing-function:linear!important;
+    animation-iteration-count:infinite!important;
+    opacity:0;
+    will-change:transform,opacity;
+  }
+}
