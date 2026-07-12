@@ -20,7 +20,7 @@ export default function LoginPage() {
     try {
       await signInWithGoogle()
     } catch (error) {
-      setLocalError(error instanceof Error ? error.message : 'Unable to sign in with Google.')
+      setLocalError(error instanceof Error ? error.message : 'Unable to sign in with Google. Please try again.')
     }
   }
 

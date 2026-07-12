@@ -2,10 +2,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import {
-  getRedirectResult,
   onAuthStateChanged,
   signInWithPopup,
-  signInWithRedirect,
   signOut as firebaseSignOut,
   User
 } from 'firebase/auth'
@@ -27,7 +25,7 @@ function getAuthErrorMessage(error: unknown) {
   const code = (error as { code?: string }).code
   switch (code) {
     case 'auth/popup-blocked':
-      return 'Your browser blocked the sign-in popup. Trying redirect instead...'
+      return 'Safari blocked the Google sign-in window. Allow pop-ups for this site, then try again.'
     case 'auth/popup-closed-by-user':
       return 'Sign-in was cancelled. Please try again.'
     case 'auth/unauthorized-domain':
@@ -50,13 +48,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let active = true
-
-    getRedirectResult(auth)
-      .catch((error) => {
-        if (active) {
-          setAuthError(getAuthErrorMessage(error))
-        }
-      })
 
     const unsubscribe = onAuthStateChanged(auth, async (nextUser) => {
       if (!active) return
@@ -95,14 +86,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await signInWithPopup(auth, googleProvider)
     } catch (error) {
       const code = (error as { code?: string }).code
-      if (code === 'auth/popup-blocked') {
-        await signInWithRedirect(auth, googleProvider)
-        return
-      }
-
       setSigningIn(false)
-      setAuthError(getAuthErrorMessage(error))
-      throw error
+      const message = code === 'auth/popup-blocked'
+        ? 'Safari blocked the Google sign-in window. Allow pop-ups for this site, then try again.'
+        : getAuthErrorMessage(error)
+      setAuthError(message)
+      throw new Error(message)
     }
   }, [])
 
