@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import AnalyticsPanel from '@/components/AnalyticsPanel'
 import DashboardContent from '@/components/DashboardContent'
 import GameLogsModal from '@/components/GameLogsModal'
 import { LeaderboardPanel } from '@/components/Leaderboard'
@@ -80,17 +79,26 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   useEffect(() => subscribePlayers(clubId, setPlayers), [clubId])
   useEffect(() => subscribeSeasons(clubId, setSeasons), [clubId])
   useEffect(() => {
-    if (!isManager) {
+    if (!isManager || club?.universal) {
       setJoinRequests([])
       return
     }
     return subscribeJoinRequests(clubId, setJoinRequests)
-  }, [clubId, isManager])
+  }, [club?.universal, clubId, isManager])
 
   useEffect(() => {
     ensureConfig(clubId).catch(() => undefined)
     ensureSeasons(clubId, user?.uid ?? 'system').catch(() => undefined)
   }, [clubId, user?.uid])
+
+  useEffect(() => {
+    if (clubId !== 'KEN' || !isManager || !user) return
+    void user.getIdToken().then((token) => fetch('/api/games/mutate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+      body: JSON.stringify({ clubId, action: 'rebuild' })
+    })).catch(() => undefined)
+  }, [clubId, isManager, user])
 
   const addPlayer = async () => {
     setPlayerMessage(null)
@@ -600,7 +608,6 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             <div className="overflow-y-auto bg-slate-50 p-5">
               <div className="space-y-5">
                 <DashboardContent clubId={clubId} seasonNumber={activeSeasonNumber} />
-                <AnalyticsPanel clubId={clubId} seasonNumber={activeSeasonNumber} />
               </div>
             </div>
           </div>

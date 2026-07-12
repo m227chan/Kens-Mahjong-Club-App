@@ -1001,6 +1001,65 @@ export function subscribeGames(clubId: string, callback: (games: GameDoc[]) => v
   })
 }
 
+const historyCache = new Map<string, { expiresAt: number; value: unknown[] }>()
+
+async function cachedHistory<T>(key: string, loader: () => Promise<T[]>, ttlMs = 5 * 60_000) {
+  const cached = historyCache.get(key)
+  if (cached && cached.expiresAt > Date.now()) return cached.value as T[]
+  const value = await loader()
+  historyCache.set(key, { expiresAt: Date.now() + ttlMs, value })
+  return value
+}
+
+export function invalidateClubHistoryCache(clubId: string) {
+  for (const key of historyCache.keys()) if (key.startsWith(`${clubId}:`)) historyCache.delete(key)
+}
+
+export async function loadGamesPage(clubId: string, pageSize = 100, beforeMillis?: number) {
+  const key = `${clubId}:games:${pageSize}:${beforeMillis ?? 'latest'}`
+  return cachedHistory<GameDoc>(key, async () => {
+    const constraints = beforeMillis
+      ? [where('datetime', '<', Timestamp.fromMillis(beforeMillis)), orderBy('datetime', 'desc'), limit(pageSize)]
+      : [orderBy('datetime', 'desc'), limit(pageSize)]
+    const snapshot = await getDocs(query(clubCollection(clubId, 'games'), ...constraints))
+    return snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as GameDoc)).reverse()
+  })
+}
+
+export async function loadAllGames(clubId: string) {
+  return cachedHistory<GameDoc>(`${clubId}:games:all`, async () => {
+    const snapshot = await getDocs(query(clubCollection(clubId, 'games'), orderBy('datetime')))
+    return snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as GameDoc))
+  })
+}
+
+export async function loadAnalyticsGames(clubId: string, gameCount: number, seasonNumber?: number) {
+  if (gameCount === 0) {
+    const games = await loadAllGames(clubId)
+    return games.filter((game) => (!seasonNumber || (game.seasonNumber ?? 1) === seasonNumber)
+      && (clubId !== 'KEN' || game.datetime.toMillis() >= Date.parse('2026-04-25T04:00:00.000Z')))
+  }
+  const sampleSize = Math.max(gameCount * 2, gameCount + 25)
+  const games = await loadGamesPage(clubId, sampleSize)
+  const filtered = games.filter((game) => (!seasonNumber || (game.seasonNumber ?? 1) === seasonNumber)
+    && (clubId !== 'KEN' || game.datetime.toMillis() >= Date.parse('2026-04-25T04:00:00.000Z')))
+  return filtered.slice(-gameCount)
+}
+
+export async function loadAnalyticsEloEvents(clubId: string, gameCount: number, seasonNumber?: number) {
+  const key = `${clubId}:elo:${gameCount}:${seasonNumber ?? 'all'}`
+  return cachedHistory<EloEventDoc>(key, async () => {
+    const q = gameCount === 0
+      ? query(clubCollection(clubId, 'eloEvents'), orderBy('datetime'))
+      : query(clubCollection(clubId, 'eloEvents'), orderBy('datetime', 'desc'), limit(Math.max(gameCount * 8, 200)))
+    const snapshot = await getDocs(q)
+    const events = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as EloEventDoc))
+    const filtered = events.filter((event) => (!seasonNumber || (event.seasonNumber ?? 1) === seasonNumber)
+      && (clubId !== 'KEN' || event.datetime.toMillis() >= Date.parse('2026-04-25T04:00:00.000Z')))
+    return gameCount === 0 ? filtered : filtered.reverse()
+  })
+}
+
 export async function getClubGameCount(clubId: string) {
   const snapshot = await getCountFromServer(clubCollection(clubId, 'games'))
   return snapshot.data().count

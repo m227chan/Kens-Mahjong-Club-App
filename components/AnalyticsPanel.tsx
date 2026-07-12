@@ -28,7 +28,7 @@ function MiniBarChart({ data, color = '#18694f' }: { data: Array<{ label: string
   )
 }
 
-export default function AnalyticsPanel({ clubId, seasonNumber }: { clubId: string; seasonNumber?: number }) {
+export default function AnalyticsPanel({ clubId, seasonNumber, selectedPlayerIds }: { clubId: string; seasonNumber?: number; selectedPlayerIds?: string[] }) {
   const [playerStats, setPlayerStats] = useState<PlayerStatsDoc[]>([])
   const [players, setPlayers] = useState<PlayerDoc[]>([])
 
@@ -36,14 +36,16 @@ export default function AnalyticsPanel({ clubId, seasonNumber }: { clubId: strin
   useEffect(() => subscribePlayers(clubId, (nextPlayers) => setPlayers(nextPlayers)), [clubId])
 
   const top = useMemo(() => {
+    const selected = selectedPlayerIds ? new Set(selectedPlayerIds) : null
     return [...playerStats]
+      .filter((stat) => !selected || selected.has(stat.playerId))
       .sort((a, b) => {
         const rankA = a.eloRank || Number.MAX_SAFE_INTEGER
         const rankB = b.eloRank || Number.MAX_SAFE_INTEGER
         return rankA - rankB || b.gamesPlayed - a.gamesPlayed || b.totalPoints - a.totalPoints
       })
-      .slice(0, 8)
-  }, [playerStats])
+      .slice(0, selected ? selectedPlayerIds!.length : 8)
+  }, [playerStats, selectedPlayerIds])
 
   const playerName = (playerId: string, short = false) => {
     const name = players.find((player) => player.id === playerId)?.displayName ?? playerId

@@ -4,9 +4,11 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { Timestamp } from 'firebase/firestore'
 import {
   createPlayer,
+  invalidateClubHistoryCache,
   importGames,
+  loadAllGames,
+  loadGamesPage,
   subscribeActiveSession,
-  subscribeGames,
   subscribePlayers
 } from '@/lib/firestore'
 import { auth } from '@/lib/firebase'
@@ -134,10 +136,22 @@ export default function GameLogsModal({
   const [draftSeason, setDraftSeason] = useState(currentSeason)
   const [draftNotes, setDraftNotes] = useState('')
   const [savingGame, setSavingGame] = useState(false)
+  const [loadingGames, setLoadingGames] = useState(true)
+  const [loadingOlderGames, setLoadingOlderGames] = useState(false)
+  const [hasOlderGames, setHasOlderGames] = useState(true)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => subscribePlayers(clubId, setPlayers), [clubId])
-  useEffect(() => subscribeGames(clubId, setGames), [clubId])
+  useEffect(() => {
+    let cancelled = false
+    setLoadingGames(true)
+    void loadGamesPage(clubId).then((nextGames) => {
+      if (!cancelled) { setGames(nextGames); setHasOlderGames(nextGames.length === 100) }
+    }).catch((error) => {
+      if (!cancelled) setImportMessage(error instanceof Error ? error.message : 'Unable to load game logs.')
+    }).finally(() => { if (!cancelled) setLoadingGames(false) })
+    return () => { cancelled = true }
+  }, [clubId])
   useEffect(() => subscribeActiveSession(clubId, currentSeason, setSession), [clubId, currentSeason])
 
   useEffect(() => {
@@ -195,10 +209,11 @@ export default function GameLogsModal({
     return [headers, ...rows]
   }
 
-  const exportCsv = () => {
-    const allGamePlayerIds = new Set(games.flatMap((game) => game.entries.map((entry) => entry.playerId)))
+  const exportCsv = async () => {
+    const exportGames = await loadAllGames(clubId)
+    const allGamePlayerIds = new Set(exportGames.flatMap((game) => game.entries.map((entry) => entry.playerId)))
     const allGamePlayers = players.filter((player) => allGamePlayerIds.has(player.id))
-    const rows = buildCsvRows(games, allGamePlayers)
+    const rows = buildCsvRows(exportGames, allGamePlayers)
     const csv = rows.map((row) => row.map(csvEscape).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
@@ -243,12 +258,34 @@ export default function GameLogsModal({
       })
       const result = await response.json() as { error?: string }
       if (!response.ok) throw new Error(result.error ?? 'Unable to modify game.')
+      invalidateClubHistoryCache(clubId)
+      if (action === 'delete') {
+        setGames((current) => current.filter((game) => game.id !== selectedGame.id))
+      } else {
+        const updated: GameDoc = { ...selectedGame, datetime: Timestamp.fromDate(new Date(draftDate)), seasonNumber: draftSeason, entries, notes: draftNotes.trim() || null }
+        setGames((current) => current.map((game) => game.id === updated.id ? updated : game).sort((a, b) => a.datetime.toMillis() - b.datetime.toMillis()))
+      }
       setSelectedGame(null)
       setImportMessage(action === 'delete' ? 'Game deleted and all club statistics recalculated.' : 'Game updated and all club statistics recalculated.')
     } catch (error) {
       setImportMessage(error instanceof Error ? error.message : 'Unable to modify game.')
     } finally {
       setSavingGame(false)
+    }
+  }
+
+  const loadOlderGames = async () => {
+    const oldest = games[0]?.datetime?.toMillis?.()
+    if (!oldest || loadingOlderGames) return
+    setLoadingOlderGames(true)
+    try {
+      const older = await loadGamesPage(clubId, 100, oldest)
+      setGames((current) => [...older, ...current])
+      setHasOlderGames(older.length === 100)
+    } catch (error) {
+      setImportMessage(error instanceof Error ? error.message : 'Unable to load older games.')
+    } finally {
+      setLoadingOlderGames(false)
     }
   }
   const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -432,6 +469,10 @@ export default function GameLogsModal({
                 ))}
               </select>
             ) : null}
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-500">
+            <span>{loadingGames ? 'Loading recent games…' : `${games.length.toLocaleString()} game records loaded`}</span>
+            {hasOlderGames && !loadingGames ? <button type="button" onClick={loadOlderGames} disabled={loadingOlderGames} className="rounded border border-slate-300 bg-white px-3 py-1.5 font-bold text-slate-700 disabled:opacity-50">{loadingOlderGames ? 'Loading…' : 'Load 100 older games'}</button> : null}
           </div>
           {importMessage ? <p className="mt-3 text-sm font-semibold text-slate-600">{importMessage}</p> : null}
         </div>

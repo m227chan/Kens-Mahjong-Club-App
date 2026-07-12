@@ -25,6 +25,8 @@ type Stats = {
 }
 
 const pathOf = (...parts: string[]) => parts.join('/')
+const KEN_STATS_CUTOFF_ISO = '2026-04-25T04:00:00.000Z'
+const KEN_STATS_VERSION = 'post-zero-schema-2026-04-25'
 
 async function requireManager(clubId: string, uid: string) {
   const member = await adminDb.doc(pathOf('clubs', clubId, 'members', uid)).get()
@@ -44,15 +46,18 @@ function validateEntries(entries: Entry[]) {
 export async function mutateGameAndRebuild(input: {
   callerUid: string
   clubId: string
-  gameId: string
-  action: 'update' | 'delete'
+  gameId?: string
+  action: 'update' | 'delete' | 'rebuild'
   game?: { datetime: string; seasonNumber: number; entries: Entry[]; notes?: string | null }
 }) {
   const clubId = input.clubId.trim().toUpperCase()
-  if (!clubId || !input.gameId) throw new Error('Club and game are required.')
+  if (!clubId || (input.action !== 'rebuild' && !input.gameId)) throw new Error('Club and game are required.')
   await requireManager(clubId, input.callerUid)
 
   const root = adminDb.doc(pathOf('clubs', clubId))
+  const clubSnap = await root.get()
+  const needsKenCutoffMigration = clubId === 'KEN' && clubSnap.get('statsSchemaVersion') !== KEN_STATS_VERSION
+  if (input.action === 'rebuild' && !needsKenCutoffMigration) return { action: input.action, migrated: false }
   const [gamesSnap, configSnap, oldStats, oldSeasonStats, oldEvents] = await Promise.all([
     root.collection('games').orderBy('datetime').get(),
     root.collection('appConfig').doc('settings').get(),
@@ -60,8 +65,8 @@ export async function mutateGameAndRebuild(input: {
     root.collection('seasonPlayerStats').get(),
     root.collection('eloEvents').get()
   ])
-  const target = gamesSnap.docs.find((doc) => doc.id === input.gameId)
-  if (!target) throw new Error('Game not found.')
+  const target = input.gameId ? gamesSnap.docs.find((doc) => doc.id === input.gameId) : undefined
+  if (input.action !== 'rebuild' && !target) throw new Error('Game not found.')
 
   let replacement: StoredGame | null = null
   if (input.action === 'update') {
@@ -70,7 +75,7 @@ export async function mutateGameAndRebuild(input: {
     const date = new Date(input.game.datetime)
     if (!Number.isFinite(date.getTime())) throw new Error('Enter a valid game date and time.')
     const seasonNumber = Math.max(1, Math.floor(input.game.seasonNumber))
-    const current = { id: target.id, ...target.data() } as StoredGame
+    const current = { id: target!.id, ...target!.data() } as StoredGame
     const winner = input.game.entries.every((entry) => entry.score === 0)
       ? null
       : input.game.entries.reduce((best, entry) => entry.score > best.score ? entry : best).playerId
@@ -92,6 +97,8 @@ export async function mutateGameAndRebuild(input: {
     .filter((doc) => input.action !== 'delete' || doc.id !== input.gameId)
     .map((doc) => doc.id === input.gameId && replacement ? replacement : ({ id: doc.id, ...doc.data() } as StoredGame))
     .sort((a, b) => a.datetime.toMillis() - b.datetime.toMillis())
+  const cutoffMillis = Date.parse(KEN_STATS_CUTOFF_ISO)
+  const statsGames = clubId === 'KEN' ? games.filter((game) => game.datetime.toMillis() >= cutoffMillis) : games
   const config = (configSnap.exists ? configSnap.data() : {}) as AppConfigLike
   const startingRating = config.eloStartingRating ?? 1500
   const now = Timestamp.now()
@@ -129,7 +136,7 @@ export async function mutateGameAndRebuild(input: {
     return results
   }
 
-  games.forEach((game) => {
+  statsGames.forEach((game) => {
     applyGame(allStats, (id) => id, game)
     const season = game.seasonNumber ?? 1
     const results = applyGame(seasonStats, (id) => `${season}_${id}`, game, season)
@@ -146,19 +153,30 @@ export async function mutateGameAndRebuild(input: {
   new Set([...seasonStats.values()].map((stats) => stats.seasonNumber ?? 1)).forEach((season) => rank([...seasonStats.values()].filter((stats) => stats.seasonNumber === season)))
 
   const writes: Array<(batch: FirebaseFirestore.WriteBatch) => void> = []
-  oldStats.docs.forEach((doc) => writes.push((batch) => batch.delete(doc.ref)))
-  oldSeasonStats.docs.forEach((doc) => writes.push((batch) => batch.delete(doc.ref)))
-  oldEvents.docs.forEach((doc) => writes.push((batch) => batch.delete(doc.ref)))
+  oldStats.docs.filter((doc) => !allStats.has(doc.id)).forEach((doc) => writes.push((batch) => batch.delete(doc.ref)))
+  oldSeasonStats.docs.filter((doc) => !seasonStats.has(doc.id)).forEach((doc) => writes.push((batch) => batch.delete(doc.ref)))
   allStats.forEach((stats, id) => writes.push((batch) => batch.set(root.collection('playerStats').doc(id), stats)))
   seasonStats.forEach((stats, id) => writes.push((batch) => batch.set(root.collection('seasonPlayerStats').doc(id), stats)))
-  events.forEach((event) => writes.push((batch) => { const ref = root.collection('eloEvents').doc(); batch.set(ref, { ...event, id: ref.id }) }))
-  if (input.action === 'delete') writes.push((batch) => batch.delete(target.ref))
-  else writes.push((batch) => batch.set(target.ref, replacement!, { merge: false }))
+
+  const originalMillis = target ? (target.get('datetime') as Timestamp).toMillis() : Number.POSITIVE_INFINITY
+  const replacementMillis = replacement?.datetime.toMillis() ?? originalMillis
+  const affectedMillis = needsKenCutoffMigration ? 0 : Math.min(originalMillis, replacementMillis)
+  oldEvents.docs.filter((doc) => {
+    const datetime = doc.get('datetime') as Timestamp | undefined
+    return (datetime?.toMillis() ?? 0) >= affectedMillis || doc.get('gameId') === input.gameId
+  }).forEach((doc) => writes.push((batch) => batch.delete(doc.ref)))
+  events.filter((event) => (event.datetime as Timestamp).toMillis() >= affectedMillis).forEach((event) => writes.push((batch) => {
+    const ref = root.collection('eloEvents').doc(`${event.gameId}_${event.playerId}`)
+    batch.set(ref, { ...event, id: ref.id })
+  }))
+  if (input.action === 'delete') writes.push((batch) => batch.delete(target!.ref))
+  else if (input.action === 'update') writes.push((batch) => batch.set(target!.ref, replacement!, { merge: false }))
+  if (needsKenCutoffMigration) writes.push((batch) => batch.set(root, { statsSchemaVersion: KEN_STATS_VERSION, statsCutoffAt: Timestamp.fromDate(new Date(KEN_STATS_CUTOFF_ISO)) }, { merge: true }))
 
   for (let index = 0; index < writes.length; index += 400) {
     const batch = adminDb.batch()
     writes.slice(index, index + 400).forEach((write) => write(batch))
     await batch.commit()
   }
-  return { action: input.action, gameId: input.gameId }
+  return { action: input.action, gameId: input.gameId, migrated: needsKenCutoffMigration }
 }
