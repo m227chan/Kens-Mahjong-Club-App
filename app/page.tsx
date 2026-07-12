@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import {
   createClub,
   ensureConfig,
+  getClubGameCount,
   leaveClub,
   requestToJoinClub,
   subscribePlayerStats,
@@ -16,11 +17,12 @@ import {
 import type { ClubMembershipDoc, PlayerDoc, PlayerStatsDoc } from '@/lib/types'
 
 function CountUp({ value, suffix = '' }: { value: number; suffix?: string }) {
-  const [display, setDisplay] = useState(value)
+  const roundedValue = Math.round(value)
+  const [display, setDisplay] = useState(roundedValue)
 
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setDisplay(value)
+      setDisplay(roundedValue)
       return
     }
     const duration = 620
@@ -29,12 +31,12 @@ function CountUp({ value, suffix = '' }: { value: number; suffix?: string }) {
     const tick = (now: number) => {
       const progress = Math.min(1, (now - started) / duration)
       const eased = 1 - Math.pow(1 - progress, 3)
-      setDisplay(Math.round(value * eased))
+      setDisplay(Math.round(roundedValue * eased))
       if (progress < 1) frame = requestAnimationFrame(tick)
     }
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
-  }, [value])
+  }, [roundedValue])
 
   return <>{display}{suffix}</>
 }
@@ -77,6 +79,7 @@ export default function HomePage() {
   const [joinClubId, setJoinClubId] = useState('')
   const [clubPlayers, setClubPlayers] = useState<Record<string, PlayerDoc[]>>({})
   const [clubStats, setClubStats] = useState<Record<string, PlayerStatsDoc[]>>({})
+  const [clubGameCounts, setClubGameCounts] = useState<Record<string, number>>({})
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [dataError, setDataError] = useState(false)
@@ -111,6 +114,24 @@ export default function HomePage() {
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe())
   }, [clubs, user])
 
+  useEffect(() => {
+    if (!user || clubs.length === 0) {
+      setClubGameCounts({})
+      return
+    }
+
+    let cancelled = false
+    void Promise.all(clubs.map(async (club) => [club.clubId, await getClubGameCount(club.clubId)] as const))
+      .then((counts) => {
+        if (!cancelled) setClubGameCounts(Object.fromEntries(counts))
+      })
+      .catch(() => {
+        if (!cancelled) setClubGameCounts({})
+      })
+
+    return () => { cancelled = true }
+  }, [clubs, user])
+
   const clubSummaries = useMemo(() => clubs.map((club) => {
     const player = (clubPlayers[club.clubId] ?? []).find((entry) => entry.authUid === user?.uid) ?? null
     const stats = player ? (clubStats[club.clubId] ?? []).find((entry) => entry.playerId === player.id) ?? null : null
@@ -122,7 +143,7 @@ export default function HomePage() {
     const games = stats.reduce((sum, entry) => sum + entry.gamesPlayed, 0)
     const wins = stats.reduce((sum, entry) => sum + entry.gamesWon, 0)
     const trendValues = stats.flatMap((entry) => entry.recentEloDeltas ?? [])
-    const trend = trendValues.reduce((sum, value) => sum + value, 0)
+    const trend = Math.round(trendValues.reduce((sum, value) => sum + value, 0))
     return { games, winRate: games ? Math.round((wins / games) * 100) : 0, trend, trendValues }
   }, [clubSummaries])
 
@@ -232,7 +253,11 @@ export default function HomePage() {
                       <div><p className="club-stat">{stats.gamesPlayed ? Math.round((stats.gamesWon / stats.gamesPlayed) * 100) : 0}%</p><p className="club-label">Win rate</p></div>
                       <div><p className="club-stat">#{stats.pointsRank || '–'}</p><p className="club-label">Standing</p></div>
                     </div>
-                    <p className="mt-3 text-xs font-semibold text-slate-500">{stats.gamesPlayed} recorded game{stats.gamesPlayed === 1 ? '' : 's'}</p>
+                    <p className="mt-3 text-xs font-semibold text-slate-500">
+                      {clubGameCounts[club.clubId] === undefined
+                        ? 'Loading club game count…'
+                        : `${clubGameCounts[club.clubId].toLocaleString()} club game${clubGameCounts[club.clubId] === 1 ? '' : 's'} recorded`}
+                    </p>
                   </>
                 ) : (
                   <div className="mt-5 rounded border border-dashed border-amber-200 bg-amber-50 p-4">

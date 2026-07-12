@@ -3,6 +3,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  getCountFromServer,
   limit,
   onSnapshot,
   orderBy,
@@ -998,6 +999,11 @@ export function subscribeGames(clubId: string, callback: (games: GameDoc[]) => v
     const games = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as GameDoc))
     callback(seasonNumber ? games.filter((game) => (game.seasonNumber ?? 1) === seasonNumber) : games)
   })
+}
+
+export async function getClubGameCount(clubId: string) {
+  const snapshot = await getCountFromServer(clubCollection(clubId, 'games'))
+  return snapshot.data().count
 }
 
 export function subscribePlayerStats(clubId: string, callback: (stats: Array<PlayerStatsDoc & { id: string }>) => void, seasonNumber?: number) {
