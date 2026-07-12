@@ -10,8 +10,9 @@ service cloud.firestore {
     }
     function isClubManager(clubId) {
       return isSignedIn()
-        && exists(/databases/$(database)/documents/clubs/$(clubId))
-        && get(/databases/$(database)/documents/clubs/$(clubId)).data.managerUid == request.auth.uid;
+        && exists(/databases/$(database)/documents/clubs/$(clubId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/clubs/$(clubId)/members/$(request.auth.uid)).data.active == true
+        && get(/databases/$(database)/documents/clubs/$(clubId)/members/$(request.auth.uid)).data.role == 'manager';
     }
 
     match /users/{uid} {
@@ -21,7 +22,8 @@ service cloud.firestore {
       match /clubs/{clubId} {
         allow read: if isSignedIn() && request.auth.uid == uid;
         allow create: if isSignedIn() && (request.auth.uid == uid || isClubManager(clubId));
-        allow update: if isSignedIn() && (request.auth.uid == uid || isClubManager(clubId));
+        allow update: if isSignedIn() && (request.auth.uid == uid || isClubManager(clubId))
+          && (clubId != 'KEN' || request.resource.data.active == true);
         allow delete: if false;
       }
     }
@@ -40,7 +42,8 @@ service cloud.firestore {
       match /members/{uid} {
         allow read: if isClubMember(clubId) || (isSignedIn() && request.auth.uid == uid);
         allow create: if isSignedIn() && (request.auth.uid == uid || isClubManager(clubId));
-        allow update: if isSignedIn() && (request.auth.uid == uid || isClubManager(clubId));
+        allow update: if isSignedIn() && (request.auth.uid == uid || isClubManager(clubId))
+          && (clubId != 'KEN' || request.resource.data.active == true);
         allow delete: if false;
       }
 

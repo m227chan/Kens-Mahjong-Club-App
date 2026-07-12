@@ -412,7 +412,8 @@ export default function GameLogsModal({
                 {displayedPlayers.map((player) => (
                   <th key={player.id} className="sticky top-0 z-10 min-w-[120px] border-b border-slate-200 bg-slate-100 px-3 py-2 text-left font-black text-slate-700">{player.displayName}</th>
                 ))}
-                {canDeleteGames ? <th className="sticky right-0 top-0 z-20 border-b border-slate-200 bg-slate-100 px-3 py-2 text-left font-black text-slate-700">Actions</th> : null}              </tr>
+                {canDeleteGames ? <th className="sticky right-0 top-0 z-20 border-b border-slate-200 bg-slate-100 px-3 py-2 text-left font-black text-slate-700">Actions</th> : null}
+              </tr>
             </thead>
             <tbody>
               {displayedGames.map((game) => {
@@ -435,7 +436,8 @@ export default function GameLogsModal({
                           {deletingGameId === game.id ? 'Deleting…' : 'Delete'}
                         </button>
                       </td>
-                    ) : null}                  </tr>
+                    ) : null}
+                  </tr>
                 )
               })}
             </tbody>

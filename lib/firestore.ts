@@ -14,7 +14,7 @@ import {
   writeBatch
 } from 'firebase/firestore'
 import type { DocumentData, DocumentReference } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { auth, db } from '@/lib/firebase'
 import { assignSeats, assignTitle, calculateRoundEloDeltas, computeGlobalRanks, type AppConfigLike } from '@/lib/stats-engine'
 import type {
   AppConfigDoc,
@@ -142,6 +142,22 @@ export function subscribeUserClubs(
   }, onError)
 }
 
+
+export async function promoteManagerByEmail(clubId: string, email: string) {
+  const token = await auth.currentUser?.getIdToken()
+  if (!token) throw new Error('Sign in again before promoting a manager.')
+  const response = await fetch('/api/promote-manager', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + token,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ clubId, email: email.trim().toLowerCase() })
+  })
+  const result = await response.json() as { status?: 'promoted' | 'pending'; email?: string; error?: string }
+  if (!response.ok || !result.status || !result.email) throw new Error(result.error ?? 'Unable to promote that manager.')
+  return { status: result.status, email: result.email }
+}
 export function subscribeClubMembers(clubId: string, callback: (members: ClubMembershipDoc[]) => void) {
   const q = query(clubCollection(clubId, 'members'), where('active', '==', true))
   return onSnapshot(q, (snapshot) => {
@@ -249,6 +265,7 @@ export async function resolveJoinRequest(input: { clubId: string; request: JoinR
 }
 
 export async function leaveClub(input: { clubId: string; uid: string }) {
+  if (input.clubId === 'KEN') throw new Error("Kendall's Mahjong Club is available to every user and cannot be left.")
   const memberSnap = await getDoc(clubDoc(input.clubId, 'members', input.uid))
   if (memberSnap.exists() && (memberSnap.data() as ClubMembershipDoc).role === 'manager') {
     throw new Error('Club managers cannot leave their club yet.')
@@ -355,6 +372,7 @@ export async function updatePlayerIcon(clubId: string, playerId: string, nextIco
 }
 
 export async function deleteClub(clubId: string, managerUid: string) {
+  if (clubId === 'KEN') throw new Error("Kendall's Mahjong Club cannot be deleted.")
   const members = await getDocs(query(clubCollection(clubId, 'members'), where('active', '==', true)))
   const batch = writeBatch(db)
   batch.set(doc(db, 'clubs', clubId), { active: false, deletedAt: Timestamp.now(), deletedBy: managerUid }, { merge: true })

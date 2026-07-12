@@ -9,6 +9,7 @@ export interface ClubDoc {
   createdAt: Timestamp
   activeSeasonNumber?: number
   active: boolean
+  universal?: boolean
 }
 
 export interface ClubMembershipDoc {
@@ -19,6 +20,7 @@ export interface ClubMembershipDoc {
   displayName: string | null
   photoURL?: string | null
   role: 'manager' | 'member'
+  universal?: boolean
   joinedAt: Timestamp
   active: boolean
 }
@@ -102,6 +104,7 @@ export interface PlayerStatsDoc {
   eloRank: number
   pointsRank: number
   last5EloDelta: number
+  playoffSeedScore?: number
   recentEloDeltas?: number[]
   daysAttended: number
   lastPlayedAt?: string | null

@@ -15,6 +15,7 @@ import {
   ensureConfig,
   ensureSeasons,
   removePlayer,
+  promoteManagerByEmail,
   resolveJoinRequest,
   setActiveSeason,
   setPlayerAuthLink,
@@ -65,6 +66,9 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [deleteConfirmName, setDeleteConfirmName] = useState('')
   const [deletingClub, setDeletingClub] = useState(false)
   const [mobileView, setMobileView] = useState<'session' | 'standings' | 'roster'>('session')
+  const [managerEmail, setManagerEmail] = useState('')
+  const [managerMessage, setManagerMessage] = useState<string | null>(null)
+  const [promotingManager, setPromotingManager] = useState(false)
 
   const isManager = membership.role === 'manager'
   const usedIconKeys = new Set(players.map((player) => player.icon.trim().toLocaleLowerCase()))
@@ -164,6 +168,23 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
     }
   }
 
+
+  const promoteManager = async () => {
+    if (!managerEmail.trim()) return
+    setPromotingManager(true)
+    setManagerMessage(null)
+    try {
+      const result = await promoteManagerByEmail(clubId, managerEmail)
+      setManagerMessage(result.status === 'promoted'
+        ? result.email + ' is now a club manager.'
+        : 'A pending manager grant was saved for ' + result.email + '. It will apply when they first sign in.')
+      setManagerEmail('')
+    } catch (error) {
+      setManagerMessage(error instanceof Error ? error.message : 'Unable to promote that manager.')
+    } finally {
+      setPromotingManager(false)
+    }
+  }
   const copyShare = async () => {
     await navigator.clipboard?.writeText(clubId)
     setCopied(true)
@@ -308,7 +329,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                   </p>
                 )}
               </div>
-              {isManager ? (
+              {isManager && !club?.universal ? (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
                   <p className="text-sm font-black text-rose-950">Delete club</p>
                   <p className="mt-1 text-sm text-rose-700">Remove this club from every member&apos;s active clubs. Game history will no longer be accessible.</p>
@@ -431,6 +452,30 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             </div>
 
             <div className="overflow-y-auto p-5">
+              {isManager ? (
+                <section className="mb-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <h4 className="text-sm font-black uppercase tracking-[0.16em] text-slate-700">Club managers</h4>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">Promote an existing user, or save a grant that applies when this email first signs in.</p>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <input
+                      type="email"
+                      value={managerEmail}
+                      onChange={(event) => setManagerEmail(event.target.value)}
+                      placeholder="manager@example.com"
+                      className="min-h-11 min-w-0 flex-1 rounded border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[rgb(var(--bamboo))]"
+                    />
+                    <button
+                      type="button"
+                      onClick={promoteManager}
+                      disabled={promotingManager || !managerEmail.trim()}
+                      className="min-h-11 rounded bg-[rgb(var(--bamboo))] px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
+                    >
+                      {promotingManager ? 'Promoting...' : 'Promote manager'}
+                    </button>
+                  </div>
+                  {managerMessage ? <p className="mt-3 text-sm font-semibold text-slate-700">{managerMessage}</p> : null}
+                </section>
+              ) : null}
               <section className="rounded-lg border border-teal-200 bg-teal-50 p-4">
                 <h4 className="text-sm font-black uppercase tracking-[0.16em] text-teal-800">Add player</h4>
                 <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_140px_auto]">

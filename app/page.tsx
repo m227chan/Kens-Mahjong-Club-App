@@ -243,7 +243,7 @@ export default function HomePage() {
 
                 <div className="mt-5 flex items-center gap-2">
                   <Link href={`/club/${encodeURIComponent(club.clubId)}`} className="flex-1 rounded bg-[rgb(var(--ink))] px-4 py-2.5 text-center text-sm font-bold text-[rgb(var(--surface))] hover:opacity-90">{player ? 'Open club' : 'Open roster'}</Link>
-                  {club.role !== 'manager' ? <button type="button" onClick={() => handleLeaveClub(club.clubId)} className="rounded border border-rose-200 px-3 py-2.5 text-sm font-bold text-rose-700 hover:bg-rose-50">Leave</button> : null}
+                  {club.role !== 'manager' && !club.universal ? <button type="button" onClick={() => handleLeaveClub(club.clubId)} className="rounded border border-rose-200 px-3 py-2.5 text-sm font-bold text-rose-700 hover:bg-rose-50">Leave</button> : null}
                 </div>
               </article>
             ))}
