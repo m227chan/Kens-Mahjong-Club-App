@@ -64,6 +64,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleteConfirmName, setDeleteConfirmName] = useState('')
   const [deletingClub, setDeletingClub] = useState(false)
+  const [mobileView, setMobileView] = useState<'session' | 'standings' | 'roster'>('session')
 
   const isManager = membership.role === 'manager'
   const usedIconKeys = new Set(players.map((player) => player.icon.trim().toLocaleLowerCase()))
@@ -195,7 +196,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
 
   return (
     <main className="px-4 py-6">
-      <div className="mb-5 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      <div className="club-workspace-header mb-5 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Current club</p>
           <h1 className="mt-1 text-2xl font-black text-slate-950">{club?.name ?? membership.clubName}</h1>
@@ -334,6 +335,24 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         </div>
       ) : null}
 
+      <nav className="mobile-workspace-tabs sticky top-0 z-30 -mx-4 mb-4 grid grid-cols-3 border-y border-slate-200 bg-white/95 p-2 backdrop-blur md:hidden" aria-label="Club workspace">
+        {([
+          ['session', 'Session'],
+          ['standings', 'Standings'],
+          ['roster', 'Roster'],
+        ] as const).map(([view, label]) => (
+          <button
+            key={view}
+            type="button"
+            onClick={() => setMobileView(view)}
+            aria-pressed={mobileView === view}
+            className={mobileView === view ? 'mobile-workspace-tab active' : 'mobile-workspace-tab'}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_460px]">
         <div className="min-w-0 space-y-6">
           {isManager && joinRequests.length > 0 ? (
@@ -360,7 +379,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             </section>
           ) : null}
 
-          <section id="players" className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <section id="players" className={mobileView === 'roster' ? 'block rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:block' : 'hidden rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:block'}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Players</p>
@@ -370,17 +389,19 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                 </p>
               </div>
             </div>
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="club-roster-stats mt-5 grid gap-3 sm:grid-cols-3">
               <StatCard label="Tracked players" value={String(players.length)} tone="border-slate-200 bg-slate-50 text-slate-900" />
               <StatCard label="Linked users" value={String(players.filter((player) => player.authUid).length)} tone="border-blue-200 bg-blue-50 text-blue-900" />
               <StatCard label="Club members" value={String(members.length)} tone="border-teal-200 bg-teal-50 text-teal-900" />
             </div>
           </section>
 
-          <LeaderboardPanel clubId={clubId} seasonNumber={activeSeasonNumber} />
+          <div className={mobileView === 'standings' ? 'block md:block' : 'hidden md:block'}>
+            <LeaderboardPanel clubId={clubId} seasonNumber={activeSeasonNumber} />
+          </div>
         </div>
 
-        <aside className="order-first xl:order-none xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto">
+        <aside className={mobileView === 'session' ? 'order-first block md:block xl:order-none xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto' : 'order-first hidden md:block xl:order-none xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto'}>
           <SessionManager clubId={clubId} seasonNumber={activeSeasonNumber} />
         </aside>
       </div>

@@ -346,3 +346,58 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
     will-change:transform,opacity;
   }
 }
+/* Mobile information architecture: focused views, compact summaries, one page scroll. */
+@media(max-width:767px){
+  .mobile-workspace-tabs{box-shadow:0 8px 20px rgb(var(--shadow)/.08)}
+  .mobile-workspace-tab{min-height:44px;border:1px solid transparent;border-radius:4px;color:rgb(var(--muted));font-size:.82rem;font-weight:800}
+  .mobile-workspace-tab.active{border-color:rgb(var(--bamboo)/.38);background:rgb(var(--bamboo)/.1);color:rgb(var(--bamboo));box-shadow:inset 0 -3px 0 rgb(var(--bamboo))}
+  .club-workspace-header{margin-bottom:.75rem;padding:.85rem}
+  .club-workspace-header>div:first-child>p{display:none}
+  .club-workspace-header h1{margin-top:0;font-size:1.25rem;line-height:1.35}
+  .club-action-bar{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:.45rem!important}
+  .club-action-bar>label,.club-action-bar>button:nth-child(2){grid-column:span 3!important}
+  .club-action-bar>button{min-height:42px!important;padding:.55rem .4rem!important;font-size:.76rem!important}
+  #players{padding:1rem}
+  #players>div:first-child>div>p:first-child{display:none}
+  #players h3{margin-top:0;font-size:1rem}
+  #players h3+p{display:-webkit-box;margin-top:.25rem;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;font-size:.82rem;line-height:1.45}
+  .club-roster-stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:.45rem;margin-top:.85rem}
+  .club-roster-stats>div{padding:.7rem .55rem!important;text-align:center}
+  .club-roster-stats>div p:first-child{font-size:.64rem;line-height:1.35;letter-spacing:.08em}
+  .club-roster-stats>div p:last-child{margin-top:.35rem;font-size:1.35rem}
+
+  .leaderboard-board>header{padding:.8rem .9rem}
+  .leaderboard-board>header>p:first-child{display:none}
+  .leaderboard-board>header>div{margin-top:0;align-items:center}
+  .leaderboard-board>header h2{font-size:1rem}
+  .leaderboard-board>header div>p{font-size:.75rem}
+  .mobile-leaderboard article{background:rgb(var(--surface-1))}
+  .mobile-leaderboard-toggle{min-height:44px;background:rgb(var(--surface-2))}
+
+  .session-manager #sessionPage{height:auto!important;min-height:0!important;overflow:visible!important}
+  .session-manager .tables-scroll{overflow:visible!important;padding:8px!important}
+  .session-manager .header{position:relative!important;padding:11px 12px!important}
+  .session-manager .header>div:first-child>div:first-child{font-size:18px!important}
+  .session-manager .sideline-section{margin:8px 8px 0!important;padding:9px!important}
+  .session-manager .table-seats{min-height:132px!important;padding:9px!important}
+  .session-manager .table-card{margin-bottom:10px!important}
+
+  .home-dashboard{padding-top:1.15rem;padding-bottom:2rem}
+  .home-greeting{gap:.65rem}
+  .home-greeting p:first-child{font-size:.68rem}
+  .home-greeting h1{margin-top:.4rem;font-size:1.75rem;line-height:1.2}
+  .home-greeting h1+p{margin-top:.35rem}
+  .home-summary{margin-top:1.1rem}
+  .home-summary>div>div:first-child{padding:1rem}
+  .home-summary>div>div:first-child>p:first-child{font-size:.68rem}
+  .home-summary>div>div:first-child>div{margin-top:1rem;gap:.75rem}
+  .home-summary .home-number{font-size:clamp(1.65rem,9vw,2.35rem)}
+  .home-summary .home-label{margin-top:.4rem;font-size:.64rem}
+  .home-trend-card{display:none!important}
+  .home-dashboard>section.mt-9{margin-top:1.5rem}
+  .home-dashboard>section.mt-9>div:first-child h2{margin-top:.35rem;font-size:1.35rem}
+  .home-club-wave{margin-top:.85rem}
+  .home-club-card{padding:1rem}
+  .home-club-card h3{font-size:1.1rem}
+  .home-club-card .mt-5{margin-top:1rem}
+}

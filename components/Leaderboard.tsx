@@ -18,6 +18,7 @@ function formatWinRate(wins: number, games: number) {
 export function LeaderboardPanel({ clubId, seasonNumber, compact = false }: { clubId: string; seasonNumber?: number; compact?: boolean }) {
   const [players, setPlayers] = useState<PlayerDoc[]>([])
   const [stats, setStats] = useState<PlayerStatsDoc[]>([])
+  const [mobileExpanded, setMobileExpanded] = useState(false)
 
   useEffect(() => subscribePlayers(clubId, (nextPlayers) => setPlayers(nextPlayers)), [clubId])
   useEffect(() => subscribePlayerStats(clubId, (nextStats) => setStats(nextStats), seasonNumber), [clubId, seasonNumber])
@@ -41,6 +42,7 @@ export function LeaderboardPanel({ clubId, seasonNumber, compact = false }: { cl
   }, [players, stats])
 
   const visibleRows = compact ? rows.slice(0, 8) : rows
+  const mobileRows = mobileExpanded ? visibleRows : visibleRows.slice(0, 5)
 
   return (
     <section className="leaderboard-board overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -54,28 +56,36 @@ export function LeaderboardPanel({ clubId, seasonNumber, compact = false }: { cl
 
       {visibleRows.length > 0 ? (
         <>
-          <div className="divide-y divide-slate-200 md:hidden">
-            {visibleRows.map((row, index) => (
-              <article key={row.playerId} className="p-4">
-                <div className="flex items-start gap-3">
-                  <span className="flex min-h-11 min-w-11 items-center justify-center rounded border border-slate-200 bg-slate-50 text-lg">{row.icon}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline justify-between gap-2"><h3 className="truncate text-base font-extrabold text-slate-950">{row.displayName}</h3><span className="font-mono text-xl font-bold text-[rgb(var(--cinnabar))]">#{row.pointsRank || index + 1}</span></div>
-                    <p className="mt-1 text-xs text-slate-500">{titleForStanding(index + 1, rows.length, row.gamesPlayed)}</p>
+          <div className="mobile-leaderboard md:hidden">
+            <div className="grid grid-cols-[42px_minmax(0,1fr)_64px_64px] items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">
+              <span>Rank</span><span>Player</span><span>ELO</span><span>Win</span>
+            </div>
+            <div className="divide-y divide-slate-200">
+              {mobileRows.map((row, index) => (
+                <article key={row.playerId} className="grid min-h-16 grid-cols-[42px_minmax(0,1fr)_64px_64px] items-center gap-2 px-3 py-2.5">
+                  <span className="font-mono text-base font-black text-[rgb(var(--cinnabar))]">#{row.pointsRank || index + 1}</span>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="flex h-9 w-8 shrink-0 items-center justify-center rounded border border-slate-200 bg-slate-50 text-base">{row.icon}</span>
+                    <div className="min-w-0">
+                      <h3 className="truncate text-sm font-extrabold text-slate-950">{row.displayName}</h3>
+                      <p className="truncate text-xs leading-5 text-slate-500">{titleForStanding(index + 1, rows.length, row.gamesPlayed)}</p>
+                    </div>
                   </div>
-                </div>
-                <dl className="mt-4 grid grid-cols-3 gap-2 border-t border-slate-200 pt-3">
-                  <div><dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Points</dt><dd className="mt-1 font-mono text-sm font-bold text-slate-900">{row.totalPoints}</dd></div>
-                  <div><dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">ELO</dt><dd className="mt-1 font-mono text-sm font-bold text-slate-900">{row.eloRating}</dd></div>
-                  <div><dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Win rate</dt><dd className="mt-1 font-mono text-sm font-bold text-slate-900">{formatWinRate(row.gamesWon, row.gamesPlayed)}</dd></div>
-                  <div><dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Games</dt><dd className="mt-1 font-mono text-sm font-bold text-slate-900">{row.gamesPlayed}</dd></div>
-                  <div><dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Wins</dt><dd className="mt-1 font-mono text-sm font-bold text-slate-900">{row.gamesWon}</dd></div>
-                  <div><dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Losses</dt><dd className="mt-1 font-mono text-sm font-bold text-slate-900">{row.gamesLost}</dd></div>
-                </dl>
-              </article>
-            ))}
-          </div>
-          <div className="hidden overflow-x-auto md:block">
+                  <span className="font-mono text-sm font-bold text-slate-900">{row.eloRating}</span>
+                  <span className="font-mono text-sm font-bold text-slate-900">{formatWinRate(row.gamesWon, row.gamesPlayed)}</span>
+                </article>
+              ))}
+            </div>
+            {visibleRows.length > 5 ? (
+              <button
+                type="button"
+                onClick={() => setMobileExpanded((current) => !current)}
+                className="mobile-leaderboard-toggle w-full border-t border-slate-200 px-4 py-3 text-sm font-bold text-[rgb(var(--bamboo))]"
+              >
+                {mobileExpanded ? 'Show top 5' : 'Show all ' + visibleRows.length + ' players'}
+              </button>
+            ) : null}
+          </div>          <div className="hidden overflow-x-auto md:block">
           <div className="min-w-[1020px]">
             <div className="grid grid-cols-[64px_minmax(280px,1.8fr)_88px_112px_76px_76px_84px_116px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
               <span>Rank</span>

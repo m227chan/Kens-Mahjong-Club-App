@@ -202,7 +202,7 @@ export default function HomePage() {
               <div><p className="home-number"><CountUp value={clubs.length} /></p><p className="home-label">Clubs joined</p></div>
             </div>
           </div>
-          <div className={`flex flex-col justify-end border-t border-slate-200 p-6 lg:border-l lg:border-t-0 ${rollup.trend >= 0 ? 'text-[rgb(var(--bamboo))]' : 'text-[rgb(var(--cinnabar))]'}`}>
+          <div className={`home-trend-card flex flex-col justify-end border-t border-slate-200 p-6 lg:border-l lg:border-t-0 ${rollup.trend >= 0 ? 'text-[rgb(var(--bamboo))]' : 'text-[rgb(var(--cinnabar))]'}`}>
             <TrendLine values={rollup.trendValues} />
             <p className="mt-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Latest rating movement</p>
           </div>
