@@ -232,7 +232,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
               setPlayerMessage(null)
               setRosterOpen(true)
             }}
-            className="rounded-lg bg-teal-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-teal-500"
+            className="club-roster-action rounded-lg bg-teal-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-teal-500"
           >
             Roster
           </button>
@@ -255,7 +255,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             onClick={() => setSettingsOpen(true)}
             aria-label="Settings"
             title="Settings"
-            className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-950 text-lg font-bold text-white transition hover:bg-slate-800"
+            className="club-settings-action flex h-10 w-10 items-center justify-center rounded-lg bg-slate-950 text-lg font-bold text-white transition hover:bg-slate-800"
           >
             ⚙️
           </button>
@@ -339,7 +339,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         {([
           ['session', 'Session'],
           ['standings', 'Standings'],
-          ['roster', 'Roster'],
+          ['roster', 'Players'],
         ] as const).map(([view, label]) => (
           <button
             key={view}
@@ -394,6 +394,16 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
               <StatCard label="Linked users" value={String(players.filter((player) => player.authUid).length)} tone="border-blue-200 bg-blue-50 text-blue-900" />
               <StatCard label="Club members" value={String(members.length)} tone="border-teal-200 bg-teal-50 text-teal-900" />
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                setPlayerMessage(null)
+                setRosterOpen(true)
+              }}
+              className="mobile-manage-players mt-3 block w-full rounded bg-[rgb(var(--bamboo))] px-4 py-3 text-sm font-bold text-white md:hidden"
+            >
+              Manage players
+            </button>
           </section>
 
           <div className={mobileView === 'standings' ? 'block md:block' : 'hidden md:block'}>

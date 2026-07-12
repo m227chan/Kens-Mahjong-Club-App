@@ -37,7 +37,7 @@ export function LeaderboardPanel({ clubId, seasonNumber, compact = false }: { cl
       .sort((a, b) => {
         const rankA = a.pointsRank || Number.MAX_SAFE_INTEGER
         const rankB = b.pointsRank || Number.MAX_SAFE_INTEGER
-        return rankA - rankB || b.totalPoints - a.totalPoints
+        return rankA - rankB || b.totalPoints - a.totalPoints || b.gamesPlayed - a.gamesPlayed || a.playerId.localeCompare(b.playerId)
       })
   }, [players, stats])
 

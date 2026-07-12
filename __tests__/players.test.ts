@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { PLAYER_COLORS, assignPlayerColors, assignTitles } from '../lib/players'
+import { PLAYER_COLORS, RANK_TITLES, assignPlayerColors, assignTitles, rankTitleBandSizes, titleForStanding } from '../lib/players'
 
 describe('PLAYER_COLORS', () => {
   it('should have 14 colors', () => {
@@ -32,107 +32,53 @@ describe('assignPlayerColors', () => {
   })
 })
 
-describe('assignTitles', () => {
-  it('should assign Messiah, Master, Mongrel, Moron for N=4', () => {
-    const rankedPlayers = [
-      { name: 'Alice', rank: 1, roundsPlayed: 5 },
-      { name: 'Bob', rank: 2, roundsPlayed: 5 },
-      { name: 'Charlie', rank: 3, roundsPlayed: 5 },
-      { name: 'Diana', rank: 4, roundsPlayed: 5 }
-    ]
-
-    const result = assignTitles(rankedPlayers, 4)
-
-    expect(result.Alice).toEqual({ title: 'Messiah', emoji: '👑' })
-    expect(result.Bob).toEqual({ title: 'Master', emoji: '🏆' })
-    expect(result.Charlie).toEqual({ title: 'Mongrel', emoji: '🐶' })
-    expect(result.Diana).toEqual({ title: 'Moron', emoji: '🤡' })
+describe('normal-distribution rank titles', () => {
+  it('uses the requested 9-band proportions for 100 players', () => {
+    expect(rankTitleBandSizes(100)).toEqual([4, 7, 12, 17, 20, 17, 12, 7, 4])
   })
 
-  it('should assign Messiah, Master, Monk, Mongrel, Moron for N=5', () => {
-    const rankedPlayers = [
-      { name: 'Alice', rank: 1, roundsPlayed: 5 },
-      { name: 'Bob', rank: 2, roundsPlayed: 5 },
-      { name: 'Charlie', rank: 3, roundsPlayed: 5 },
-      { name: 'Diana', rank: 4, roundsPlayed: 5 },
-      { name: 'Eve', rank: 5, roundsPlayed: 5 }
-    ]
-
-    const result = assignTitles(rankedPlayers, 5)
-
-    expect(result.Alice).toEqual({ title: 'Messiah', emoji: '👑' })
-    expect(result.Bob).toEqual({ title: 'Master', emoji: '🏆' })
-    expect(result.Charlie).toEqual({ title: 'Monk', emoji: '🧘' })
-    expect(result.Diana).toEqual({ title: 'Mongrel', emoji: '🐶' })
-    expect(result.Eve).toEqual({ title: 'Moron', emoji: '🤡' })
+  it('keeps every outer pair symmetric after rounding', () => {
+    for (const total of [5, 15, 52, 99]) {
+      const sizes = rankTitleBandSizes(total)
+      expect(sizes.reduce((sum, size) => sum + size, 0)).toBe(total)
+      expect(sizes[0]).toBe(sizes[8])
+      expect(sizes[1]).toBe(sizes[7])
+      expect(sizes[2]).toBe(sizes[6])
+      expect(sizes[3]).toBe(sizes[5])
+    }
   })
 
-  it('should assign Messiah, Master, Monk, Minion, Mongrel, Moron for N=6', () => {
-    const rankedPlayers = [
-      { name: 'Alice', rank: 1, roundsPlayed: 5 },
-      { name: 'Bob', rank: 2, roundsPlayed: 5 },
-      { name: 'Charlie', rank: 3, roundsPlayed: 5 },
-      { name: 'Diana', rank: 4, roundsPlayed: 5 },
-      { name: 'Eve', rank: 5, roundsPlayed: 5 },
-      { name: 'Frank', rank: 6, roundsPlayed: 5 }
-    ]
+  it('assigns titles straight down the ranked list', () => {
+    const expected = RANK_TITLES.flatMap((title, index) =>
+      Array.from({ length: rankTitleBandSizes(100)[index] }, () => title)
+    )
 
-    const result = assignTitles(rankedPlayers, 6)
-
-    expect(result.Alice).toEqual({ title: 'Messiah', emoji: '👑' })
-    expect(result.Bob).toEqual({ title: 'Master', emoji: '🏆' })
-    expect(result.Charlie).toEqual({ title: 'Monk', emoji: '🧘' })
-    expect(result.Diana).toEqual({ title: 'Minion', emoji: '🪄' })
-    expect(result.Eve).toEqual({ title: 'Mongrel', emoji: '🐶' })
-    expect(result.Frank).toEqual({ title: 'Moron', emoji: '🤡' })
+    expect(Array.from({ length: 100 }, (_, index) => titleForStanding(index + 1, 100))).toEqual(expected)
   })
 
-  it('should assign all middle ranks as Monk for N=10', () => {
-    const rankedPlayers = Array.from({ length: 10 }, (_, i) => ({
-      name: `Player${i + 1}`,
-      rank: i + 1,
-      roundsPlayed: 5
+  it('allows empty bands in small clubs without losing players', () => {
+    expect(rankTitleBandSizes(5)).toEqual([0, 0, 1, 1, 1, 1, 1, 0, 0])
+    expect(Array.from({ length: 5 }, (_, index) => titleForStanding(index + 1, 5))).toEqual([
+      'Musketeer',
+      'Marshal',
+      'Monk',
+      'Mortal',
+      'Minion'
+    ])
+  })
+
+  it('recalculates assignTitles from each current rank', () => {
+    const rankedPlayers = Array.from({ length: 100 }, (_, index) => ({
+      name: 'Player' + (index + 1),
+      rank: index + 1,
+      roundsPlayed: index % 3
     }))
 
-    const result = assignTitles(rankedPlayers, 10)
+    const result = assignTitles(rankedPlayers, rankedPlayers.length)
 
-    expect(result.Player1).toEqual({ title: 'Messiah', emoji: '👑' })
-    expect(result.Player2).toEqual({ title: 'Master', emoji: '🏆' })
-    expect(result.Player3).toEqual({ title: 'Monk', emoji: '🧘' })
-    expect(result.Player4).toEqual({ title: 'Monk', emoji: '🧘' })
-    expect(result.Player5).toEqual({ title: 'Monk', emoji: '🧘' })
-    expect(result.Player6).toEqual({ title: 'Monk', emoji: '🧘' })
-    expect(result.Player7).toEqual({ title: 'Monk', emoji: '🧘' })
-    expect(result.Player8).toEqual({ title: 'Minion', emoji: '🪄' }) // N-2 = 8
-    expect(result.Player9).toEqual({ title: 'Mongrel', emoji: '🐶' })
-    expect(result.Player10).toEqual({ title: 'Moron', emoji: '🤡' })
-  })
-
-  it('should assign Moron to both players in a tie at last rank', () => {
-    const rankedPlayers = [
-      { name: 'Alice', rank: 1, roundsPlayed: 5 },
-      { name: 'Bob', rank: 2, roundsPlayed: 5 },
-      { name: 'Charlie', rank: 2, roundsPlayed: 5 }, // Tied for 2nd
-      { name: 'Diana', rank: 4, roundsPlayed: 5 }
-    ]
-
-    const result = assignTitles(rankedPlayers, 4)
-
-    expect(result.Alice).toEqual({ title: 'Messiah', emoji: '👑' })
-    expect(result.Bob).toEqual({ title: 'Master', emoji: '🏆' })
-    expect(result.Charlie).toEqual({ title: 'Master', emoji: '🏆' }) // Tied, shares higher title
-    expect(result.Diana).toEqual({ title: 'Moron', emoji: '🤡' })
-  })
-
-  it('should assign Monk to new players regardless of rank', () => {
-    const rankedPlayers = [
-      { name: 'Alice', rank: 1, roundsPlayed: 0 }, // New player at rank 1
-      { name: 'Bob', rank: 2, roundsPlayed: 5 }
-    ]
-
-    const result = assignTitles(rankedPlayers, 4)
-
-    expect(result.Alice).toEqual({ title: 'Monk', emoji: '🧘' }) // New player
-    expect(result.Bob).toEqual({ title: 'Master', emoji: '🏆' })
+    expect(result.Player1.title).toBe('Messiah')
+    expect(result.Player50.title).toBe('Monk')
+    expect(result.Player100.title).toBe('Moron')
+    expect(Object.keys(result)).toHaveLength(100)
   })
 })

@@ -401,3 +401,39 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
   .home-club-card h3{font-size:1.1rem}
   .home-club-card .mt-5{margin-top:1rem}
 }
+@media(max-width:767px){
+  .mobile-workspace-tabs{
+    gap:.4rem;
+    padding:.5rem!important;
+    border-color:rgb(var(--line))!important;
+    background:rgb(var(--surface-1))!important;
+    box-shadow:0 8px 20px rgb(var(--shadow)/.14);
+  }
+  .mobile-workspace-tab{
+    border-color:rgb(var(--line))!important;
+    background:rgb(var(--surface-2))!important;
+    color:rgb(var(--ink))!important;
+    box-shadow:0 2px 0 rgb(var(--shadow)/.08);
+  }
+  .mobile-workspace-tab.active{
+    border-color:rgb(var(--bamboo))!important;
+    background:rgb(var(--bamboo))!important;
+    color:#fff!important;
+    box-shadow:inset 0 -3px 0 rgb(0 0 0/.14),0 3px 0 rgb(var(--bamboo)/.2);
+  }
+  .club-roster-action{display:none!important}
+  .club-settings-action{
+    justify-self:center;
+    width:44px!important;
+    min-width:44px;
+    padding:0!important;
+    border:0!important;
+    background:transparent!important;
+    color:rgb(var(--ink))!important;
+    box-shadow:none!important;
+    font-size:1.35rem!important;
+  }
+  .club-settings-action:hover,.club-settings-action:active{background:transparent!important}
+  .club-settings-action:focus-visible{outline:2px solid rgb(var(--bamboo));outline-offset:2px}
+  .mobile-manage-players{min-height:46px}
+}
