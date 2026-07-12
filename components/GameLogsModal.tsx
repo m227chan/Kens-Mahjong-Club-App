@@ -4,12 +4,12 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { Timestamp } from 'firebase/firestore'
 import {
   createPlayer,
-  deleteGameAndRebuild,
   importGames,
   subscribeActiveSession,
   subscribeGames,
   subscribePlayers
 } from '@/lib/firestore'
+import { auth } from '@/lib/firebase'
 import type { GameDoc, PlayerDoc, SeasonDoc, SessionDoc } from '@/lib/types'
 import { randomUnusedPlayerEmoji } from '@/lib/players'
 
@@ -128,7 +128,12 @@ export default function GameLogsModal({
   const [selectedPlayerId, setSelectedPlayerId] = useState('')
   const [importMessage, setImportMessage] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
-  const [deletingGameId, setDeletingGameId] = useState<string | null>(null)
+  const [selectedGame, setSelectedGame] = useState<GameDoc | null>(null)
+  const [draftScores, setDraftScores] = useState<Record<string, string>>({})
+  const [draftDate, setDraftDate] = useState('')
+  const [draftSeason, setDraftSeason] = useState(currentSeason)
+  const [draftNotes, setDraftNotes] = useState('')
+  const [savingGame, setSavingGame] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => subscribePlayers(clubId, setPlayers), [clubId])
@@ -204,18 +209,46 @@ export default function GameLogsModal({
     URL.revokeObjectURL(url)
   }
 
-  const removeGame = async (game: GameDoc) => {
+  const openGame = (game: GameDoc) => {
     if (!canDeleteGames) return
-    if (!window.confirm(`Delete the game from ${formatDate(game)}? Points, ELO, ranks, titles, and charts will be recalculated from the remaining games.`)) return
-    setDeletingGameId(game.id)
+    const date = game.datetime.toDate()
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
+    setSelectedGame(game)
+    setDraftScores(Object.fromEntries(game.entries.map((entry) => [entry.playerId, String(entry.score)])))
+    setDraftDate(local)
+    setDraftSeason(game.seasonNumber ?? 1)
+    setDraftNotes(game.notes ?? '')
+    setImportMessage(null)
+  }
+
+  const mutateGame = async (action: 'update' | 'delete') => {
+    if (!selectedGame || !canDeleteGames) return
+    if (action === 'delete' && !window.confirm(`Permanently delete the game from ${formatDate(selectedGame)}? All club statistics and ELO history will be rebuilt.`)) return
+    const entries = selectedGame.entries.map((entry) => ({ playerId: entry.playerId, score: Number(draftScores[entry.playerId]) }))
+    if (action === 'update' && (entries.some((entry) => !Number.isFinite(entry.score)) || entries.reduce((sum, entry) => sum + entry.score, 0) !== 0)) {
+      setImportMessage('Enter four valid scores that add up to zero.')
+      return
+    }
+    setSavingGame(true)
     setImportMessage(null)
     try {
-      await deleteGameAndRebuild(clubId, game.id)
-      setImportMessage('Game deleted. Club statistics were recalculated.')
+      const token = await auth.currentUser?.getIdToken()
+      if (!token) throw new Error('Sign in again before modifying a game.')
+      const response = await fetch('/api/games/mutate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({ clubId, gameId: selectedGame.id, action, ...(action === 'update' ? {
+          game: { datetime: new Date(draftDate).toISOString(), seasonNumber: draftSeason, entries, notes: draftNotes }
+        } : {}) })
+      })
+      const result = await response.json() as { error?: string }
+      if (!response.ok) throw new Error(result.error ?? 'Unable to modify game.')
+      setSelectedGame(null)
+      setImportMessage(action === 'delete' ? 'Game deleted and all club statistics recalculated.' : 'Game updated and all club statistics recalculated.')
     } catch (error) {
-      setImportMessage(error instanceof Error ? error.message : 'Unable to delete game.')
+      setImportMessage(error instanceof Error ? error.message : 'Unable to modify game.')
     } finally {
-      setDeletingGameId(null)
+      setSavingGame(false)
     }
   }
   const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -353,7 +386,7 @@ export default function GameLogsModal({
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-600">Game logs</p>
             <h3 className="mt-2 text-xl font-black text-slate-950">Club game score table</h3>
-            <p className="mt-1 text-sm text-slate-500">Wide table by player, with one row per recorded game.</p>
+            <p className="mt-1 text-sm text-slate-500">One record per game. {canDeleteGames ? 'Select a record to review or edit it.' : ''}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={exportCsv} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-500">
@@ -403,8 +436,27 @@ export default function GameLogsModal({
           {importMessage ? <p className="mt-3 text-sm font-semibold text-slate-600">{importMessage}</p> : null}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-auto p-4">
-          <table className="game-log-table min-w-full border-separate border-spacing-0 text-sm">
+        <div className="min-h-0 flex-1 overflow-auto p-3 sm:p-4">
+          <div className="grid gap-3 md:hidden">
+            {displayedGames.map((game) => (
+              <button key={game.id} type="button" onClick={() => openGame(game)} disabled={!canDeleteGames} className="rounded border border-slate-200 bg-white p-4 text-left shadow-sm transition enabled:hover:border-[rgb(var(--bamboo))] enabled:active:scale-[.99] disabled:cursor-default">
+                <span className="flex items-start justify-between gap-3">
+                  <span><strong className="block text-sm text-slate-900">{formatDate(game)}</strong><span className="mt-1 block text-xs font-semibold text-slate-500">Season {game.seasonNumber ?? 1}</span></span>
+                  {canDeleteGames ? <span className="text-xs font-bold text-[rgb(var(--bamboo))]">Review →</span> : null}
+                </span>
+                <span className="mt-3 grid grid-cols-2 gap-2">
+                  {game.entries.map((entry) => (
+                    <span key={entry.playerId} className="flex items-center justify-between gap-2 rounded bg-slate-50 px-2.5 py-2 text-xs">
+                      <span className="truncate font-semibold text-slate-700">{playerById.get(entry.playerId)?.displayName ?? 'Player'}</span>
+                      <strong className={entry.score > 0 ? 'text-emerald-700' : entry.score < 0 ? 'text-rose-700' : 'text-slate-700'}>{entry.score}</strong>
+                    </span>
+                  ))}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <table className="game-log-table hidden min-w-full border-separate border-spacing-0 text-sm md:table">
             <thead>
               <tr>
                 <th className="sticky left-0 top-0 z-20 border-b border-slate-200 bg-slate-100 px-3 py-2 text-left font-black text-slate-700">Datetime</th>
@@ -412,14 +464,13 @@ export default function GameLogsModal({
                 {displayedPlayers.map((player) => (
                   <th key={player.id} className="sticky top-0 z-10 min-w-[120px] border-b border-slate-200 bg-slate-100 px-3 py-2 text-left font-black text-slate-700">{player.displayName}</th>
                 ))}
-                {canDeleteGames ? <th className="sticky right-0 top-0 z-20 border-b border-slate-200 bg-slate-100 px-3 py-2 text-left font-black text-slate-700">Actions</th> : null}
               </tr>
             </thead>
             <tbody>
               {displayedGames.map((game) => {
                 const scoreByPlayer = new Map(game.entries.map((entry) => [entry.playerId, entry.score]))
                 return (
-                  <tr key={game.id} className="game-log-row">
+                  <tr key={game.id} onClick={() => openGame(game)} onKeyDown={(event) => { if (canDeleteGames && (event.key === 'Enter' || event.key === ' ')) openGame(game) }} tabIndex={canDeleteGames ? 0 : undefined} title={canDeleteGames ? 'Select to review, edit, or delete this game' : undefined} className={`game-log-row ${canDeleteGames ? 'cursor-pointer outline-none hover:ring-2 hover:ring-inset hover:ring-[rgb(var(--bamboo))] focus:ring-2 focus:ring-inset focus:ring-[rgb(var(--bamboo))]' : ''}`}>
                     <td className="sticky left-0 z-10 whitespace-nowrap border-b border-slate-100 bg-inherit px-3 py-2 font-semibold text-slate-700">{formatDate(game)}</td>
                     <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2 text-slate-600">Season {game.seasonNumber ?? 1}</td>
                     {displayedPlayers.map((player) => {
@@ -430,13 +481,6 @@ export default function GameLogsModal({
                         </td>
                       )
                     })}
-                    {canDeleteGames ? (
-                      <td className="sticky right-0 border-b border-slate-100 bg-inherit px-3 py-2">
-                        <button type="button" onClick={() => removeGame(game)} disabled={deletingGameId === game.id} className="min-h-9 rounded border border-rose-200 px-3 py-1 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50">
-                          {deletingGameId === game.id ? 'Deleting…' : 'Delete'}
-                        </button>
-                      </td>
-                    ) : null}
                   </tr>
                 )
               })}
@@ -449,6 +493,39 @@ export default function GameLogsModal({
           ) : null}
         </div>
       </div>
+
+      {selectedGame ? (
+        <div className="responsive-modal fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/80 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && !savingGame) setSelectedGame(null) }}>
+          <div className="responsive-modal-panel max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-lg border border-slate-200 bg-white p-5 shadow-2xl sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div><p className="text-xs font-bold uppercase tracking-[.16em] text-[rgb(var(--bamboo))]">Game record</p><h4 className="mt-2 text-xl font-black text-slate-950">Review and update</h4></div>
+              <button type="button" onClick={() => setSelectedGame(null)} disabled={savingGame} className="rounded border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">Close</button>
+            </div>
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <label className="text-sm font-bold text-slate-700">Date and time<input type="datetime-local" value={draftDate} onChange={(event) => setDraftDate(event.target.value)} className="mt-2 min-h-11 w-full rounded border border-slate-300 bg-white px-3 text-slate-900" /></label>
+              <label className="text-sm font-bold text-slate-700">Season<select value={draftSeason} onChange={(event) => setDraftSeason(Number(event.target.value))} className="mt-2 min-h-11 w-full rounded border border-slate-300 bg-white px-3 text-slate-900">{seasons.map((season) => <option key={season.id} value={season.seasonNumber}>{season.name}</option>)}</select></label>
+            </div>
+            <div className="mt-5">
+              <p className="text-sm font-bold text-slate-700">Player scores <span className="font-normal text-slate-500">(must total zero)</span></p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {selectedGame.entries.map((entry) => (
+                  <label key={entry.playerId} className="flex items-center justify-between gap-3 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
+                    <span className="truncate">{playerById.get(entry.playerId)?.icon} {playerById.get(entry.playerId)?.displayName ?? entry.playerId}</span>
+                    <input type="number" value={draftScores[entry.playerId] ?? ''} onChange={(event) => setDraftScores((current) => ({ ...current, [entry.playerId]: event.target.value }))} className="w-24 rounded border border-slate-300 bg-white px-2 py-1.5 text-right font-mono font-bold text-slate-900" />
+                  </label>
+                ))}
+              </div>
+            </div>
+            <label className="mt-5 block text-sm font-bold text-slate-700">Notes<textarea value={draftNotes} onChange={(event) => setDraftNotes(event.target.value)} rows={3} className="mt-2 w-full resize-y rounded border border-slate-300 bg-white p-3 text-slate-900" /></label>
+            <p className="mt-3 text-xs leading-5 text-slate-500">Saving or deleting rebuilds points, ELO ratings, rankings, win rates, titles, and analytics from the complete game history.</p>
+            {importMessage ? <p className="mt-3 rounded border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{importMessage}</p> : null}
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+              <button type="button" onClick={() => mutateGame('delete')} disabled={savingGame} className="min-h-11 rounded border border-rose-300 px-4 py-2 text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50">Delete game</button>
+              <button type="button" onClick={() => mutateGame('update')} disabled={savingGame || !draftDate} className="min-h-11 rounded bg-[rgb(var(--bamboo))] px-5 py-2 text-sm font-bold text-white disabled:opacity-50">{savingGame ? 'Rebuilding statistics…' : 'Save changes'}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
