@@ -4,13 +4,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { subscribePlayerStats, subscribePlayers } from '@/lib/firestore'
 import type { PlayerDoc, PlayerStatsDoc } from '@/lib/types'
 
-function MiniBarChart({ data, color = '#18694f' }: { data: Array<{ label: string; value: number }>; color?: string }) {
+function MiniBarChart({ data, color = '#18694f' }: { data: Array<{ id: string; label: string; value: number }>; color?: string }) {
   const max = Math.max(...data.map((entry) => Math.abs(entry.value)), 1)
 
   return (
     <div className="mt-4 grid gap-3 rounded-lg border border-slate-200 bg-white p-3">
       {data.map((entry) => (
-        <div key={entry.label} className="grid grid-cols-[56px_1fr_48px] items-center gap-3">
+        <div key={entry.id} className="grid grid-cols-[72px_1fr_48px] items-center gap-3">
           <span className="truncate text-xs font-semibold text-slate-600">{entry.label}</span>
           <div
             className="h-2 rounded-full bg-slate-100"
@@ -49,31 +49,31 @@ export default function AnalyticsPanel({ clubId, seasonNumber, selectedPlayerIds
 
   const playerName = (playerId: string, short = false) => {
     const name = players.find((player) => player.id === playerId)?.displayName ?? playerId
-    return short ? name.slice(0, 4) : name
+    return short ? name.slice(0, 8) : name
   }
 
   const cards = [
     {
       title: 'Rank Alignment',
-      value: top.map((stat) => ({ label: playerName(stat.playerId, true), value: Math.abs(stat.eloRank - stat.pointsRank) })),
+      value: top.map((stat) => ({ id: stat.playerId, label: playerName(stat.playerId, true), value: Math.abs(stat.eloRank - stat.pointsRank) })),
       color: '#18694f',
       description: 'Lower is better. Compares ELO rank to points rank.'
     },
     {
       title: 'ELO Headroom',
-      value: top.map((stat) => ({ label: playerName(stat.playerId, true), value: Math.max(0, stat.eloPeak - stat.eloRating) })),
+      value: top.map((stat) => ({ id: stat.playerId, label: playerName(stat.playerId, true), value: Math.max(0, stat.eloPeak - stat.eloRating) })),
       color: '#28666e',
       description: 'Distance from each player\'s peak rating.'
     },
     {
       title: 'Points / Game',
-      value: top.map((stat) => ({ label: playerName(stat.playerId, true), value: stat.gamesPlayed ? stat.totalPoints / stat.gamesPlayed : 0 })),
+      value: top.map((stat) => ({ id: stat.playerId, label: playerName(stat.playerId, true), value: stat.gamesPlayed ? stat.totalPoints / stat.gamesPlayed : 0 })),
       color: '#c18b30',
       description: 'Average point result per recorded game.'
     },
     {
       title: 'Last 5 ELO',
-      value: top.map((stat) => ({ label: playerName(stat.playerId, true), value: stat.last5EloDelta })),
+      value: top.map((stat) => ({ id: stat.playerId, label: playerName(stat.playerId, true), value: stat.last5EloDelta })),
       color: '#b9392c',
       description: 'Recent rating movement across the latest games.'
     }
