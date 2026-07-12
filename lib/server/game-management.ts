@@ -26,7 +26,7 @@ type Stats = {
 
 const pathOf = (...parts: string[]) => parts.join('/')
 const KEN_STATS_CUTOFF_ISO = '2026-04-25T04:00:00.000Z'
-const KEN_STATS_VERSION = 'post-zero-schema-2026-04-25'
+const KEN_STATS_VERSION = 'season-2-points-all-history-v2'
 
 async function requireManager(clubId: string, uid: string) {
   const member = await adminDb.doc(pathOf('clubs', clubId, 'members', uid)).get()
@@ -144,6 +144,23 @@ export async function mutateGameAndRebuild(input: {
       ratingBefore: result.ratingBefore, ratingAfter: result.ratingAfter, delta: result.delta, kFactor: result.kFactor,
       marginMultiplier: result.marginMultiplier, opponents: result.opponents }))
   })
+
+  // KEN's legacy Season 2 rows before the schema cutoff contain valid points,
+  // but not reliable participation/win/ELO data. Add only their scores.
+  if (clubId === 'KEN') {
+    games
+      .filter((game) => (game.seasonNumber ?? 1) === 2 && game.datetime.toMillis() < cutoffMillis)
+      .forEach((game) => {
+        game.entries.forEach((entry) => {
+          const allTime = allStats.get(entry.playerId) ?? makeStats(entry.playerId)
+          allStats.set(entry.playerId, { ...allTime, totalPoints: allTime.totalPoints + entry.score })
+
+          const seasonKey = `2_${entry.playerId}`
+          const season = seasonStats.get(seasonKey) ?? makeStats(entry.playerId, 2)
+          seasonStats.set(seasonKey, { ...season, totalPoints: season.totalPoints + entry.score })
+        })
+      })
+  }
 
   const rank = (items: Stats[]) => {
     const ranks = computeGlobalRanks(items)

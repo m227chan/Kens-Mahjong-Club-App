@@ -1036,13 +1036,11 @@ export async function loadAllGames(clubId: string) {
 export async function loadAnalyticsGames(clubId: string, gameCount: number, seasonNumber?: number) {
   if (gameCount === 0) {
     const games = await loadAllGames(clubId)
-    return games.filter((game) => (!seasonNumber || (game.seasonNumber ?? 1) === seasonNumber)
-      && (clubId !== 'KEN' || game.datetime.toMillis() >= Date.parse('2026-04-25T04:00:00.000Z')))
+    return games.filter((game) => !seasonNumber || (game.seasonNumber ?? 1) === seasonNumber)
   }
   const sampleSize = Math.max(gameCount * 2, gameCount + 25)
   const games = await loadGamesPage(clubId, sampleSize)
-  const filtered = games.filter((game) => (!seasonNumber || (game.seasonNumber ?? 1) === seasonNumber)
-    && (clubId !== 'KEN' || game.datetime.toMillis() >= Date.parse('2026-04-25T04:00:00.000Z')))
+  const filtered = games.filter((game) => !seasonNumber || (game.seasonNumber ?? 1) === seasonNumber)
   return filtered.slice(-gameCount)
 }
 
