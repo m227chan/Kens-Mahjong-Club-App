@@ -3,7 +3,8 @@
 import { Timestamp } from '@/lib/timestamp'
 import { auth } from '@/lib/firebase'
 import { getSupabaseBrowserClient } from '@/lib/supabase'
-import { assignSeats, computeGlobalRanks } from '@/lib/stats-engine'
+import { createInitialSessionLayout, normalizeSessionLayout } from '@/lib/session-layout'
+import { computeGlobalRanks } from '@/lib/stats-engine'
 import type { AppConfigDoc, ClubDoc, ClubMembershipDoc, EloEventDoc, GameDoc, JoinRequestDoc, PlayerDoc, PlayerStatsDoc, SeasonDoc, SessionDoc, TableArrangementDoc } from '@/lib/types'
 
 type UserLike = { uid: string; email: string | null; displayName: string | null; photoURL?: string | null; getIdToken?: () => Promise<string> }
@@ -49,9 +50,12 @@ function mapStats(row: Row): PlayerStatsDoc & { id: string } {
     daysAttended: Number(row.days_attended), lastPlayedAt: row.last_played_at as string | null, updatedAt: ts(row.updated_at) }
 }
 function mapSession(row: Row): SessionDoc {
+  const participants = (row.participants as string[]) ?? []
+  const tableCount = Number(row.table_count)
+  const rawTables = (row.tables as Record<string, string[]>) ?? {}
+  const { tables, sideline } = normalizeSessionLayout(participants, tableCount, rawTables, (row.sideline as string[]) ?? [])
   return { id: String(row.id), createdAt: ts(row.created_at), createdBy: String(row.created_by), seasonNumber: Number(row.season_number),
-    isActive: Boolean(row.is_active), tableCount: Number(row.table_count), participants: (row.participants as string[]) ?? [],
-    tables: (row.tables as Record<string, string[]>) ?? {}, sideline: (row.sideline as string[]) ?? [], closedAt: nullableTs(row.closed_at) }
+    isActive: Boolean(row.is_active), tableCount, participants, tables, sideline, closedAt: nullableTs(row.closed_at) }
 }
 function mapGame(row: Row): GameDoc {
   const rawEntries = (row.game_entries ?? row.entries ?? []) as Array<Row>
@@ -153,7 +157,15 @@ export function subscribeActiveSession(clubId: string, seasonNumber: number, cal
   const load = async () => { const { data, error } = await client().from('sessions').select('*').eq('club_id', clubId).eq('season_number', seasonNumber).eq('is_active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(); if (error) throw error; return data ? mapSession(data) : null }
   return realtime(`session:${clubId}`, 'sessions', `club_id=eq.${clubId}`, load, callback, onError)
 }
-export async function createSession(clubId: string, input: { createdBy: string; participants: string[]; tableCount: number; seasonNumber: number }) { const arrangement = assignSeats(input.participants, input.tableCount); const { data, error } = await client().from('sessions').insert({ club_id: clubId, created_by: input.createdBy, season_number: input.seasonNumber, table_count: input.tableCount, participants: input.participants, tables: arrangement.tables, sideline: arrangement.sideline }).select('id').single(); if (error) throw error; return String(data.id) }
+export async function createSession(clubId: string, input: { createdBy: string; participants: string[]; tableCount: number; seasonNumber: number; tables?: Record<string, string[]>; sideline?: string[] }) {
+  const initialLayout = createInitialSessionLayout(input.participants, input.tableCount)
+  const tables = input.tables ?? initialLayout.tables
+  const assigned = new Set(Object.values(tables).flat())
+  const sideline = input.sideline ?? initialLayout.sideline.filter((playerId) => !assigned.has(playerId))
+  const { data, error } = await client().from('sessions').insert({ club_id: clubId, created_by: input.createdBy, season_number: input.seasonNumber, table_count: input.tableCount, participants: input.participants, tables, sideline }).select('id').single()
+  if (error) throw error
+  return String(data.id)
+}
 export async function updateSession(clubId: string, sessionId: string, values: Partial<Omit<SessionDoc, 'id' | 'createdAt' | 'createdBy'>>) { const mapped: Row = {}; if (values.seasonNumber != null) mapped.season_number = values.seasonNumber; if (values.isActive != null) mapped.is_active = values.isActive; if (values.tableCount != null) mapped.table_count = values.tableCount; if (values.participants) mapped.participants = values.participants; if (values.tables) mapped.tables = values.tables; if (values.sideline) mapped.sideline = values.sideline; if (values.closedAt !== undefined) mapped.closed_at = values.closedAt?.toDate().toISOString() ?? null; const { error } = await client().from('sessions').update(mapped).eq('id', sessionId).eq('club_id', clubId); if (error) throw error }
 export const closeSession = (clubId: string, sessionId: string) => updateSession(clubId, sessionId, { isActive: false, closedAt: Timestamp.now() })
 export async function getConfig(clubId: string) { const { data, error } = await client().from('app_configs').select('*').eq('club_id', clubId).maybeSingle(); if (error) throw error; return data ? { titleBands: data.title_bands, eloBaseK: data.elo_base_k, eloVeteranGamesThreshold: data.elo_veteran_games_threshold, eloStartingRating: data.elo_starting_rating, eloNewPlayerK: data.elo_new_player_k, eloIntermediateK: data.elo_intermediate_k, eloNewPlayerGamesThreshold: data.elo_new_player_games_threshold } as AppConfigDoc : {} as AppConfigDoc }

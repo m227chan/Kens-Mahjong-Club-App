@@ -293,7 +293,9 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           createdBy: user?.uid ?? 'anonymous',
           participants: setupParticipants,
           tableCount: setupTableCount,
-          seasonNumber
+          seasonNumber,
+          tables: nextTables,
+          sideline
         })
         setSession({ ...nextSession, id: sessionId })
       }
