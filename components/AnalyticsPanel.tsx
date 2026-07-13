@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { subscribePlayerStats, subscribePlayers } from '@/lib/firestore'
+import { subscribePlayerStats, subscribePlayers } from '@/lib/data'
 import type { PlayerDoc, PlayerStatsDoc } from '@/lib/types'
 
 function MiniBarChart({ data, color = '#18694f' }: { data: Array<{ id: string; label: string; value: number }>; color?: string }) {

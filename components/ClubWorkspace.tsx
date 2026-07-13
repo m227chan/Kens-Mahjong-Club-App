@@ -8,12 +8,14 @@ import GameLogsModal from '@/components/GameLogsModal'
 import { LeaderboardPanel } from '@/components/Leaderboard'
 import SessionManager from '@/components/SessionManager'
 import { useAuth } from '@/contexts/AuthContext'
+import { useSound } from '@/contexts/SoundContext'
 import {
   createPlayer,
   deleteClub,
   ensureConfig,
   ensureSeasons,
   removePlayer,
+  rebuildClubStats,
   promoteManagerByEmail,
   resolveJoinRequest,
   setActiveSeason,
@@ -25,7 +27,7 @@ import {
   subscribeJoinRequests,
   subscribePlayers,
   subscribeSeasons
-} from '@/lib/firestore'
+} from '@/lib/data'
 import type { ClubDoc, ClubMembershipDoc, JoinRequestDoc, PlayerDoc, SeasonDoc } from '@/lib/types'
 import { PLAYER_EMOJIS, randomUnusedPlayerEmoji } from '@/lib/players'
 
@@ -70,6 +72,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [promotingManager, setPromotingManager] = useState(false)
 
   const isManager = membership.role === 'manager'
+  const { play } = useSound()
   const usedIconKeys = new Set(players.map((player) => player.icon.trim().toLocaleLowerCase()))
   const latestSeasonNumber = seasons.length ? seasons[seasons.length - 1].seasonNumber : club?.activeSeasonNumber ?? 1
   const activeSeasonNumber = club?.activeSeasonNumber ?? latestSeasonNumber
@@ -93,21 +96,19 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
 
   useEffect(() => {
     if (clubId !== 'KEN' || !isManager || !user) return
-    void user.getIdToken().then((token) => fetch('/api/games/mutate', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-      body: JSON.stringify({ clubId, action: 'rebuild' })
-    })).catch(() => undefined)
+    void rebuildClubStats(clubId).catch(() => undefined)
   }, [clubId, isManager, user])
 
   const addPlayer = async () => {
     setPlayerMessage(null)
     if (!playerName.trim()) {
+      play('error')
       setPlayerMessage('Enter a player name.')
       return
     }
 
     if (usedIconKeys.has(playerIcon.trim().toLocaleLowerCase())) {
+      play('error')
       setPlayerMessage('That icon or initial is already in use in this club.')
       return
     }
@@ -123,7 +124,9 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
       setIconPickerOpen(false)
       setLinkToMe(false)
       setPlayerMessage('Player added.')
+      play('confirmation')
     } catch (error) {
+      play('error')
       setPlayerMessage(error instanceof Error ? error.message : 'Unable to add player.')
     }
   }
@@ -187,7 +190,9 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         ? result.email + ' is now a club manager.'
         : 'A pending manager grant was saved for ' + result.email + '. It will apply when they first sign in.')
       setManagerEmail('')
+      play('achievement')
     } catch (error) {
+      play('error')
       setManagerMessage(error instanceof Error ? error.message : 'Unable to promote that manager.')
     } finally {
       setPromotingManager(false)
@@ -436,12 +441,12 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           </section>
 
           <div className={mobileView === 'standings' ? 'block md:block' : 'hidden md:block'}>
-            <LeaderboardPanel clubId={clubId} seasonNumber={activeSeasonNumber} />
+            <LeaderboardPanel clubId={clubId} seasonNumber={activeSeasonNumber} players={players} />
           </div>
         </div>
 
         <aside className={mobileView === 'session' ? 'order-first block md:block xl:order-none xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto' : 'order-first hidden md:block xl:order-none xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto'}>
-          <SessionManager clubId={clubId} seasonNumber={activeSeasonNumber} />
+          <SessionManager clubId={clubId} seasonNumber={activeSeasonNumber} players={players} />
         </aside>
       </div>
 

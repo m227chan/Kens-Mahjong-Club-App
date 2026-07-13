@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         if (nextUser) {
           const tokenResult = await nextUser.getIdTokenResult()
-          const enrollmentKey = `mahjong:universal-enrollment:v2:${nextUser.uid}`
+          const enrollmentKey = `mahjong:universal-enrollment:v4:supabase:${nextUser.uid}`
           let alreadyEnrolled = false
           try { alreadyEnrolled = window.localStorage.getItem(enrollmentKey) === 'complete' } catch { /* private storage mode */ }
           if (!alreadyEnrolled) {
@@ -68,6 +68,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               headers: { Authorization: 'Bearer ' + token }
             })
             if (enrollment.ok) {
+              const result = await enrollment.json() as { tokenRefreshRequired?: boolean }
+              if (result.tokenRefreshRequired) await nextUser.getIdToken(true)
               try { window.localStorage.setItem(enrollmentKey, 'complete') } catch { /* best-effort cache */ }
             } else {
               console.warn('Universal club enrollment will retry on the next sign-in.')

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { loadAnalyticsEloEvents, loadAnalyticsGames, subscribeActiveSession, subscribePlayerStats, subscribePlayers } from '@/lib/firestore'
+import { loadAnalyticsEloEvents, loadAnalyticsGames, subscribeActiveSession, subscribePlayerStats, subscribePlayers } from '@/lib/data'
 import type { EloEventDoc, GameDoc, PlayerDoc, PlayerStatsDoc, SessionDoc } from '@/lib/types'
 import AnalyticsPanel from '@/components/AnalyticsPanel'
 

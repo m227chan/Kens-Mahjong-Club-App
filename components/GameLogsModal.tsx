@@ -1,17 +1,17 @@
 'use client'
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
-import { Timestamp } from 'firebase/firestore'
+import { Timestamp } from '@/lib/timestamp'
 import {
   createPlayer,
   invalidateClubHistoryCache,
   importGames,
   loadAllGames,
   loadGamesPage,
+  mutateGameRecord,
   subscribeActiveSession,
   subscribePlayers
-} from '@/lib/firestore'
-import { auth } from '@/lib/firebase'
+} from '@/lib/data'
 import type { GameDoc, PlayerDoc, SeasonDoc, SessionDoc } from '@/lib/types'
 import { randomUnusedPlayerEmoji } from '@/lib/players'
 
@@ -247,17 +247,9 @@ export default function GameLogsModal({
     setSavingGame(true)
     setImportMessage(null)
     try {
-      const token = await auth.currentUser?.getIdToken()
-      if (!token) throw new Error('Sign in again before modifying a game.')
-      const response = await fetch('/api/games/mutate', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-        body: JSON.stringify({ clubId, gameId: selectedGame.id, action, ...(action === 'update' ? {
-          game: { datetime: new Date(draftDate).toISOString(), seasonNumber: draftSeason, entries, notes: draftNotes }
-        } : {}) })
-      })
-      const result = await response.json() as { error?: string }
-      if (!response.ok) throw new Error(result.error ?? 'Unable to modify game.')
+      await mutateGameRecord({ clubId, gameId: selectedGame.id, action, ...(action === 'update' ? {
+        game: { datetime: new Date(draftDate).toISOString(), seasonNumber: draftSeason, entries, notes: draftNotes }
+      } : {}) })
       invalidateClubHistoryCache(clubId)
       if (action === 'delete') {
         setGames((current) => current.filter((game) => game.id !== selectedGame.id))

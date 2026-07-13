@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuth } from '@/contexts/AuthContext'
+import { useSound } from '@/contexts/SoundContext'
 import {
   closeSession,
   createGame,
@@ -10,7 +11,7 @@ import {
   subscribeActiveSession,
   subscribePlayers,
   updateSession
-} from '@/lib/firestore'
+} from '@/lib/data'
 import type { PlayerDoc } from '@/lib/types'
 
 const FAN_POINTS: Record<number, number> = {
@@ -62,9 +63,11 @@ const initialWinState: WinState = {
   fan: null
 }
 
-export default function SessionManager({ clubId, seasonNumber }: { clubId: string; seasonNumber: number }) {
+export default function SessionManager({ clubId, seasonNumber, players: suppliedPlayers }: { clubId: string; seasonNumber: number; players?: PlayerDoc[] }) {
   const { user, loading, isAdmin } = useAuth()
-  const [players, setPlayers] = useState<PlayerDoc[]>([])
+  const { play } = useSound()
+  const [subscribedPlayers, setSubscribedPlayers] = useState<PlayerDoc[]>([])
+  const players = suppliedPlayers ?? subscribedPlayers
   const [session, setSession] = useState<SessionState>(initialSession)
   const [page, setPage] = useState<'loading' | 'setup' | 'session'>('loading')
   const [setupParticipants, setSetupParticipants] = useState<string[]>([])
@@ -91,7 +94,7 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
   const dragSourceRef = useRef<string | null>(null)
 
   useEffect(() => {
-    const playerUnsub = subscribePlayers(clubId, (nextPlayers) => setPlayers(nextPlayers))
+    const playerUnsub = suppliedPlayers ? undefined : subscribePlayers(clubId, setSubscribedPlayers)
     const sessionUnsub = subscribeActiveSession(
       clubId,
       seasonNumber,
@@ -126,10 +129,10 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
     )
 
     return () => {
-      playerUnsub()
+      playerUnsub?.()
       sessionUnsub()
     }
-  }, [clubId, seasonNumber])
+  }, [clubId, seasonNumber, suppliedPlayers])
 
   useEffect(() => {
     if (!toast) return
@@ -358,8 +361,9 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
 
   const submitWin = async (tableId: string) => {
     const scores = calcScores()
-    if (!scores) return
+    if (!scores) { play('error'); return }
     if (!user) {
+      play('error')
       showToast('Sign in to record games.')
       return
     }
@@ -376,10 +380,12 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
         fan: winState.winType === 'draw' ? null : winState.fan,
         notes: null
       })
+      play('win')
       setFlash({ scores, winner: winState.winner })
       closeAllWinPanels()
       setWinState(initialWinState)
     } catch (error) {
+      play('error')
       showToast(error instanceof Error ? error.message : 'Unable to save game.')
     } finally {
       setSavingGameTable(null)
@@ -388,10 +394,11 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
 
   const addDraw = async (tableId: string) => {
     const playersOnTable = session.tables[tableId] || []
-    if (playersOnTable.length !== 4) return
+    if (playersOnTable.length !== 4) { play('error'); return }
 
     const scores = Object.fromEntries(playersOnTable.map((playerId) => [playerId, 0])) as Record<string, number>
     if (!user) {
+      play('error')
       showToast('Sign in to record games.')
       return
     }
@@ -408,9 +415,11 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
         fan: null,
         notes: null
       })
+      play('draw')
       setFlash({ scores, winner: null })
       showToast('Draw saved.')
     } catch (error) {
+      play('error')
       showToast(error instanceof Error ? error.message : 'Unable to save draw.')
     } finally {
       setSavingGameTable(null)
@@ -493,6 +502,7 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
     if (!pickerTableId) return
     const playersOnTable = session.tables[pickerTableId] || []
     if (playersOnTable.length >= 4) {
+      play('error')
       showToast('Table is full.')
       return
     }
@@ -501,6 +511,7 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
     const nextTables = { ...session.tables, [pickerTableId]: [...playersOnTable, playerId] }
     const nextSideline = session.sideline.filter((id) => id !== playerId)
     await persistSession({ ...session, tables: nextTables, sideline: nextSideline })
+    play('tile')
 
     if (nextTables[pickerTableId].length >= 4) {
       closePicker()
@@ -539,12 +550,14 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
       const nextSidelineWithSource = [...nextSideline, sourcePlayer]
       nextTables[sourceTable] = [...nextTables[sourceTable], targetPlayerId]
       await persistSession({ ...session, tables: nextTables, sideline: nextSidelineWithSource })
+      play('tile')
       closeSwapPicker()
       return
     }
 
     nextTables[sourceTable] = [...nextTables[sourceTable], targetPlayerId]
     await persistSession({ ...session, tables: nextTables, sideline: session.sideline })
+    play('tile')
     closeSwapPicker()
   }
 
@@ -788,6 +801,7 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
         if (playerIdx !== -1) nextTables[tableId][playerIdx] = targetPlayerId
         if (sourceIdx !== -1) nextTables[tableId][sourceIdx] = playerId
         await persistSession({ ...session, tables: nextTables, sideline: nextSideline })
+        play('tile')
         return
       }
 
@@ -800,6 +814,7 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
       }
     } else {
       if (targetPlayers.length >= 4) {
+        play('error')
         showToast('Table is full (4/4)')
         return
       }
@@ -812,6 +827,7 @@ export default function SessionManager({ clubId, seasonNumber }: { clubId: strin
     }
 
     await persistSession({ ...session, tables: nextTables, sideline: nextSideline })
+    play('tile')
   }
 
   const pickerAvailable = useMemo(() => {

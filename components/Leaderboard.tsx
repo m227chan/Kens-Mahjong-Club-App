@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { subscribePlayerStats, subscribePlayers } from '@/lib/firestore'
+import { subscribePlayerStats, subscribePlayers } from '@/lib/data'
 import type { PlayerDoc, PlayerStatsDoc } from '@/lib/types'
 import { titleForStanding } from '@/lib/players'
 
@@ -15,12 +15,13 @@ function formatWinRate(wins: number, games: number) {
   return `${Math.round((wins / games) * 100)}%`
 }
 
-export function LeaderboardPanel({ clubId, seasonNumber, compact = false }: { clubId: string; seasonNumber?: number; compact?: boolean }) {
-  const [players, setPlayers] = useState<PlayerDoc[]>([])
+export function LeaderboardPanel({ clubId, seasonNumber, compact = false, players: suppliedPlayers }: { clubId: string; seasonNumber?: number; compact?: boolean; players?: PlayerDoc[] }) {
+  const [subscribedPlayers, setSubscribedPlayers] = useState<PlayerDoc[]>([])
   const [stats, setStats] = useState<PlayerStatsDoc[]>([])
   const [mobileExpanded, setMobileExpanded] = useState(false)
+  const players = suppliedPlayers ?? subscribedPlayers
 
-  useEffect(() => subscribePlayers(clubId, (nextPlayers) => setPlayers(nextPlayers)), [clubId])
+  useEffect(() => suppliedPlayers ? undefined : subscribePlayers(clubId, setSubscribedPlayers), [clubId, suppliedPlayers])
   useEffect(() => subscribePlayerStats(clubId, (nextStats) => setStats(nextStats), seasonNumber), [clubId, seasonNumber])
 
   const rows = useMemo(() => {

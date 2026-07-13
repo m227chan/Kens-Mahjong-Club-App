@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import ClubWorkspace from '@/components/ClubWorkspace'
 import { useAuth } from '@/contexts/AuthContext'
-import { subscribeUserClubs } from '@/lib/firestore'
+import { subscribeUserClubs } from '@/lib/data'
 import type { ClubMembershipDoc } from '@/lib/types'
 
 export default function ClubPage() {

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
+import { useSound } from '@/contexts/SoundContext'
 
 const tiles = [
   ['中',7,14,64,.2,.82],['發',25,7,48,1.4,1.08],['萬',45,17,58,2.6,.91],
@@ -12,6 +13,7 @@ const tiles = [
 ] as const
 
 function FloatingTiles() {
+  const { play } = useSound()
   const field = useRef<HTMLDivElement>(null)
   const nodes = useRef<Array<HTMLDivElement | null>>([])
 
@@ -21,7 +23,7 @@ function FloatingTiles() {
     let bounds = field.current.getBoundingClientRect()
     let frame = 0
     const pointer = { x: -1000, y: -1000, active: false }
-    const motion = tiles.map(() => ({ x: 0, y: 0, vx: 0, vy: 0 }))
+    const motion = tiles.map(() => ({ x: 0, y: 0, vx: 0, vy: 0, lastClack: 0 }))
     const resize = () => { if (field.current) bounds = field.current.getBoundingClientRect() }
     const move = (event: PointerEvent) => {
       pointer.x = event.clientX - bounds.left
@@ -44,6 +46,10 @@ function FloatingTiles() {
           const force = (1 - distance / 135) * 1.7
           state.vx += dx / distance * force
           state.vy += dy / distance * force
+          if (force > 0.8 && performance.now() - state.lastClack > 750) {
+            state.lastClack = performance.now()
+            play('tile')
+          }
         }
 
         state.vx = (-state.x * 0.005 + state.vx) * 0.93
@@ -68,7 +74,7 @@ function FloatingTiles() {
       removeEventListener('pointercancel', leave)
       document.removeEventListener('mouseleave', leave)
     }
-  }, [])
+  }, [play])
 
   return (
     <div ref={field} className="login-tile-field" aria-hidden="true">
@@ -107,11 +113,13 @@ function FloatingTiles() {
 export default function LoginPage(){
   const router=useRouter()
   const {user,loading,signingIn,authError,signInWithGoogle}=useAuth()
+  const {play,unlock}=useSound()
   const [localError,setLocalError]=useState<string|null>(null)
   useEffect(()=>{if(!loading&&user)router.replace('/')},[loading,router,user])
   const handleSignIn=async()=>{
     setLocalError(null)
-    try{await signInWithGoogle()}catch(error){setLocalError(error instanceof Error?error.message:'Unable to sign in with Google. Please try again.')}
+    unlock()
+    try{await signInWithGoogle();play('confirmation')}catch(error){play('error');setLocalError(error instanceof Error?error.message:'Unable to sign in with Google. Please try again.')}
   }
   return <main className="login-welcome">
     <FloatingTiles/>

@@ -1,4 +1,4 @@
-import type { Timestamp } from 'firebase/firestore'
+import type { Timestamp } from '@/lib/timestamp'
 
 export interface ClubDoc {
   id: string
@@ -101,6 +101,7 @@ export interface PlayerStatsDoc {
   worstSingleGame: number
   eloRating: number
   eloPeak: number
+  eloGamesPlayed?: number
   eloRank: number
   pointsRank: number
   last5EloDelta: number

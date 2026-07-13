@@ -13,7 +13,7 @@ import {
   subscribePlayerStats,
   subscribePlayers,
   subscribeUserClubs
-} from '@/lib/firestore'
+} from '@/lib/data'
 import type { ClubMembershipDoc, PlayerDoc, PlayerStatsDoc } from '@/lib/types'
 
 function CountUp({ value, suffix = '' }: { value: number; suffix?: string }) {
