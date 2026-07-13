@@ -212,7 +212,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
   }
 
   const selectTableCount = (value: number) => {
-    const nextCount = value < 1 ? 1 : value
+    const nextCount = Math.min(99, Math.max(1, Math.floor(value)))
     setSetupTableCount(nextCount)
   }
 
@@ -1018,6 +1018,36 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           background: #ebf4ff;
         }
         .table-count-btn span { display: block; font-size: 10px; font-weight: 600; color: var(--gray); margin-top: 2px; }
+        .desktop-table-count { display: flex; align-items: center; gap: 10px; }
+        .mobile-table-stepper { display: none; }
+        .table-stepper-button {
+          width: 46px;
+          min-height: 46px;
+          border: 1px solid rgb(var(--line));
+          border-radius: 3px;
+          background: rgb(var(--surface-2));
+          color: rgb(var(--ink));
+          font-size: 24px;
+          font-weight: 800;
+          line-height: 1;
+          cursor: pointer;
+          touch-action: manipulation;
+        }
+        .table-stepper-button:active:not(:disabled) { transform: translateY(1px); background: rgb(var(--bamboo)/.14); }
+        .table-stepper-button:disabled { cursor: not-allowed; opacity: .35; }
+        .table-stepper-value {
+          min-width: 74px;
+          min-height: 46px;
+          display: grid;
+          place-items: center;
+          border: 1px solid rgb(var(--bamboo));
+          border-radius: 3px;
+          background: rgb(var(--bamboo)/.08);
+          color: rgb(var(--ink));
+          font-size: 22px;
+          font-weight: 800;
+          font-variant-numeric: tabular-nums;
+        }
 
         .player-grid {
           display: grid;
@@ -1596,6 +1626,8 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         html.dark .session-manager .header,html.dark .session-manager .table-name,html.dark .session-manager .chip-name,html.dark .session-manager .section-label,html.dark .session-manager .setup-card h3 { color:rgb(var(--ink))!important; }
         @media(max-width:640px){
           .session-manager #sessionPage{height:calc(100dvh - 112px)}.session-manager .tables-scroll{padding:10px}.session-manager .sideline-section{margin:10px 10px 0}
+          .desktop-table-count { display:none; }
+          .mobile-table-stepper { display:flex; align-items:center; gap:10px; }
           .session-result-dialog { display:block!important; position:fixed!important; left:50%!important; top:50%!important; transform:translate(-50%,-50%)!important; width:min(420px,calc(100vw - 24px))!important; max-height:calc(100dvh - 24px)!important; overflow-y:auto!important; z-index:12000!important; padding:16px!important; border:1px solid rgb(var(--line))!important; border-radius:6px!important; background:rgb(var(--surface))!important; color:rgb(var(--ink))!important; box-shadow:0 0 0 100vmax rgb(0 0 0/.68),0 20px 60px rgb(0 0 0/.35)!important; overscroll-behavior:contain; }
         }
       `}</style>
@@ -1649,16 +1681,41 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
       <div id="setupPage" className={`page ${page === 'setup' ? 'active' : ''}`}>
         <div className="setup-card">
           <h3>📋 Number of Tables</h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="desktop-table-count">
             <input
               type="number"
               min={1}
               max={99}
               value={setupTableCount}
               onChange={(event) => selectTableCount(Number(event.target.value) || 1)}
+              onFocus={(event) => event.currentTarget.select()}
               style={{ width: 70, padding: '8px 10px', border: '2px solid #e2e8f0', borderRadius: 8, fontSize: 18, fontWeight: 700, textAlign: 'center' }}
             />
             <span style={{ fontSize: 13, color: '#718096', fontWeight: 600 }}>tables</span>
+          </div>
+          <div className="mobile-table-stepper" role="group" aria-label="Number of tables">
+            <button
+              type="button"
+              className="table-stepper-button"
+              aria-label="Decrease number of tables"
+              disabled={setupTableCount <= 1}
+              onClick={() => selectTableCount(setupTableCount - 1)}
+            >
+              ‹
+            </button>
+            <output className="table-stepper-value" aria-live="polite" aria-label={`${setupTableCount} tables`}>
+              {setupTableCount}
+            </output>
+            <button
+              type="button"
+              className="table-stepper-button"
+              aria-label="Increase number of tables"
+              disabled={setupTableCount >= 99}
+              onClick={() => selectTableCount(setupTableCount + 1)}
+            >
+              ›
+            </button>
+            <span style={{ fontSize: 13, color: 'rgb(var(--muted))', fontWeight: 700 }}>tables</span>
           </div>
         </div>
 

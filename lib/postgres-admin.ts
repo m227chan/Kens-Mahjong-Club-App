@@ -3,9 +3,16 @@ import { Pool, type PoolClient } from 'pg'
 
 let pool: Pool | undefined
 
+function cleanEnvironmentValue(value: string | undefined) {
+  const trimmed = value?.trim()
+  if (!trimmed) return ''
+  const wrapped = (trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  return wrapped ? trimmed.slice(1, -1).trim() : trimmed
+}
+
 function getPool() {
   if (pool) return pool
-  const connectionString = process.env.SUPABASE_DATABASE_URL
+  const connectionString = cleanEnvironmentValue(process.env.SUPABASE_DATABASE_URL)
   if (!connectionString) throw new Error('SUPABASE_DATABASE_URL is not configured.')
   pool = new Pool({ connectionString, max: 5, ssl: { rejectUnauthorized: false } })
   return pool
