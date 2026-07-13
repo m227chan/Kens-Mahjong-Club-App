@@ -1,28 +1,57 @@
-# Ken's Mahjong Club Score Tracker
+# Mahjong Club Score Tracker
 
-A responsive Mahjong club dashboard for managing rosters, live sessions, score records, standings, ELO ratings, analytics, seasons, and club membership.
+A responsive web application for organizing Mahjong clubs, running live sessions, recording game results, and following player performance over time.
 
-## Architecture
+## Features
 
-- Next.js, React, TypeScript, and Tailwind CSS
-- Supabase PostgreSQL, Row Level Security, and Realtime for all application data
-- Firebase Authentication for Google sign-in only
-- Server-side Firebase Admin token verification
+- Create and manage multiple clubs and seasons
+- Maintain player rosters with customizable emoji avatars
+- Arrange tables and manage players during live sessions
+- Record self-draws, discard wins, draws, and point totals
+- Review and correct individual game records
+- Track standings, win rates, cumulative scores, and ELO ratings
+- Explore player and club analytics
+- Import and export game data as CSV
+- Use light and dark themes across desktop and mobile layouts
+- Manage memberships and manager permissions
 
-The data layer is Supabase-only. See [docs/SUPABASE.md](docs/SUPABASE.md).
+## Technology
+
+- Next.js and React
+- TypeScript
+- Tailwind CSS
+- Supabase PostgreSQL, Row Level Security, and Realtime
+- Firebase Authentication for Google sign-in
+- Firebase Admin for server-side identity verification
+
+Application data is stored in Supabase. Firebase is used only for authentication.
 
 ## Local development
 
-1. Copy `.env.example` to `.env.local` and fill in the Firebase Auth and Supabase values.
-2. Apply database migrations with `npm run supabase:schema`.
-3. Install and run:
+Requirements:
+
+- Node.js 20.19 or newer
+- A Supabase project
+- A Firebase project with Google Authentication enabled
+
+Copy `.env.example` to `.env.local` and provide the required environment variables. Never commit `.env.local`, database credentials, service-account credentials, or production data.
+
+Install dependencies and apply the database schema:
 
 ```bash
 npm install
+npm run supabase:schema
+```
+
+Start the development server:
+
+```bash
 npm run dev
 ```
 
-## Verification
+Open [http://localhost:3000](http://localhost:3000).
+
+## Quality checks
 
 ```bash
 npm test -- --run
@@ -30,10 +59,18 @@ npm run lint
 npm run build
 ```
 
-## Data model
+## Database migrations
 
-Schema migrations live in `supabase/migrations`. The universal club's imported Season 2 data uses `stat_baselines` for authoritative spreadsheet totals and marks its source games as historical. New games are calculated on top of that baseline, preserving normal create, edit, delete, analytics, and ELO behavior without re-reading the source workbook.
+Versioned SQL migrations are stored in `supabase/migrations`. Apply pending migrations with:
+
+```bash
+npm run supabase:schema
+```
+
+Applied migration filenames are recorded by the schema runner so migrations are not repeated.
 
 ## Deployment
 
-Deploy the Next.js app to Vercel with the variables listed in `.env.example`. Apply new SQL migrations separately with `npm run supabase:schema`. Firebase deployment is not required for application data; its project is used only for Authentication.
+The application can be deployed to a Next.js-compatible hosting provider. Configure the variables documented in `.env.example`, apply database migrations separately, and create a new deployment whenever public environment variables change.
+
+Keep all server credentials server-only. Variables containing database connection strings or Firebase Admin credentials must never use the `NEXT_PUBLIC_` prefix.
