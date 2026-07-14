@@ -567,12 +567,12 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
     min-width:44px;
     padding:0!important;
     border:0!important;
-    background:transparent!important;
-    color:rgb(var(--ink))!important;
-    box-shadow:none!important;
+    background:rgb(var(--bamboo))!important;
+    color:#fff!important;
+    box-shadow:0 2px 0 rgb(var(--shadow)/.1)!important;
     font-size:1.35rem!important;
   }
-  .club-settings-action:hover,.club-settings-action:active{background:transparent!important}
+  .club-settings-action:hover,.club-settings-action:active{background:rgb(var(--bamboo-bright))!important}
   .club-settings-action:focus-visible{outline:2px solid rgb(var(--bamboo));outline-offset:2px}
   .mobile-manage-players{min-height:46px}
 }

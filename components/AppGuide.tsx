@@ -35,6 +35,7 @@ type TourStep = {
   body: string
   action: TourAction
   clickTarget?: string
+  intermediateTarget?: string
   instruction?: string
 }
 
@@ -47,7 +48,7 @@ const TOUR_STEPS: TourStep[] = [
   { selector: '[data-tour="club-header"]', title: 'The club workspace', body: 'This header identifies the current club and keeps its season, roster, analytics, game logs, share ID, and manager settings together.', action: 'next' },
   { selector: '[data-tour="season-selector"]', title: 'Seasons are chapters', body: 'Switch seasons to review a different chapter of standings and history. Starting a new season is a manager action in Settings; the tour will not change it.', action: 'next' },
   { selector: '[data-tour="session-manager"]', title: 'Run the live session here', body: 'Choose attendees and tables, seat players from the sideline, then record a winner or draw. Four players make a table ready. Ming will not start a session or record a game.', action: 'next' },
-  { selector: '[data-tour="roster-open"], [data-tour="roster-tab"]', clickTarget: 'roster-open', title: 'Open the real roster', body: 'The roster manages tracked players, account links, emojis, names, and manager access. On mobile, open the Roster tab first, then use Manage players.', action: 'responsive', instruction: 'On mobile, tap Roster and then Manage players. On desktop, click Roster.' },
+  { selector: '[data-tour="roster-open"], [data-tour="roster-tab"]', clickTarget: 'roster-open', intermediateTarget: 'roster-tab', title: 'Open the real roster', body: 'The roster manages tracked players, account links, emojis, names, and manager access. On mobile, open the Roster tab first, then use Manage players.', action: 'responsive', instruction: 'On mobile, tap Roster and then Manage players. On desktop, click Roster.' },
   { selector: '[data-tour="roster-modal"]', title: 'Roster and linked users', body: 'Members can link themselves to one available player. Managers also see player and manager controls. Nothing is changed unless you deliberately use one of those controls.', action: 'next' },
   { selector: '[data-tour="roster-close"]', title: 'Return to the workspace', body: 'Close the real roster to continue.', action: 'click', instruction: 'Click Close.' },
   { selector: '[data-tour="leaderboard"], [data-tour="standings-tab"]', clickTarget: 'standings-tab', title: 'Standings update from games', body: 'Points, ELO, activity, and results are recalculated for the selected season. On mobile, open the Standings tab to reveal the same leaderboard.', action: 'responsive', instruction: 'On mobile, click Standings. On desktop, choose Next.' },
@@ -194,11 +195,17 @@ export default function AppGuide() {
   const targetRequiresClick = (() => {
     if (!step || !targetRef.current) return false
     if (step.action === 'click') return true
+    return step.action === 'responsive' && [step.clickTarget, step.intermediateTarget].includes(targetRef.current.dataset.tour)
+  })()
+
+  const targetAdvancesOnClick = (() => {
+    if (!step || !targetRef.current) return false
+    if (step.action === 'click') return true
     return step.action === 'responsive' && targetRef.current.dataset.tour === step.clickTarget
   })()
 
   useEffect(() => {
-    if (!tourOpen || !targetRequiresClick || !step) return
+    if (!tourOpen || !targetAdvancesOnClick || !step) return
     const handleClick = (event: MouseEvent) => {
       const target = targetRef.current
       if (!target || !(event.target instanceof Node) || !target.contains(event.target)) return
@@ -206,7 +213,7 @@ export default function AppGuide() {
     }
     document.addEventListener('click', handleClick, true)
     return () => document.removeEventListener('click', handleClick, true)
-  }, [advance, step, targetRequiresClick, tourOpen])
+  }, [advance, step, targetAdvancesOnClick, tourOpen])
 
   useEffect(() => {
     if (!tourOpen) return
@@ -257,7 +264,7 @@ export default function AppGuide() {
 
   if (!mounted) return <button type="button" className={helpButtonClass} aria-label="Open app guide">?</button>
 
-  const bubbleAbove = spotlight ? spotlight.top > window.innerHeight * 0.55 : false
+  const bubbleAbove = spotlight ? spotlight.top > window.innerHeight * (window.innerWidth < 768 ? 0.28 : 0.55) : false
 
   return (
     <>
