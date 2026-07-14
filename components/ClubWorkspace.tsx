@@ -362,7 +362,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             onClick={() => setSettingsOpen(true)}
             aria-label="Settings"
             title="Settings"
-            className="club-settings-action flex h-10 w-10 items-center justify-center rounded-lg bg-slate-950 text-lg font-bold text-white transition hover:bg-slate-800"
+            className="club-settings-action flex h-10 w-10 items-center justify-center rounded-lg bg-teal-600 text-lg font-bold text-white transition hover:bg-teal-500"
           >
             ⚙️
           </button>
@@ -447,11 +447,11 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         {([
           ['session', 'Session'],
           ['standings', 'Standings'],
-          ['roster', 'Players'],
+          ['roster', 'Roster'],
         ] as const).map(([view, label]) => (
           <button
             key={view}
-            data-tour={view === 'standings' ? 'standings-tab' : undefined}
+            data-tour={view === 'standings' ? 'standings-tab' : view === 'roster' ? 'roster-tab' : undefined}
             type="button"
             onClick={() => setMobileView(view)}
             aria-pressed={mobileView === view}
