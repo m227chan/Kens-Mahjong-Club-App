@@ -1,6 +1,7 @@
 import 'server-only'
 import { randomBytes } from 'node:crypto'
 import type { PoolClient } from 'pg'
+import { toDateOnly } from '@/lib/date-only'
 import { calculateRoundEloDeltas, computeGlobalRanks, type AppConfigLike } from '@/lib/stats-engine'
 import { withTransaction } from '@/lib/postgres-admin'
 
@@ -92,7 +93,7 @@ function baselineStats(row: Record<string, unknown>): Stats {
     gamesWon: Number(row.games_won), gamesLost: Number(row.games_lost), winLossRatio: Number(row.win_loss_ratio), bestSingleGame: row.best_single_game == null ? Number.NEGATIVE_INFINITY : Number(row.best_single_game),
     worstSingleGame: row.worst_single_game == null ? Number.POSITIVE_INFINITY : Number(row.worst_single_game), eloRating: Number(row.elo_rating), eloPeak: Number(row.elo_peak), eloGamesPlayed: Number(row.elo_games_played),
     eloRank: 0, pointsRank: 0, last5EloDelta: Number(row.last5_elo_delta), playoffSeedScore: row.playoff_seed_score == null ? null : Number(row.playoff_seed_score), recentEloDeltas: (row.recent_elo_deltas as number[]) ?? [],
-    daysAttended: Number(row.days_attended), lastPlayedAt: row.last_played_at ? String(row.last_played_at).slice(0, 10) : null }
+    daysAttended: Number(row.days_attended), lastPlayedAt: toDateOnly(row.last_played_at) }
 }
 
 async function rebuild(client: PoolClient, clubId: string) {
