@@ -462,6 +462,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
 
     const nextSession = { ...session, tables: nextTables, sideline: nextSideline }
     await persistSession(nextSession)
+    play('tile')
     showToast('All tables cleared.')
   }
 
@@ -473,6 +474,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
     })
     const nextTables = { ...session.tables, [tableId]: [] }
     await persistSession({ ...session, tables: nextTables, sideline: nextSideline })
+    play('tile')
     showToast('Table cleared.')
   }
 
@@ -480,6 +482,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
     const nextTables = { ...session.tables, [tableId]: (session.tables[tableId] || []).filter((id) => id !== playerId) }
     const nextSideline = session.sideline.includes(playerId) ? session.sideline : [...session.sideline, playerId]
     await persistSession({ ...session, tables: nextTables, sideline: nextSideline })
+    play('tile')
   }
 
   const toggleTable = (tableId: string) => {
@@ -854,7 +857,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
 
       return (
         <div key={tableId} className={`table-card${isValid ? ' valid' : ''}`} id={`table-${tableId}`}>
-          {isValid ? (
+          {playersOnTable.length > 0 ? (
             <button className="clear-table-btn" type="button" onClick={() => clearSingleTable(tableId)}>✕</button>
           ) : null}
           <div className="table-header">
@@ -1518,9 +1521,9 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           opacity: 0;
           transition: opacity 0.15s;
         }
-        .table-card.valid .player-chip .chip-remove-btn { display: flex; }
+        .player-chip .chip-remove-btn { display: flex; }
         .table-card.valid .player-chip .chip-win-btn { display: flex; }
-        .table-card.valid .player-chip:hover .chip-remove-btn { opacity: 1; }
+        .player-chip:hover .chip-remove-btn { opacity: 1; }
         .table-card.valid .player-chip:hover .chip-win-btn { opacity: 1; }
         .chip-remove-btn:hover { background: rgba(0,0,0,0.5) !important; }
 

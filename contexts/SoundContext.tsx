@@ -50,12 +50,34 @@ export function SoundProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
   const [enabled, setEnabled] = useState(true)
   const contextRef = useRef<AudioContext | null>(null)
-  const lastPlayedRef = useRef(0)
+  const resumeRef = useRef<Promise<void> | null>(null)
+
+  const ensureAudioReady = useCallback(async () => {
+    let context = contextRef.current
+    if (!context || context.state === 'closed') {
+      context = new AudioContext({ latencyHint: 'interactive' })
+      contextRef.current = context
+    }
+
+    if (context.state !== 'running') {
+      if (!resumeRef.current) {
+        resumeRef.current = context.resume().then(() => undefined).finally(() => {
+          resumeRef.current = null
+        })
+      }
+      try {
+        await resumeRef.current
+      } catch {
+        return null
+      }
+    }
+
+    return context.state === 'running' ? context : null
+  }, [])
 
   const unlock = useCallback(() => {
-    if (!contextRef.current) contextRef.current = new AudioContext()
-    if (contextRef.current.state === 'suspended') void contextRef.current.resume()
-  }, [])
+    void ensureAudioReady()
+  }, [ensureAudioReady])
 
   useEffect(() => {
     try {
@@ -79,8 +101,8 @@ export function SoundProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const prepare = () => unlock()
-    window.addEventListener('pointerdown', prepare, { once: true, passive: true })
-    window.addEventListener('keydown', prepare, { once: true })
+    window.addEventListener('pointerdown', prepare, { passive: true })
+    window.addEventListener('keydown', prepare)
     return () => {
       window.removeEventListener('pointerdown', prepare)
       window.removeEventListener('keydown', prepare)
@@ -89,26 +111,25 @@ export function SoundProvider({ children }: { children: React.ReactNode }) {
 
   const play = useCallback((cue: SoundCue) => {
     if (!enabled) return
-    unlock()
-    const context = contextRef.current
-    if (!context || context.state !== 'running') return
-    const nowMs = performance.now()
-    if (nowMs - lastPlayedRef.current < 90) return
-    lastPlayedRef.current = nowMs
-    const now = context.currentTime + 0.005
-    const output = context.createGain()
-    output.gain.value = 0.85
-    output.connect(context.destination)
+    void ensureAudioReady().then((context) => {
+      if (!context) return
+      const now = context.currentTime + 0.005
+      const output = context.createGain()
+      output.gain.value = 0.85
+      output.connect(context.destination)
 
-    if (cue === 'tile') clack(context, output, now, 0.18)
-    else if (cue === 'win') { clack(context, output, now, 0.12); tone(context, output, 523, now + 0.04, 0.22, 0.10); tone(context, output, 659, now + 0.13, 0.28, 0.09); tone(context, output, 784, now + 0.23, 0.38, 0.08) }
-    else if (cue === 'draw') { clack(context, output, now, 0.11); tone(context, output, 392, now + 0.035, 0.18, 0.055) }
-    else if (cue === 'achievement') { tone(context, output, 440, now, 0.2, 0.06); tone(context, output, 554, now + 0.1, 0.24, 0.065); tone(context, output, 659, now + 0.21, 0.32, 0.06) }
-    else if (cue === 'rank-up') { tone(context, output, 440, now, 0.18, 0.055); tone(context, output, 587, now + 0.1, 0.24, 0.06) }
-    else if (cue === 'rank-down' || cue === 'loss') { tone(context, output, 392, now, 0.18, 0.045, 'triangle'); tone(context, output, 330, now + 0.1, 0.22, 0.04, 'triangle') }
-    else if (cue === 'error') { tone(context, output, 220, now, 0.14, 0.045, 'triangle'); tone(context, output, 196, now + 0.08, 0.16, 0.035, 'triangle') }
-    else { tone(context, output, 494, now, 0.17, 0.05); tone(context, output, 622, now + 0.09, 0.22, 0.045) }
-  }, [enabled, unlock])
+      if (cue === 'tile') clack(context, output, now, 0.18)
+      else if (cue === 'win') { clack(context, output, now, 0.12); tone(context, output, 523, now + 0.04, 0.22, 0.10); tone(context, output, 659, now + 0.13, 0.28, 0.09); tone(context, output, 784, now + 0.23, 0.38, 0.08) }
+      else if (cue === 'draw') { clack(context, output, now, 0.11); tone(context, output, 392, now + 0.035, 0.18, 0.055) }
+      else if (cue === 'achievement') { tone(context, output, 440, now, 0.2, 0.06); tone(context, output, 554, now + 0.1, 0.24, 0.065); tone(context, output, 659, now + 0.21, 0.32, 0.06) }
+      else if (cue === 'rank-up') { tone(context, output, 440, now, 0.18, 0.055); tone(context, output, 587, now + 0.1, 0.24, 0.06) }
+      else if (cue === 'rank-down' || cue === 'loss') { tone(context, output, 392, now, 0.18, 0.045, 'triangle'); tone(context, output, 330, now + 0.1, 0.22, 0.04, 'triangle') }
+      else if (cue === 'error') { tone(context, output, 220, now, 0.14, 0.045, 'triangle'); tone(context, output, 196, now + 0.08, 0.16, 0.035, 'triangle') }
+      else { tone(context, output, 494, now, 0.17, 0.05); tone(context, output, 622, now + 0.09, 0.22, 0.045) }
+
+      window.setTimeout(() => output.disconnect(), 1200)
+    })
+  }, [enabled, ensureAudioReady])
 
   const toggle = useCallback(() => {
     unlock()

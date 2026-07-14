@@ -340,7 +340,7 @@ Shared client-facing types live in `lib/types.ts`:
 - “All” selection includes the complete currently filtered roster selection.
 - New sessions begin with every participant on the sideline and empty numbered tables.
 - Mobile-only decrement/increment controls make table count editing reliable without text-selection quirks.
-- Move players between sideline and tables, fill open seats, clear tables, swap players, and edit the session. The add-player dialog shows the table's selected players first and lets the user remove a selection without closing the dialog.
+- Move players between sideline and tables, fill open seats, clear tables, swap players, and edit the session. Occupied tables expose a clear-table control on hover, and every occupied seat exposes a remove-player control on hover, including incomplete tables; touch layouts keep these controls visible because hover is unavailable. The add-player dialog shows the table's selected players first and lets the user remove a selection without closing the dialog.
 - Search by player or table.
 - Table cards show capacity and readiness; four players marks a table ready.
 - Record self-draw wins, discard wins, or draws.
@@ -412,8 +412,8 @@ Rounding drift is assigned to the central band. Small clubs may have empty bands
 - Light/dark mode follows saved preference or initial OS preference.
 - Sound can be enabled or muted globally; preference is cached locally and stored in the user profile.
 - Web Audio cues cover tiles, wins, losses, draws, achievements, confirmations, rank changes, and errors.
-- Audio context is unlocked only after user interaction to comply with browser autoplay policies.
-- Repeated cues are throttled to prevent harsh overlap.
+- Audio context startup follows browser autoplay policy and is retried on later pointer or keyboard interactions so playback recovers after mobile browsers suspend audio.
+- Each requested cue waits for the shared audio context to resume and is then scheduled independently, so rapid valid cues are not silently discarded.
 - The login tile field moves continuously in normal motion mode and reacts to pointer/touch proximity.
 - Count-up, chart, entrance, celebration, and background animations respect reduced-motion preference.
 
