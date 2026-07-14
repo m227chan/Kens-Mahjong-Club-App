@@ -298,13 +298,13 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
 
   return (
     <main className="px-4 py-6">
-      <div className="club-workspace-header mb-5 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      <div data-tour="club-header" className="club-workspace-header mb-5 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Current club</p>
           <h1 className="mt-1 text-2xl font-black text-slate-950">{club?.name ?? membership.clubName}</h1>
         </div>
         <div className="club-action-bar flex flex-wrap gap-2">
-          <label className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
+          <label data-tour="season-selector" className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
             <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Season</span>
             <select
               value={activeSeasonNumber}
@@ -330,6 +330,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             {copied ? 'Copied' : `Club ID: ${clubId}`}
           </button>
           <button
+            data-tour="roster-open"
             type="button"
             onClick={() => {
               setPlayerMessage(null)
@@ -340,6 +341,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             Roster
           </button>
           <button
+            data-tour="analytics-open"
             type="button"
             onClick={() => setAnalyticsOpen(true)}
             className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-indigo-500"
@@ -347,6 +349,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             Analytics
           </button>
           <button
+            data-tour="logs-open"
             type="button"
             onClick={() => setGameLogsOpen(true)}
             className="rounded-lg bg-sky-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-sky-500"
@@ -354,6 +357,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             Game logs
           </button>
           <button
+            data-tour="settings-open"
             type="button"
             onClick={() => setSettingsOpen(true)}
             aria-label="Settings"
@@ -367,7 +371,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
 
       {settingsOpen ? (
         <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
-          <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white shadow-2xl">
+          <div data-tour="settings-modal" className="w-full max-w-lg rounded-lg border border-slate-200 bg-white shadow-2xl">
             <div className="border-b border-slate-200 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -376,6 +380,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                   <p className="mt-1 text-sm text-slate-500">Manage navigation and season controls for this club.</p>
                 </div>
                 <button
+                  data-tour="settings-close"
                   type="button"
                   onClick={() => setSettingsOpen(false)}
                   className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600"
@@ -446,6 +451,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         ] as const).map(([view, label]) => (
           <button
             key={view}
+            data-tour={view === 'standings' ? 'standings-tab' : undefined}
             type="button"
             onClick={() => setMobileView(view)}
             aria-pressed={mobileView === view}
@@ -503,6 +509,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
               <StatCard label="Club members" value={String(members.length)} tone="border-teal-200 bg-teal-50 text-teal-900" />
             </div>
             <button
+              data-tour="roster-open"
               type="button"
               onClick={() => {
                 setPlayerMessage(null)
@@ -526,14 +533,14 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
 
       {rosterOpen ? (
         <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
-          <div className="responsive-modal-panel flex max-h-[90vh] w-full max-w-5xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
+          <div data-tour="roster-modal" className="responsive-modal-panel flex max-h-[90vh] w-full max-w-5xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <div className="p-5 pb-0">
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-600">Club roster</p>
                 <h3 className="mt-2 text-xl font-black text-slate-950">Players and linked users</h3>
                 <p className="mt-1 text-sm text-slate-500">{players.length} tracked players in {club?.name ?? membership.clubName}</p>
               </div>
-              <button type="button" onClick={() => setRosterOpen(false)} className="mr-5 mt-5 rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">
+              <button data-tour="roster-close" type="button" onClick={() => setRosterOpen(false)} className="mr-5 mt-5 rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">
                 Close
               </button>
             </div>
@@ -699,14 +706,14 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
 
       {analyticsOpen ? (
         <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
-          <div className="responsive-modal-panel flex max-h-[92vh] w-full max-w-6xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
+          <div data-tour="analytics-modal" className="responsive-modal-panel flex max-h-[92vh] w-full max-w-6xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
             <div className="flex items-start justify-between gap-3 border-b border-slate-200 p-5">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">Analytics</p>
                 <h3 className="mt-2 text-xl font-black text-slate-950">{club?.name ?? membership.clubName} insights</h3>
                 <p className="mt-1 text-sm text-slate-500">Dashboard charts, ELO movement, and club analytics.</p>
               </div>
-              <button type="button" onClick={() => setAnalyticsOpen(false)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">
+              <button data-tour="analytics-close" type="button" onClick={() => setAnalyticsOpen(false)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">
                 Close
               </button>
             </div>

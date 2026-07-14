@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { adminAuth } from '@/lib/firebase-admin'
 import { withTransaction } from '@/lib/postgres-admin'
 import { mutateSupabaseGames } from '@/lib/server/supabase-game-management'
+import { CREATED_CLUB_LIMIT_MESSAGE, hasReachedCreatedClubLimit } from '@/lib/club-limits'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -37,8 +38,15 @@ export async function POST(request: NextRequest) {
         const member = await db.query('select 1 from club_members where club_id=$1 and firebase_uid=$2 and active', [club, caller.uid])
         if (!member.rowCount) throw new Error('Only an active club member can do that.')
       }
+      if (action === 'getCreatedClubCount') {
+        const count = await db.query('select count(distinct id)::integer as count from clubs where manager_uid=$1', [caller.uid])
+        return Number(count.rows[0]?.count ?? 0)
+      }
       if (action === 'createClub') {
         const name = String(body.name ?? '').trim(); if (!name) throw new Error('Enter a club name.')
+        await db.query('select pg_advisory_xact_lock(hashtext($1))', [`club-create:${caller.uid}`])
+        const createdCount = Number((await db.query('select count(distinct id)::integer as count from clubs where manager_uid=$1', [caller.uid])).rows[0]?.count ?? 0)
+        if (hasReachedCreatedClubLimit(createdCount)) throw new Error(CREATED_CLUB_LIMIT_MESSAGE)
         let id = clubId(); while ((await db.query('select 1 from clubs where id=$1', [id])).rowCount) id = clubId()
         await db.query('insert into clubs(id,name,manager_uid,manager_email,manager_display_name) values($1,$2,$3,$4,$5)', [id,name,caller.uid,caller.email ?? null,caller.name ?? null])
         await db.query("insert into club_members(club_id,firebase_uid,email,display_name,photo_url,role) values($1,$2,$3,$4,$5,'manager')", [id,caller.uid,caller.email ?? null,caller.name ?? null,caller.picture ?? null])

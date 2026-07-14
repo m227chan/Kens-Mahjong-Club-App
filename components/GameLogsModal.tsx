@@ -14,8 +14,7 @@ import {
 } from '@/lib/data'
 import type { GameDoc, PlayerDoc, SeasonDoc, SessionDoc } from '@/lib/types'
 import { randomUnusedPlayerEmoji } from '@/lib/players'
-
-type ViewMode = 'all' | 'session' | 'player'
+import { DEFAULT_GAME_LOG_AUDIENCE, DEFAULT_GAME_LOG_LAYOUT, filterGamesByAudience, type GameLogAudience, type GameLogLayout } from '@/lib/game-log-view'
 
 function csvEscape(value: string | number | null | undefined) {
   const text = value === null || value === undefined ? '' : String(value)
@@ -126,7 +125,8 @@ export default function GameLogsModal({
   const [games, setGames] = useState<GameDoc[]>([])
   const [session, setSession] = useState<SessionDoc | null>(null)
   const [seasonFilter, setSeasonFilter] = useState<number | 'all'>(currentSeason)
-  const [viewMode, setViewMode] = useState<ViewMode>('all')
+  const [viewMode, setViewMode] = useState<GameLogAudience>(DEFAULT_GAME_LOG_AUDIENCE)
+  const [layoutMode, setLayoutMode] = useState<GameLogLayout>(DEFAULT_GAME_LOG_LAYOUT)
   const [selectedPlayerId, setSelectedPlayerId] = useState('')
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const [importMessage, setImportMessage] = useState<string | null>(null)
@@ -180,9 +180,8 @@ export default function GameLogsModal({
   }, [games, seasonFilter])
 
   const displayedGames = useMemo(() => {
-    if (viewMode !== 'player' || !selectedPlayerId) return filteredGames
-    return filteredGames.filter((game) => game.entries.some((entry) => entry.playerId === selectedPlayerId))
-  }, [filteredGames, selectedPlayerId, viewMode])
+    return filterGamesByAudience(filteredGames, viewMode, session?.participants ?? [], selectedPlayerId)
+  }, [filteredGames, selectedPlayerId, session?.participants, viewMode])
 
   const displayedPlayers = useMemo(() => {
     if (viewMode === 'session') {
@@ -423,11 +422,11 @@ export default function GameLogsModal({
 
   return (
     <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
-      <div className="responsive-modal-panel flex max-h-[92vh] w-full max-w-7xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
+      <div data-tour="logs-modal" className="responsive-modal-panel flex max-h-[92vh] w-full max-w-7xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
         <div className="flex flex-col gap-4 border-b border-slate-200 p-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-600">Game logs</p>
-            <h3 className="mt-2 text-xl font-black text-slate-950">Club game score table</h3>
+            <h3 className="mt-2 text-xl font-black text-slate-950">Club game logs</h3>
             <p className="mt-1 text-sm text-slate-500">One record per game. {canDeleteGames ? 'Select a record to review or edit it.' : ''}</p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -437,7 +436,7 @@ export default function GameLogsModal({
             <button type="button" onClick={() => fileInputRef.current?.click()} disabled={importing} className="rounded-lg bg-sky-600 px-3 py-2 text-sm font-bold text-white hover:bg-sky-500 disabled:opacity-50">
               {importing ? 'Importing...' : 'Import CSV'}
             </button>
-            <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">
+            <button data-tour="logs-close" type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">
               Close
             </button>
             <input ref={fileInputRef} type="file" accept=".csv,text/csv" onChange={handleImport} className="hidden" />
@@ -477,7 +476,7 @@ export default function GameLogsModal({
                   Show all data
                 </button>
                 <button type="button" onClick={() => setViewMode('session')} className={`rounded-lg border px-3 py-2 text-sm font-bold ${viewMode === 'session' ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 bg-white text-slate-600'}`}>
-                  Show session player&apos;s game scores
+                  Session players
                 </button>
                 <button type="button" onClick={() => setViewMode('player')} className={`rounded-lg border px-3 py-2 text-sm font-bold ${viewMode === 'player' ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 bg-white text-slate-600'}`}>
                   Specific player
@@ -491,36 +490,50 @@ export default function GameLogsModal({
                   ))}
                 </select>
               ) : null}
+              <div className="relative ml-auto hidden grid-cols-2 rounded-full border border-slate-300 bg-slate-200/70 p-1 md:grid" role="group" aria-label="Game log layout">
+                <span aria-hidden="true" className={`absolute bottom-1 left-1 top-1 w-[calc(50%-0.25rem)] rounded-full bg-white shadow-sm transition-transform ${layoutMode === 'table' ? 'translate-x-full' : 'translate-x-0'}`} />
+                <button type="button" aria-pressed={layoutMode === 'cards'} onClick={() => setLayoutMode('cards')} className={`relative z-10 min-h-8 rounded-full px-3 text-xs font-bold transition-colors ${layoutMode === 'cards' ? 'text-slate-900' : 'text-slate-500'}`}>Cards</button>
+                <button type="button" aria-pressed={layoutMode === 'table'} onClick={() => setLayoutMode('table')} className={`relative z-10 min-h-8 rounded-full px-3 text-xs font-bold transition-colors ${layoutMode === 'table' ? 'text-slate-900' : 'text-slate-500'}`}>Table</button>
+              </div>
             </div>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-500">
-            <span>{loadingGames ? 'Loading recent games…' : `${games.length.toLocaleString()} game records loaded`}</span>
+            <span>{loadingGames ? 'Loading recent games…' : `${displayedGames.length.toLocaleString()} shown · ${games.length.toLocaleString()} loaded`}</span>
             {hasOlderGames && !loadingGames ? <button type="button" onClick={loadOlderGames} disabled={loadingOlderGames} className="rounded border border-slate-300 bg-white px-3 py-1.5 font-bold text-slate-700 disabled:opacity-50">{loadingOlderGames ? 'Loading…' : 'Load 100 older games'}</button> : null}
           </div>
           {importMessage ? <p className="mt-3 text-sm font-semibold text-slate-600">{importMessage}</p> : null}
         </div>
 
         <div className="min-h-0 flex-1 overflow-auto p-3 sm:p-4">
-          <div className="grid gap-3 md:hidden">
+          <div className={`grid grid-cols-1 gap-3 ${layoutMode === 'table' ? 'md:hidden' : ''}`}>
             {displayedGames.map((game) => (
-              <button key={game.id} type="button" onClick={() => openGame(game)} disabled={!canDeleteGames} className="rounded border border-slate-200 bg-white p-4 text-left shadow-sm transition enabled:hover:border-[rgb(var(--bamboo))] enabled:active:scale-[.99] disabled:cursor-default">
-                <span className="flex items-start justify-between gap-3">
-                  <span><strong className="block text-sm text-slate-900">{formatDate(game)}</strong><span className="mt-1 block text-xs font-semibold text-slate-500">Season {game.seasonNumber ?? 1}</span></span>
-                  {canDeleteGames ? <span className="text-xs font-bold text-[rgb(var(--bamboo))]">Review →</span> : null}
+              <button key={game.id} type="button" onClick={() => openGame(game)} disabled={!canDeleteGames} className="group w-full overflow-hidden rounded border border-slate-200 bg-white text-left shadow-sm transition enabled:hover:-translate-y-0.5 enabled:hover:border-[rgb(var(--bamboo))] enabled:hover:shadow-md enabled:active:translate-y-0 disabled:cursor-default">
+                <span className="flex items-center justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-5 sm:py-4">
+                  <span className="min-w-0">
+                    <strong className="block truncate text-sm text-slate-900 sm:text-base">{formatDate(game)}</strong>
+                    <span className="mt-1 inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[.08em] text-slate-500">Season {game.seasonNumber ?? 1}</span>
+                  </span>
+                  {canDeleteGames ? <span className="shrink-0 text-xs font-bold text-[rgb(var(--bamboo))] transition-transform group-hover:translate-x-1">Review record →</span> : null}
                 </span>
-                <span className="mt-3 grid grid-cols-2 gap-2">
-                  {game.entries.map((entry) => (
-                    <span key={entry.playerId} className="flex items-center justify-between gap-2 rounded bg-slate-50 px-2.5 py-2 text-xs">
-                      <span className="truncate font-semibold text-slate-700">{playerById.get(entry.playerId)?.displayName ?? 'Player'}</span>
-                      <strong className={entry.score > 0 ? 'text-emerald-700' : entry.score < 0 ? 'text-rose-700' : 'text-slate-700'}>{entry.score}</strong>
-                    </span>
-                  ))}
+                <span className="grid grid-cols-2 gap-px bg-[rgb(var(--line))] sm:grid-cols-4">
+                  {game.entries.map((entry) => {
+                    const player = playerById.get(entry.playerId)
+                    return (
+                      <span key={entry.playerId} className="flex min-h-16 items-center justify-between gap-3 bg-slate-50 px-4 py-3 sm:min-h-20 sm:flex-col sm:items-start sm:justify-center sm:gap-1">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="text-base" aria-hidden="true">{player?.icon ?? '🀄'}</span>
+                          <span className="truncate text-xs font-bold text-slate-700 sm:text-sm">{player?.displayName ?? 'Player'}</span>
+                        </span>
+                        <strong className={`shrink-0 font-mono text-base sm:text-lg ${entry.score > 0 ? 'text-emerald-700' : entry.score < 0 ? 'text-rose-700' : 'text-slate-700'}`}>{entry.score > 0 ? `+${entry.score}` : entry.score}</strong>
+                      </span>
+                    )
+                  })}
                 </span>
               </button>
             ))}
           </div>
 
-          <table className="game-log-table hidden min-w-full border-separate border-spacing-0 text-sm md:table">
+          <table className={`game-log-table hidden min-w-full border-separate border-spacing-0 text-sm ${layoutMode === 'table' ? 'md:table' : 'md:hidden'}`}>
             <thead>
               <tr>
                 <th className="sticky left-0 top-0 z-20 border-b border-slate-200 bg-slate-100 px-3 py-2 text-left font-black text-slate-700">Datetime</th>

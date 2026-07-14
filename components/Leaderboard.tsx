@@ -46,7 +46,7 @@ export function LeaderboardPanel({ clubId, seasonNumber, compact = false, player
   const mobileRows = mobileExpanded ? visibleRows : visibleRows.slice(0, 5)
 
   return (
-    <section className="leaderboard-board overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+    <section data-tour="leaderboard" className="leaderboard-board overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
       <header className="border-b border-slate-200 px-5 py-4">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Leaderboard</p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-3">

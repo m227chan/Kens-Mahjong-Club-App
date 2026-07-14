@@ -86,6 +86,7 @@ app/
   layout.tsx                       Global header, providers, fonts, metadata
   page.tsx                         Signed-in personal dashboard
 components/
+  AppGuide.tsx                     Global guide and no-write training tour
   AnalyticsPanel.tsx               Summary comparison cards
   ClubWorkspace.tsx                Main club coordinator and modal owner
   DashboardContent.tsx             Detailed chart analytics and player selection
@@ -140,7 +141,13 @@ The club route normalizes the club ID, requires authentication, subscribes to th
 
 ### Global layout
 
-`app/layout.tsx` loads fonts, the favicon, theme/sound controls, `AuthProvider`, and `SoundProvider`. The brand link always points to `/`, making it the personal-dashboard shortcut for signed-in users. The header is sticky and uses semantic theme tokens.
+`app/layout.tsx` loads fonts, the favicon, theme/sound/help controls, `AuthProvider`, and `SoundProvider`. The brand link always points to `/`, making it the personal-dashboard shortcut for signed-in users. The header is sticky and uses semantic theme tokens.
+
+The header help control opens `AppGuide`. Its complete reference follows the signed-in workflow from personal dashboard through clubs, rosters, seasons, sessions, scoring, standings, analytics, logs, and manager tools. It preserves the operational session reference, including table setup, participating players, the sideline, result entry, self-draw/discard rules, session reset controls, and the full fan-to-base-points map.
+
+“Take a Tour” runs on the real signed-in interface. `AppGuide` remains mounted in the root layout while navigation and modal state change, locates visible elements through stable `data-tour` targets, scrolls them into view, and draws a fixed spotlight boundary plus Ming’s coachmark over the actual dashboard, club workspace, and real roster, analytics, game-log, and settings modals. Click-driven stops advance only after the highlighted real control is used; explanatory stops use Next. Desktop and mobile variants can share a target name, and the tour selects the visible instance. The tour only performs safe navigation and open/close interactions, never submits forms or invokes game, roster, season, membership, or settings mutations. Exiting at any time clears the spotlight and returns to `/`.
+
+`AppGuide` is part of the product contract, not optional marketing copy. Any major user-facing feature addition or substantial workflow change must update both surfaces in the same pull request: the concise `?` help guide must explain the feature in the correct usage order, and the interactive tour must demonstrate it with a highlighted, no-write interaction. The tour must remain representative on desktop and mobile.
 
 ## 6. Authentication and authorization
 
@@ -302,7 +309,7 @@ Shared client-facing types live in `lib/types.ts`:
 
 ### Clubs and membership
 
-- Create a club with a generated, human-shareable ID.
+- Create a club with a generated, human-shareable ID. Each account may create at most six distinct clubs over its lifetime; deleted clubs still count, while clubs joined or managed through promotion do not. The dashboard shows a subtle created-club counter, and both the transactional API and a database trigger enforce the limit safely under concurrent requests.
 - Request membership using a club ID.
 - Optional manager email notification with an authenticated review link.
 - Manager approval or rejection of pending requests. The selected request is removed optimistically, restored if the mutation fails, and accompanied by a short accessible success/error notice.
@@ -347,7 +354,7 @@ Shared client-facing types live in `lib/types.ts`:
 - Winner, discarder, and fan selections have visible selected states.
 - Calculated scores are previewed and must sum to zero before saving.
 - Saved wins trigger a cheerful, viewport-centered announcement with winner identity and score changes.
-- Session dialogs are rendered through a document-body portal, centered in the viewport regardless of page scroll, and use a full-viewport opaque fade. The help dialog has an independently scrollable body and explains both sessions and seasons.
+- Session dialogs are rendered through a document-body portal, centered in the viewport regardless of page scroll, and use a full-viewport opaque fade. General help lives in the global header so the session card stays focused on live play.
 - Session state is persisted collaboratively through Supabase and restored on another device.
 - Legacy malformed table keys are normalized safely; participants are recovered to the sideline rather than lost.
 
@@ -365,11 +372,11 @@ Every stored game must contain two to four distinct players, finite numeric scor
 
 - Loads a bounded recent page instead of the full club history.
 - Loads older pages on demand.
-- Filters by season, active-session participants, or a specific player.
+- Filters by season, active-session participants, or a specific player. Active-session games are the default audience, while “Show all” remains available.
 - Loaded records are always displayed newest first; loading an older page preserves that descending chronology.
 - Mobile condenses season and player filters into a collapsed disclosure with an active-filter summary, keeping records near the top of the viewport; desktop keeps the controls expanded.
-- Desktop uses a horizontally scrollable score table with sticky date and header cells.
-- Mobile uses readable game cards rather than compressing the wide table.
+- Desktop defaults to a single-column chronological card feed and provides an accessible Cards/Table segmented switch. Each wide card keeps its date and season in a distinct header and presents the participating players as an evenly spaced score strip; the table remains horizontally scrollable with sticky date and header cells.
+- Mobile always uses readable game cards rather than compressing the wide table, regardless of the desktop layout selection.
 - Rows/cards expose hover, focus, title, and “Review” cues when editable.
 - Selecting a game opens a viewport-centered record editor.
 - Managers can change date/time, season, scores, and notes or delete the record.
@@ -412,8 +419,8 @@ Rounding drift is assigned to the central band. Small clubs may have empty bands
 - Light/dark mode follows saved preference or initial OS preference.
 - Sound can be enabled or muted globally; preference is cached locally and stored in the user profile.
 - Web Audio cues cover tiles, wins, losses, draws, achievements, confirmations, rank changes, and errors.
-- Audio context startup follows browser autoplay policy and is retried on later pointer or keyboard interactions so playback recovers after mobile browsers suspend audio.
-- Each requested cue waits for the shared audio context to resume and is then scheduled independently, so rapid valid cues are not silently discarded.
+- Audio context startup follows browser autoplay policy. Direct pointer/touch/keyboard interaction primes the shared context with an inaudible one-frame source; focus, page-show, and visibility recovery retry startup after iOS backgrounding, screen lock, or audio-route interruption.
+- Each requested cue waits for the shared audio context to resume and is then scheduled independently, so rapid valid cues are not silently discarded. If mobile Safari delays or rejects a resume, up to four recent cues remain queued for three seconds and flush on the next valid interaction instead of disappearing.
 - The login tile field moves continuously in normal motion mode and reacts to pointer/touch proximity.
 - Count-up, chart, entrance, celebration, and background animations respect reduced-motion preference.
 
@@ -562,7 +569,7 @@ Do not make this a generic SQL endpoint. Every new action must:
 
 ### `POST /api/ensure-universal-membership`
 
-Verifies the Firebase token, ensures the default/global membership and profile state, applies eligible pending manager grants, and reports whether the client must refresh its token. The endpoint is intended to be idempotent.
+Verifies the Firebase token, ensures the default/global membership and profile state, applies eligible pending manager grants, and reports whether the client must refresh its token. The endpoint is idempotent and avoids rewriting unchanged profile/membership rows. During authentication, the provider re-enters its loading state and completes this enrollment plus any required token refresh before the personal dashboard can subscribe, ensuring first-time users see the universal club without reloading. A session-scoped success marker avoids repeating the request on every page navigation while still revalidating on a later browser session.
 
 ### `POST /api/send-join-request-email`
 
@@ -736,6 +743,7 @@ For production diagnostics, prefer counts, action names, durations, anonymous co
 - Use semantic CSS tokens and verify both themes.
 - Design mobile behavior explicitly and keep primary actions reachable with one hand.
 - Add accessible names to icon controls and visible states to selections.
+- Reflect every major user-facing feature addition or substantial workflow change in both the complete `?` help guide and the real-page interactive tour. Add or update stable `data-tour` targets instead of building a duplicate demonstration UI.
 - Add or update tests for deterministic logic and regressions.
 - Add a new migration for schema changes rather than editing applied history.
 
@@ -746,6 +754,7 @@ For production diagnostics, prefer counts, action names, durations, anonymous co
 3. Exercise the changed feature on mobile and desktop when UI is involved.
 4. Verify dark-mode contrast and reduced-motion behavior.
 5. Update this handbook when architecture, schema, feature behavior, or operational setup changes.
+6. For major user-facing changes, verify the `?` help guide and no-write interactive tour were both updated and exercised on desktop and mobile.
 
 ## 23. Known constraints and intentional tradeoffs
 

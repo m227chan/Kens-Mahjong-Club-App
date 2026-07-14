@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import {
   createClub,
   ensureConfig,
+  getCreatedClubCount,
   getClubGameCount,
   leaveClub,
   requestToJoinClub,
@@ -15,6 +16,7 @@ import {
   subscribeUserClubs
 } from '@/lib/data'
 import type { ClubMembershipDoc, PlayerDoc, PlayerStatsDoc } from '@/lib/types'
+import { CREATED_CLUB_LIMIT_MESSAGE, MAX_CREATED_CLUBS, hasReachedCreatedClubLimit } from '@/lib/club-limits'
 
 function CountUp({ value, suffix = '' }: { value: number; suffix?: string }) {
   const roundedValue = Math.round(value)
@@ -80,6 +82,7 @@ export default function HomePage() {
   const [clubPlayers, setClubPlayers] = useState<Record<string, PlayerDoc[]>>({})
   const [clubStats, setClubStats] = useState<Record<string, PlayerStatsDoc[]>>({})
   const [clubGameCounts, setClubGameCounts] = useState<Record<string, number>>({})
+  const [createdClubCount, setCreatedClubCount] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [dataError, setDataError] = useState(false)
@@ -99,6 +102,18 @@ export default function HomePage() {
       setClubs([])
       setDataError(true)
     })
+  }, [user])
+
+  useEffect(() => {
+    if (!user) {
+      setCreatedClubCount(null)
+      return
+    }
+    let cancelled = false
+    void getCreatedClubCount()
+      .then((count) => { if (!cancelled) setCreatedClubCount(count) })
+      .catch(() => { if (!cancelled) setCreatedClubCount(null) })
+    return () => { cancelled = true }
   }, [user])
 
   useEffect(() => {
@@ -149,13 +164,19 @@ export default function HomePage() {
 
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
   const firstName = user?.displayName?.trim().split(/\s+/)[0] ?? 'Player'
+  const createdClubLimitReached = createdClubCount !== null && hasReachedCreatedClubLimit(createdClubCount)
 
   const handleCreateClub = async () => {
     if (!user) return
+    if (createdClubLimitReached) {
+      setMessage(CREATED_CLUB_LIMIT_MESSAGE)
+      return
+    }
     setBusy(true); setMessage(null)
     try {
       const clubId = await createClub({ name: newClubName, user })
       await ensureConfig(clubId)
+      setCreatedClubCount((count) => count === null ? null : count + 1)
       setNewClubName('')
       router.push(`/club/${encodeURIComponent(clubId)}`)
     } catch (error) {
@@ -191,7 +212,7 @@ export default function HomePage() {
 
   return (
     <main className="home-dashboard px-4 py-7 sm:px-6 lg:px-8">
-      <header className="home-enter home-greeting flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <header data-tour="dashboard-intro" className="home-enter home-greeting flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-extrabold uppercase tracking-[0.24em] text-[rgb(var(--cinnabar))]">Personal dashboard</p>
           <h1 className="mt-2 text-3xl font-extrabold tracking-[-0.035em] text-slate-950 sm:text-4xl">{greeting}, {firstName}</h1>
@@ -207,7 +228,7 @@ export default function HomePage() {
         </div>
       ) : null}
 
-      <section className="home-enter home-summary mt-7 overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <section data-tour="dashboard-performance" className="home-enter home-summary mt-7 overflow-hidden rounded-lg border border-slate-200 bg-white">
         <div className="grid lg:grid-cols-[1fr_250px]">
           <div className="p-6 sm:p-8">
             <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">Overall performance</p>
@@ -230,7 +251,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="mt-9">
+      <section data-tour="clubs-list" className="mt-9">
         <div className="flex items-end justify-between gap-4">
           <div><p className="text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">Memberships</p><h2 className="mt-2 text-2xl font-extrabold text-slate-950">Your clubs</h2></div>
           <p className="text-sm font-semibold text-slate-500">{clubs.length} active</p>
@@ -267,7 +288,7 @@ export default function HomePage() {
                 )}
 
                 <div className="mt-5 flex items-center gap-2">
-                  <Link href={`/club/${encodeURIComponent(club.clubId)}`} className="flex-1 rounded bg-[rgb(var(--ink))] px-4 py-2.5 text-center text-sm font-bold text-[rgb(var(--surface))] hover:opacity-90">{player ? 'Open club' : 'Open roster'}</Link>
+                  <Link data-tour="open-club" href={`/club/${encodeURIComponent(club.clubId)}`} className="flex-1 rounded bg-[rgb(var(--ink))] px-4 py-2.5 text-center text-sm font-bold text-[rgb(var(--surface))] hover:opacity-90">{player ? 'Open club' : 'Open roster'}</Link>
                   {club.role !== 'manager' && !club.universal ? <button type="button" onClick={() => handleLeaveClub(club.clubId)} className="rounded border border-rose-200 px-3 py-2.5 text-sm font-bold text-rose-700 hover:bg-rose-50">Leave</button> : null}
                 </div>
               </article>
@@ -283,10 +304,14 @@ export default function HomePage() {
         )}
       </section>
 
-      <section id="club-actions" className="mt-9 rounded-lg border border-slate-200 bg-white p-5 sm:p-6">
+      <section id="club-actions" data-tour="club-actions" className="mt-9 rounded-lg border border-slate-200 bg-white p-5 sm:p-6">
         <div className="grid gap-6 lg:grid-cols-[220px_1fr_1fr] lg:items-end">
           <div><p className="text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">Grow your table</p><h2 className="mt-2 text-xl font-extrabold text-slate-950">Create or join</h2><p className="mt-2 text-sm leading-5 text-slate-600">Secondary actions when you are ready for another club.</p></div>
-          <label className="text-sm font-bold text-slate-700">New club name<div className="mt-2 flex gap-2"><input value={newClubName} onChange={(event) => setNewClubName(event.target.value)} placeholder="Sunday Mahjong" className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-[rgb(var(--bamboo))]" /><button type="button" onClick={handleCreateClub} disabled={busy || !newClubName.trim()} className="rounded bg-[rgb(var(--bamboo))] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40">Create</button></div></label>
+          <label className="text-sm font-bold text-slate-700">
+            <span className="flex items-center justify-between gap-3"><span>New club name</span><span className="text-[11px] font-semibold tracking-wide text-slate-400" title="Clubs you have created">{createdClubCount ?? '–'}/{MAX_CREATED_CLUBS} created</span></span>
+            <div className="mt-2 flex gap-2"><input value={newClubName} onChange={(event) => setNewClubName(event.target.value)} disabled={createdClubLimitReached} placeholder="Sunday Mahjong" className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-[rgb(var(--bamboo))] disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400" /><button type="button" onClick={handleCreateClub} disabled={busy || !newClubName.trim() || createdClubLimitReached} className="rounded bg-[rgb(var(--bamboo))] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40">Create</button></div>
+            {createdClubLimitReached ? <span className="mt-2 block text-xs font-medium leading-5 text-amber-700">{CREATED_CLUB_LIMIT_MESSAGE}</span> : null}
+          </label>
           <label className="text-sm font-bold text-slate-700">Existing club ID<div className="mt-2 flex gap-2"><input value={joinClubId} onChange={(event) => setJoinClubId(event.target.value.toUpperCase())} placeholder="ABC123" className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-3 py-2.5 uppercase outline-none focus:border-[rgb(var(--bamboo))]" /><button type="button" onClick={handleJoinClub} disabled={busy || !joinClubId.trim()} className="rounded border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 disabled:opacity-40">Join</button></div></label>
         </div>
         {message ? <p className="mt-4 border-l-4 border-[rgb(var(--gold))] bg-amber-50 px-4 py-3 text-sm font-semibold text-slate-700">{message}</p> : null}

@@ -115,7 +115,7 @@ export default function LoginPage(){
   const {user,loading,signingIn,authError,signInWithGoogle}=useAuth()
   const {play,unlock}=useSound()
   const [localError,setLocalError]=useState<string|null>(null)
-  useEffect(()=>{if(!loading&&user)router.replace('/')},[loading,router,user])
+  useEffect(()=>{if(!loading&&user&&!authError)router.replace('/')},[authError,loading,router,user])
   const handleSignIn=async()=>{
     setLocalError(null)
     unlock()

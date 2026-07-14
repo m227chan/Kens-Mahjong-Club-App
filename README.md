@@ -4,16 +4,17 @@ A responsive web application for organizing Mahjong clubs, running live sessions
 
 ## Features
 
-- Create and manage multiple clubs and seasons
+- Create and manage clubs and seasons, with a six-club creation allowance per account and unlimited existing-club memberships or manager roles
 - Maintain manager-controlled player rosters with renaming, account linking, and customizable emoji avatars
 - Arrange tables and manage players during live sessions with viewport-centered, mobile-friendly dialogs
 - Record self-draws, discard wins, draws, and point totals
-- Review and correct individual game records
+- Review and correct individual game records with session-player filtering and responsive card/table layouts
 - Track standings, win rates, cumulative scores, and ELO ratings
 - Explore player and club analytics
 - Import and export game data as CSV
 - Use light and dark themes across desktop and mobile layouts
 - Manage memberships and manager permissions
+- Open a concise signed-in app guide or practice the complete workflow in a temporary, no-write guided tour
 
 ## Technology
 

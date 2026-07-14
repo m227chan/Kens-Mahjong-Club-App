@@ -84,6 +84,7 @@ function realtime<T>(name: string, table: string, filter: string, load: () => Pr
 }
 
 export const createClub = (input: { name: string; user: UserLike }) => serverAction<string>('createClub', { name: input.name, user: input.user })
+export const getCreatedClubCount = () => serverAction<number>('getCreatedClubCount', {})
 export async function getClub(clubId: string) { const { data, error } = await client().from('clubs').select('*').eq('id', clubId.toUpperCase()).maybeSingle(); if (error) throw error; return data ? mapClub(data) : null }
 export function subscribeClub(clubId: string, callback: (club: ClubDoc | null) => void) { return realtime(`club:${clubId}`, 'clubs', `id=eq.${clubId}`, () => getClub(clubId), callback) }
 export function subscribeUserClubs(uid: string, callback: (clubs: ClubMembershipDoc[]) => void, onError?: (error: Error) => void) {

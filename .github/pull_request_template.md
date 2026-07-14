@@ -12,6 +12,7 @@
 
 - [ ] I updated `README.md`, or confirmed no update is needed.
 - [ ] I updated `DOCUMENTATION.md`, or confirmed no update is needed.
+- [ ] If this adds or substantially changes a major feature, I updated both the `?` help guide and the interactive tour.
 
 ## Screenshots
 

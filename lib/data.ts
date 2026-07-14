@@ -6,6 +6,7 @@ import { auth } from '@/lib/firebase'
 const backend = supabase
 
 export const createClub = backend.createClub
+export const getCreatedClubCount = backend.getCreatedClubCount
 export const subscribeClub = backend.subscribeClub
 export const subscribeUserClubs = backend.subscribeUserClubs
 export const promoteManagerByEmail = backend.promoteManagerByEmail

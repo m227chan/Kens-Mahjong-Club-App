@@ -87,7 +87,6 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
   const [collapsedTables, setCollapsedTables] = useState<Record<string, boolean>>({})
   const [sidelineCollapsed, setSidelineCollapsed] = useState(false)
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
-  const [infoOpen, setInfoOpen] = useState(false)
   const [savingSession, setSavingSession] = useState(false)
 
   const dragPlayerRef = useRef<string | null>(null)
@@ -946,7 +945,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
   const sessionTableCount = session.tableCount
 
   return (
-    <div className="session-manager">
+    <div data-tour="session-manager" className="session-manager">
       <style jsx global>{`
 
         :root {
@@ -1465,34 +1464,6 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         .danger-item { color: #e53e3e; }
         .danger-item:hover { background: #fff5f5; }
 
-        .info-section {
-          display: flex;
-          gap: 12px;
-          align-items: flex-start;
-        }
-        .info-icon {
-          font-size: 20px;
-          width: 32px;
-          height: 32px;
-          background: #ebf4ff;
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-        }
-        .info-title {
-          font-size: 13px;
-          font-weight: 700;
-          color: #2d3748;
-          margin-bottom: 3px;
-        }
-        .info-body {
-          font-size: 12px;
-          color: #718096;
-          line-height: 1.5;
-        }
-
         .chip-remove-btn {
           position: absolute; top: -3px; left: -3px;
           width: 14px; height: 14px;
@@ -1622,9 +1593,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         .session-manager .score-preview { border-radius:3px; background:rgb(var(--ink)); }
         .session-manager .winner-choice.selected,.session-manager .winner-selected { border-color:rgb(var(--bamboo))!important; background:rgb(var(--bamboo))!important; color:#fff!important; box-shadow:0 0 0 2px rgb(var(--bamboo)/.25)!important; }
         .session-manager .discard-choice.selected,.session-manager .discard-selected { border-color:rgb(var(--cinnabar))!important; background:rgb(var(--cinnabar))!important; color:#fff!important; box-shadow:0 0 0 2px rgb(var(--cinnabar)/.22)!important; }
-        .session-manager #infoOverlay,.session-manager #pickerOverlay,.session-manager #swapPickerOverlay { position:fixed!important; inset:0!important; top:0!important; align-items:center!important; justify-content:center!important; overscroll-behavior:contain; }
-        .session-manager #infoOverlay[style*="display: block"] { display:flex!important; }
-        .session-manager #infoOverlay>div { transform:none!important; margin:auto!important; }
+        .session-manager #pickerOverlay,.session-manager #swapPickerOverlay { position:fixed!important; inset:0!important; top:0!important; align-items:center!important; justify-content:center!important; overscroll-behavior:contain; }
         .session-manager .menu-item { background:rgb(var(--surface)); color:rgb(var(--ink)); border-color:rgb(var(--line)); }
         .session-manager .menu-item:hover { background:rgb(var(--surface-2)); }
         .session-manager .spinner { border-color:rgb(var(--line)); border-top-color:rgb(var(--cinnabar)); }
@@ -1643,7 +1612,6 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           <div className="header-sub">{page === 'setup' ? (session.active ? 'Editing session' : 'New session') : sessionHeaderLabel}</div>
         </div>
         <div className="header-actions">
-          <button className="btn-icon" type="button" onClick={() => setInfoOpen((current) => !current)} id="btnInfo">?</button>
           <button
             className="btn-icon"
             type="button"
@@ -1840,91 +1808,6 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         </div>,
         document.body
       ) : null}
-      {infoOpen && typeof document !== 'undefined' ? createPortal(<div id="infoOverlay" role="dialog" aria-modal="true" aria-labelledby="session-help-title" style={{ display: 'flex', position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.68)', zIndex: 20010, padding: 16, overflowY: 'auto' }}>
-        <div style={{ background: 'white', borderRadius: 14, overflow: 'hidden', maxWidth: 380, maxHeight: 'calc(100vh - 104px)', margin: '0 auto', transform: 'translateX(-32px)', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', padding: '16px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div id="session-help-title" style={{ fontSize: 16, fontWeight: 800, color: 'white' }}>🀄 Session Manager</div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>How it works</div>
-            </div>
-            <button type="button" onClick={() => setInfoOpen(false)} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, color: 'white', fontSize: 18, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
-          </div>
-          <div style={{ padding: '16px 18px', display: 'flex', minHeight: 0, flexDirection: 'column', gap: 14, overflowY: 'auto', overscrollBehavior: 'contain' }}>
-            <div className="info-section">
-              <div className="info-icon">📋</div>
-              <div>
-                <div className="info-title">What is a Session?</div>
-                <div className="info-body">A session is a single mahjong night. You choose which players are attending and how many tables are running. The session tracks who is seated where and records all games played during the night.</div>
-              </div>
-            </div>
-            <div className="info-section">
-              <div className="info-icon">📅</div>
-              <div>
-                <div className="info-title">What is a Season?</div>
-                <div className="info-body">A season is a chapter of club standings. Starting a new season closes the current live session and gives the leaderboard a fresh set of season statistics, while keeping earlier seasons and game history available to review.</div>
-              </div>
-            </div>
-            <div className="info-section">
-              <div className="info-icon">🔢</div>
-              <div>
-                <div className="info-title">Number of Tables</div>
-                <div className="info-body">Set how many tables will be running simultaneously. Each table seats exactly 4 players. You can have as many tables as you need.</div>
-              </div>
-            </div>
-            <div className="info-section">
-              <div className="info-icon">👥</div>
-              <div>
-                <div className="info-title">Selecting Players</div>
-                <div className="info-body">Choose all players attending tonight. Anyone not selected won&apos;t appear in the session. You need at least 4 players to start. Use the search bar to find players quickly.</div>
-              </div>
-            </div>
-            <div className="info-section">
-              <div className="info-icon">🪑</div>
-              <div>
-                <div className="info-title">Sideline</div>
-                <div className="info-body">Players who are attending but not currently seated at a table sit on the sideline. Drag them to a table when they&apos;re ready to play, or drag them back to the sideline between rounds.</div>
-              </div>
-            </div>
-            <div className="info-section">
-              <div className="info-icon">🎴</div>
-              <div>
-                <div className="info-title">Recording a Game</div>
-                <div className="info-body">Once a table has 4 players it shows <strong>✓ Ready</strong>. After a game finishes, tap <strong>Winner...</strong> to record who won, the win type (self-draw or discard), and the fan count. Or tap <strong>Draw</strong> if no one won.</div>
-              </div>
-            </div>
-            <div className="info-section">
-              <div className="info-icon">🀄</div>
-              <div>
-                <div className="info-title">Fan Scoring</div>
-                <div className="info-body">Scores are based on fan count (3–13+). <strong>Self-draw:</strong> winner gets 3× base, each loser pays 1× base. <strong>Discard win:</strong> winner gets 2× base, the discarder pays 2× base, others pay nothing.</div>
-              </div>
-            </div>
-            <div style={{ background: '#f7fafc', borderRadius: 10, padding: '12px 14px' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#4a5568', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Fan → Base Points</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 4 }}>
-                {Object.entries(FAN_POINTS).map(([fanValue, points]) => (
-                  <div key={fanValue} style={{ background: 'white', borderRadius: 6, padding: '4px 6px', textAlign: 'center', border: '1px solid #e2e8f0' }}>
-                    <div style={{ fontSize: 10, color: '#718096' }}>{fanValue} fan</div>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: '#667eea' }}>{points}</div>
-                  </div>
-                ))}
-                <div style={{ background: 'white', borderRadius: 6, padding: '4px 6px', textAlign: 'center', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: 10, color: '#718096' }}>13+ fan</div>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: '#667eea' }}>384</div>
-                </div>
-              </div>
-            </div>
-            <div className="info-section">
-              <div className="info-icon">⚙️</div>
-              <div>
-                <div className="info-title">Edit / Clear All Tables / Reset</div>
-                <div className="info-body"><strong>Edit</strong> lets you change which players are in the session or the number of tables. <strong>Clear All Tables</strong> moves everyone back to the sideline without ending the session. <strong>Reset Session</strong> wipes everything and starts fresh.</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>, document.body) : null}
-
       {pickerTableId && typeof document !== 'undefined' ? createPortal(<div id="pickerOverlay" role="dialog" aria-modal="true" aria-labelledby="add-player-title" style={{ display: 'flex', position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.68)', zIndex: 20010, padding: 16, alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ background: 'white', borderRadius: 14, overflow: 'hidden', width: '100%', maxWidth: 340, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
           <div style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

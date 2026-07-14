@@ -46,18 +46,46 @@ function clack(context: AudioContext, destination: AudioNode, start: number, vol
   source.start(start)
 }
 
+function emitCue(context: AudioContext, cue: SoundCue) {
+  const now = context.currentTime + 0.005
+  const output = context.createGain()
+  output.gain.value = 0.85
+  output.connect(context.destination)
+
+  if (cue === 'tile') clack(context, output, now, 0.18)
+  else if (cue === 'win') { clack(context, output, now, 0.12); tone(context, output, 523, now + 0.04, 0.22, 0.10); tone(context, output, 659, now + 0.13, 0.28, 0.09); tone(context, output, 784, now + 0.23, 0.38, 0.08) }
+  else if (cue === 'draw') { clack(context, output, now, 0.11); tone(context, output, 392, now + 0.035, 0.18, 0.055) }
+  else if (cue === 'achievement') { tone(context, output, 440, now, 0.2, 0.06); tone(context, output, 554, now + 0.1, 0.24, 0.065); tone(context, output, 659, now + 0.21, 0.32, 0.06) }
+  else if (cue === 'rank-up') { tone(context, output, 440, now, 0.18, 0.055); tone(context, output, 587, now + 0.1, 0.24, 0.06) }
+  else if (cue === 'rank-down' || cue === 'loss') { tone(context, output, 392, now, 0.18, 0.045, 'triangle'); tone(context, output, 330, now + 0.1, 0.22, 0.04, 'triangle') }
+  else if (cue === 'error') { tone(context, output, 220, now, 0.14, 0.045, 'triangle'); tone(context, output, 196, now + 0.08, 0.16, 0.035, 'triangle') }
+  else { tone(context, output, 494, now, 0.17, 0.05); tone(context, output, 622, now + 0.09, 0.22, 0.045) }
+
+  window.setTimeout(() => output.disconnect(), 1200)
+}
+
 export function SoundProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
   const [enabled, setEnabled] = useState(true)
   const contextRef = useRef<AudioContext | null>(null)
   const resumeRef = useRef<Promise<void> | null>(null)
+  const pendingCuesRef = useRef<Array<{ cue: SoundCue; expiresAt: number }>>([])
 
-  const ensureAudioReady = useCallback(async () => {
+  const getAudioContext = useCallback(() => {
     let context = contextRef.current
     if (!context || context.state === 'closed') {
-      context = new AudioContext({ latencyHint: 'interactive' })
+      const AudioContextClass = window.AudioContext ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      if (!AudioContextClass) return null
+      context = new AudioContextClass({ latencyHint: 'interactive' })
       contextRef.current = context
+      resumeRef.current = null
     }
+    return context
+  }, [])
+
+  const ensureAudioReady = useCallback(async () => {
+    const context = getAudioContext()
+    if (!context) return null
 
     if (context.state !== 'running') {
       if (!resumeRef.current) {
@@ -73,11 +101,36 @@ export function SoundProvider({ children }: { children: React.ReactNode }) {
     }
 
     return context.state === 'running' ? context : null
-  }, [])
+  }, [getAudioContext])
+
+  const primeAudio = useCallback(() => {
+    const context = getAudioContext()
+    if (!context) return
+    if (context.state !== 'running' && !resumeRef.current) {
+      resumeRef.current = context.resume().then(() => undefined).finally(() => {
+        resumeRef.current = null
+      })
+      void resumeRef.current.catch(() => undefined)
+    }
+    const source = context.createBufferSource()
+    const gain = context.createGain()
+    gain.gain.value = 0.0001
+    source.buffer = context.createBuffer(1, 1, context.sampleRate)
+    source.connect(gain).connect(context.destination)
+    source.onended = () => { source.disconnect(); gain.disconnect() }
+    source.start(0)
+  }, [getAudioContext])
 
   const unlock = useCallback(() => {
-    void ensureAudioReady()
-  }, [ensureAudioReady])
+    primeAudio()
+    void ensureAudioReady().then((context) => {
+      if (!context || !enabled) return
+      const now = Date.now()
+      const queued = pendingCuesRef.current.filter((item) => item.expiresAt >= now)
+      pendingCuesRef.current = []
+      queued.forEach((item) => emitCue(context, item.cue))
+    })
+  }, [enabled, ensureAudioReady, primeAudio])
 
   useEffect(() => {
     try {
@@ -101,48 +154,50 @@ export function SoundProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const prepare = () => unlock()
+    const prepareTouchFallback = () => {
+      if (!('PointerEvent' in window)) prepare()
+    }
+    const recover = () => { void ensureAudioReady() }
     window.addEventListener('pointerdown', prepare, { passive: true })
+    window.addEventListener('touchstart', prepareTouchFallback, { passive: true })
     window.addEventListener('keydown', prepare)
+    window.addEventListener('pageshow', recover)
+    window.addEventListener('focus', recover)
+    const handleVisibility = () => { if (document.visibilityState === 'visible') recover() }
+    document.addEventListener('visibilitychange', handleVisibility)
     return () => {
       window.removeEventListener('pointerdown', prepare)
+      window.removeEventListener('touchstart', prepareTouchFallback)
       window.removeEventListener('keydown', prepare)
+      window.removeEventListener('pageshow', recover)
+      window.removeEventListener('focus', recover)
+      document.removeEventListener('visibilitychange', handleVisibility)
     }
-  }, [unlock])
+  }, [ensureAudioReady, unlock])
+
+  useEffect(() => {
+    if (!enabled) pendingCuesRef.current = []
+  }, [enabled])
 
   const play = useCallback((cue: SoundCue) => {
     if (!enabled) return
     void ensureAudioReady().then((context) => {
-      if (!context) return
-      const now = context.currentTime + 0.005
-      const output = context.createGain()
-      output.gain.value = 0.85
-      output.connect(context.destination)
-
-      if (cue === 'tile') clack(context, output, now, 0.18)
-      else if (cue === 'win') { clack(context, output, now, 0.12); tone(context, output, 523, now + 0.04, 0.22, 0.10); tone(context, output, 659, now + 0.13, 0.28, 0.09); tone(context, output, 784, now + 0.23, 0.38, 0.08) }
-      else if (cue === 'draw') { clack(context, output, now, 0.11); tone(context, output, 392, now + 0.035, 0.18, 0.055) }
-      else if (cue === 'achievement') { tone(context, output, 440, now, 0.2, 0.06); tone(context, output, 554, now + 0.1, 0.24, 0.065); tone(context, output, 659, now + 0.21, 0.32, 0.06) }
-      else if (cue === 'rank-up') { tone(context, output, 440, now, 0.18, 0.055); tone(context, output, 587, now + 0.1, 0.24, 0.06) }
-      else if (cue === 'rank-down' || cue === 'loss') { tone(context, output, 392, now, 0.18, 0.045, 'triangle'); tone(context, output, 330, now + 0.1, 0.22, 0.04, 'triangle') }
-      else if (cue === 'error') { tone(context, output, 220, now, 0.14, 0.045, 'triangle'); tone(context, output, 196, now + 0.08, 0.16, 0.035, 'triangle') }
-      else { tone(context, output, 494, now, 0.17, 0.05); tone(context, output, 622, now + 0.09, 0.22, 0.045) }
-
-      window.setTimeout(() => output.disconnect(), 1200)
+      if (context) emitCue(context, cue)
+      else pendingCuesRef.current = [...pendingCuesRef.current.slice(-3), { cue, expiresAt: Date.now() + 3000 }]
     })
   }, [enabled, ensureAudioReady])
 
   const toggle = useCallback(() => {
-    unlock()
-    setEnabled((current) => {
-      const next = !current
-      try { window.localStorage.setItem(LOCAL_KEY, String(next)) } catch { /* best effort */ }
-      if (user) {
-        const save = setSoundPreference(user.uid, next)
-        void save.catch(() => undefined)
-      }
-      return next
-    })
-  }, [unlock, user])
+    const next = !enabled
+    if (next) unlock()
+    else pendingCuesRef.current = []
+    setEnabled(next)
+    try { window.localStorage.setItem(LOCAL_KEY, String(next)) } catch { /* best effort */ }
+    if (user) {
+      const save = setSoundPreference(user.uid, next)
+      void save.catch(() => undefined)
+    }
+  }, [enabled, unlock, user])
 
   return <SoundContext.Provider value={{ enabled, toggle, unlock, play }}>{children}</SoundContext.Provider>
 }

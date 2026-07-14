@@ -52,36 +52,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (nextUser) => {
       if (!active) return
 
+      setLoading(true)
       setUser(nextUser)
       setSigningIn(false)
 
       try {
         if (nextUser) {
-          const tokenResult = await nextUser.getIdTokenResult()
-          const enrollmentKey = `mahjong:universal-enrollment:v4:supabase:${nextUser.uid}`
+          const enrollmentKey = `mahjong:universal-enrollment:v5:supabase:${nextUser.uid}`
           let alreadyEnrolled = false
-          try { alreadyEnrolled = window.localStorage.getItem(enrollmentKey) === 'complete' } catch { /* private storage mode */ }
+          try { alreadyEnrolled = window.sessionStorage.getItem(enrollmentKey) === 'complete' } catch { /* private storage mode */ }
           if (!alreadyEnrolled) {
             const token = await nextUser.getIdToken()
-            const enrollment = await fetch('/api/ensure-universal-membership', {
-              method: 'POST',
-              headers: { Authorization: 'Bearer ' + token }
-            })
-            if (enrollment.ok) {
+            let enrollment: Response | null = null
+            for (let attempt = 0; attempt < 2; attempt += 1) {
+              enrollment = await fetch('/api/ensure-universal-membership', {
+                method: 'POST',
+                headers: { Authorization: 'Bearer ' + token }
+              })
+              if (enrollment.ok) break
+              if (attempt === 0) await new Promise((resolve) => window.setTimeout(resolve, 250))
+            }
+            if (enrollment?.ok) {
               const result = await enrollment.json() as { tokenRefreshRequired?: boolean }
               if (result.tokenRefreshRequired) await nextUser.getIdToken(true)
-              try { window.localStorage.setItem(enrollmentKey, 'complete') } catch { /* best-effort cache */ }
+              try { window.sessionStorage.setItem(enrollmentKey, 'complete') } catch { /* best-effort cache */ }
             } else {
-              console.warn('Universal club enrollment will retry on the next sign-in.')
+              throw new Error('We could not prepare your default club. Refresh the page to try again.')
             }
           }
+          const tokenResult = await nextUser.getIdTokenResult()
           setIsAdmin(Boolean(tokenResult.claims.admin))
           setAuthError(null)
         } else {
           setIsAdmin(false)
         }
-      } catch {
+      } catch (error) {
         setIsAdmin(false)
+        setAuthError(error instanceof Error ? error.message : 'We could not finish preparing your account. Refresh the page to try again.')
       } finally {
         if (active) {
           setLoading(false)
