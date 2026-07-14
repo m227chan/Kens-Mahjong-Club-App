@@ -128,6 +128,7 @@ export default function GameLogsModal({
   const [seasonFilter, setSeasonFilter] = useState<number | 'all'>(currentSeason)
   const [viewMode, setViewMode] = useState<ViewMode>('all')
   const [selectedPlayerId, setSelectedPlayerId] = useState('')
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const [importMessage, setImportMessage] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
   const [selectedGame, setSelectedGame] = useState<GameDoc | null>(null)
@@ -159,6 +160,18 @@ export default function GameLogsModal({
   }, [currentSeason])
 
   const playerById = useMemo(() => new Map(players.map((player) => [player.id, player])), [players])
+
+  const filterSummary = useMemo(() => {
+    const seasonLabel = seasonFilter === 'all'
+      ? 'All seasons'
+      : seasons.find((season) => season.seasonNumber === seasonFilter)?.name ?? `Season ${seasonFilter}`
+    const viewLabel = viewMode === 'session'
+      ? 'Session players'
+      : viewMode === 'player'
+        ? playerById.get(selectedPlayerId)?.displayName ?? 'Specific player'
+        : 'All players'
+    return `${seasonLabel} · ${viewLabel}`
+  }, [playerById, seasonFilter, seasons, selectedPlayerId, viewMode])
 
   const filteredGames = useMemo(() => {
     return games
@@ -432,35 +445,53 @@ export default function GameLogsModal({
         </div>
 
         <div className="border-b border-slate-200 bg-slate-50 p-4">
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
-              Season
-              <select value={seasonFilter} onChange={(event) => setSeasonFilter(event.target.value === 'all' ? 'all' : Number(event.target.value))} className="mt-2 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-slate-700">
-                <option value="all">All seasons</option>
-                {seasons.map((season) => (
-                  <option key={season.id} value={season.seasonNumber}>{season.name}</option>
-                ))}
-              </select>
-            </label>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => setViewMode('all')} className={`rounded-lg border px-3 py-2 text-sm font-bold ${viewMode === 'all' ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 bg-white text-slate-600'}`}>
-                Show all data
-              </button>
-              <button type="button" onClick={() => setViewMode('session')} className={`rounded-lg border px-3 py-2 text-sm font-bold ${viewMode === 'session' ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 bg-white text-slate-600'}`}>
-                Show session player&apos;s game scores
-              </button>
-              <button type="button" onClick={() => setViewMode('player')} className={`rounded-lg border px-3 py-2 text-sm font-bold ${viewMode === 'player' ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 bg-white text-slate-600'}`}>
-                Specific player
-              </button>
+          <div className="flex items-center justify-between gap-4 md:hidden">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-700">Filters</p>
+              <p className="mt-1 truncate text-xs font-semibold text-slate-500">{filterSummary}</p>
             </div>
-            {viewMode === 'player' ? (
-              <select value={selectedPlayerId} onChange={(event) => setSelectedPlayerId(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700">
-                <option value="">Select player</option>
-                {players.map((player) => (
-                  <option key={player.id} value={player.id}>{player.displayName}</option>
-                ))}
-              </select>
-            ) : null}
+            <button
+              type="button"
+              aria-expanded={mobileFiltersOpen}
+              aria-controls="game-log-filters"
+              onClick={() => setMobileFiltersOpen((current) => !current)}
+              className="flex min-h-11 shrink-0 items-center gap-2 rounded border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700"
+            >
+              {mobileFiltersOpen ? 'Hide' : 'Change'}
+              <span aria-hidden="true" className={`transition-transform ${mobileFiltersOpen ? 'rotate-180' : ''}`}>⌄</span>
+            </button>
+          </div>
+          <div id="game-log-filters" className={`${mobileFiltersOpen ? 'mt-4 block' : 'hidden'} md:block`}>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+                Season
+                <select value={seasonFilter} onChange={(event) => setSeasonFilter(event.target.value === 'all' ? 'all' : Number(event.target.value))} className="mt-2 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-slate-700">
+                  <option value="all">All seasons</option>
+                  {seasons.map((season) => (
+                    <option key={season.id} value={season.seasonNumber}>{season.name}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => setViewMode('all')} className={`rounded-lg border px-3 py-2 text-sm font-bold ${viewMode === 'all' ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 bg-white text-slate-600'}`}>
+                  Show all data
+                </button>
+                <button type="button" onClick={() => setViewMode('session')} className={`rounded-lg border px-3 py-2 text-sm font-bold ${viewMode === 'session' ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 bg-white text-slate-600'}`}>
+                  Show session player&apos;s game scores
+                </button>
+                <button type="button" onClick={() => setViewMode('player')} className={`rounded-lg border px-3 py-2 text-sm font-bold ${viewMode === 'player' ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 bg-white text-slate-600'}`}>
+                  Specific player
+                </button>
+              </div>
+              {viewMode === 'player' ? (
+                <select value={selectedPlayerId} onChange={(event) => setSelectedPlayerId(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700">
+                  <option value="">Select player</option>
+                  {players.map((player) => (
+                    <option key={player.id} value={player.id}>{player.displayName}</option>
+                  ))}
+                </select>
+              ) : null}
+            </div>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-500">
             <span>{loadingGames ? 'Loading recent games…' : `${games.length.toLocaleString()} game records loaded`}</span>
