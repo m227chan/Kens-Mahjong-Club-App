@@ -1837,21 +1837,28 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         </div>,
         document.body
       ) : null}
-      <div id="infoOverlay" style={{ display: infoOpen ? 'block' : 'none', position: 'fixed', top: 72, right: 0, bottom: 0, left: 0, background: 'rgba(0,0,0,0.4)', zIndex: 10000, padding: 16, overflowY: 'auto' }}>
+      {infoOpen && typeof document !== 'undefined' ? createPortal(<div id="infoOverlay" role="dialog" aria-modal="true" aria-labelledby="session-help-title" style={{ display: 'flex', position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.68)', zIndex: 20010, padding: 16, overflowY: 'auto' }}>
         <div style={{ background: 'white', borderRadius: 14, overflow: 'hidden', maxWidth: 380, maxHeight: 'calc(100vh - 104px)', margin: '0 auto', transform: 'translateX(-32px)', display: 'flex', flexDirection: 'column' }}>
           <div style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', padding: '16px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <div style={{ fontSize: 16, fontWeight: 800, color: 'white' }}>🀄 Session Manager</div>
+              <div id="session-help-title" style={{ fontSize: 16, fontWeight: 800, color: 'white' }}>🀄 Session Manager</div>
               <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>How it works</div>
             </div>
             <button type="button" onClick={() => setInfoOpen(false)} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, color: 'white', fontSize: 18, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
           </div>
-          <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto' }}>
+          <div style={{ padding: '16px 18px', display: 'flex', minHeight: 0, flexDirection: 'column', gap: 14, overflowY: 'auto', overscrollBehavior: 'contain' }}>
             <div className="info-section">
               <div className="info-icon">📋</div>
               <div>
                 <div className="info-title">What is a Session?</div>
                 <div className="info-body">A session is a single mahjong night. You choose which players are attending and how many tables are running. The session tracks who is seated where and records all games played during the night.</div>
+              </div>
+            </div>
+            <div className="info-section">
+              <div className="info-icon">📅</div>
+              <div>
+                <div className="info-title">What is a Season?</div>
+                <div className="info-body">A season is a chapter of club standings. Starting a new season closes the current live session and gives the leaderboard a fresh set of season statistics, while keeping earlier seasons and game history available to review.</div>
               </div>
             </div>
             <div className="info-section">
@@ -1913,13 +1920,22 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
             </div>
           </div>
         </div>
-      </div>
+      </div>, document.body) : null}
 
-      <div id="pickerOverlay" style={{ display: pickerTableId ? 'flex' : 'none', position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 600, padding: 16, alignItems: 'center', justifyContent: 'center' }}>
+      {pickerTableId && typeof document !== 'undefined' ? createPortal(<div id="pickerOverlay" role="dialog" aria-modal="true" aria-labelledby="add-player-title" style={{ display: 'flex', position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.68)', zIndex: 20010, padding: 16, alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ background: 'white', borderRadius: 14, overflow: 'hidden', width: '100%', maxWidth: 340, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
           <div style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ fontSize: 14, fontWeight: 800, color: 'white' }}>Add Player to Table {pickerTableId}</div>
+            <div id="add-player-title" style={{ fontSize: 14, fontWeight: 800, color: 'white' }}>Add Player to Table {pickerTableId}</div>
             <button type="button" onClick={closePicker} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, color: 'white', fontSize: 18, width: 30, height: 30, cursor: 'pointer' }}>×</button>
+          </div>
+          <div style={{ padding: '10px 12px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+            <div style={{ marginBottom: 7, fontSize: 11, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Selected ({(session.tables[pickerTableId] || []).length}/4)</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {(session.tables[pickerTableId] || []).length === 0 ? <span style={{ fontSize: 12, color: '#64748b' }}>No players selected yet.</span> : (session.tables[pickerTableId] || []).map((playerId) => {
+                const info = playerInfo(playerId)
+                return <button key={playerId} type="button" onClick={() => removeToSideline(pickerTableId, playerId)} title={`Remove ${info.displayName} from this table`} style={{ display: 'inline-flex', minHeight: 36, alignItems: 'center', gap: 6, border: '1px solid #94a3b8', borderRadius: 6, background: 'white', padding: '5px 8px', color: '#1e293b', fontSize: 12, fontWeight: 700 }}><span>{info.icon}</span><span>{shortName(info.displayName)}</span><span aria-hidden="true">×</span></button>
+              })}
+            </div>
           </div>
           <div style={{ padding: '10px 12px', borderBottom: '1px solid #e2e8f0' }}>
             <input
@@ -1950,9 +1966,9 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
             {pickerAvailable.length === 0 ? (pickerSearch ? 'No players match your search.' : 'No players on sideline.') : ''}
           </div>
         </div>
-      </div>
+      </div>, document.body) : null}
 
-      <div id="swapPickerOverlay" style={{ display: swapPickerTableId ? 'flex' : 'none', position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 700, padding: 16, alignItems: 'center', justifyContent: 'center' }}>
+      {swapPickerTableId && typeof document !== 'undefined' ? createPortal(<div id="swapPickerOverlay" role="dialog" aria-modal="true" style={{ display: 'flex', position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.68)', zIndex: 20010, padding: 16, alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ background: 'white', borderRadius: 14, overflow: 'hidden', width: '100%', maxWidth: 340, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
           <div style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
@@ -1994,7 +2010,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
             })}
           </div>
         </div>
-      </div>
+      </div>, document.body) : null}
     </div>
   )
 }

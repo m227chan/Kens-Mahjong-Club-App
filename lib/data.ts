@@ -19,6 +19,7 @@ export const createPlayer = backend.createPlayer
 export const removePlayer = backend.removePlayer
 export const setPlayerAuthLink = backend.setPlayerAuthLink
 export const updatePlayerIcon = backend.updatePlayerIcon
+export const updatePlayerName = backend.updatePlayerName
 export const deleteClub = backend.deleteClub
 export const createGame = backend.createGame
 export const subscribeSeasons = backend.subscribeSeasons

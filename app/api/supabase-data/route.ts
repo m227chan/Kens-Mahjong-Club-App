@@ -33,6 +33,10 @@ export async function POST(request: NextRequest) {
         const member = await db.query("select 1 from club_members where club_id=$1 and firebase_uid=$2 and active and role='manager'", [club, caller.uid])
         if (!member.rowCount) throw new Error('Only an active club manager can do that.')
       }
+      const requireMember = async (club: string) => {
+        const member = await db.query('select 1 from club_members where club_id=$1 and firebase_uid=$2 and active', [club, caller.uid])
+        if (!member.rowCount) throw new Error('Only an active club member can do that.')
+      }
       if (action === 'createClub') {
         const name = String(body.name ?? '').trim(); if (!name) throw new Error('Enter a club name.')
         let id = clubId(); while ((await db.query('select 1 from clubs where id=$1', [id])).rowCount) id = clubId()
@@ -78,11 +82,32 @@ export async function POST(request: NextRequest) {
         if (body.linked) { if (body.uid !== caller.uid) throw new Error('You can only link your own account.'); if (player.auth_uid && player.auth_uid !== caller.uid) throw new Error('That player is already linked to another user.'); if ((await db.query('select 1 from players where club_id=$1 and auth_uid=$2 and active and id<>$3', [body.clubId,caller.uid,body.playerId])).rowCount) throw new Error('Your account is already linked to another player in this club.') }
         await db.query('update players set auth_uid=$1 where id=$2 and club_id=$3', [body.linked ? caller.uid : null,body.playerId,body.clubId]); return null
       }
-      if (action === 'updatePlayerIcon') { await requireManager(body.clubId); const icon=String(body.nextIcon ?? '🀄').trim().slice(0,12); try { await db.query('update players set icon=$1,icon_key=$2 where id=$3 and club_id=$4', [icon,encodeURIComponent(icon.toLocaleLowerCase()),body.playerId,body.clubId]) } catch (error) { if ((error as { code?: string }).code === '23505') throw new Error('That emoji is already in use in this club.'); throw error } return null }
+      if (action === 'updatePlayerIcon') { await requireManager(body.clubId); const icon=String(body.nextIcon ?? '').trim().slice(0,12); if (!icon) throw new Error('Enter an emoji.'); try { await db.query('update players set icon=$1,icon_key=$2 where id=$3 and club_id=$4', [icon,encodeURIComponent(icon.toLocaleLowerCase()),body.playerId,body.clubId]) } catch (error) { if ((error as { code?: string }).code === '23505') throw new Error('That emoji is already in use in this club.'); throw error } return null }
+      if (action === 'updatePlayerName') { await requireManager(body.clubId); const name=String(body.nextName ?? '').trim().slice(0,80); if (!name) throw new Error('Enter a player name.'); await db.query('update players set display_name=$1 where id=$2 and club_id=$3 and active', [name,body.playerId,body.clubId]); return null }
       if (action === 'deleteClub') { await requireManager(body.clubId); if (body.clubId === 'KEN') throw new Error("Kendall's Mahjong Club cannot be deleted."); await db.query('update clubs set active=false,deleted_at=now(),deleted_by=$1 where id=$2', [caller.uid,body.clubId]); await db.query('update club_members set active=false where club_id=$1', [body.clubId]); return null }
       if (action === 'ensureSeasons') { await db.query("insert into seasons(club_id,season_number,name,created_by) values($1,1,'Season 1',$2) on conflict do nothing", [body.clubId,body.userId]); return null }
-      if (action === 'startNewSeason') { await requireManager(body.clubId); const next = Number((await db.query('select coalesce(max(season_number),0)+1 next from seasons where club_id=$1', [body.clubId])).rows[0].next); await db.query('update seasons set active=false where club_id=$1', [body.clubId]); await db.query('insert into seasons(club_id,season_number,name,created_by) values($1,$2,$3,$4)', [body.clubId,next,`Season ${next}`,caller.uid]); await db.query('update clubs set active_season_number=$1 where id=$2', [next,body.clubId]); return next }
+      if (action === 'startNewSeason') { await requireManager(body.clubId); await db.query('select pg_advisory_xact_lock(hashtext($1))', [`session:${body.clubId}`]); const next = Number((await db.query('select coalesce(max(season_number),0)+1 next from seasons where club_id=$1', [body.clubId])).rows[0].next); await db.query('update sessions set is_active=false,closed_at=coalesce(closed_at,now()) where club_id=$1 and is_active', [body.clubId]); await db.query('update seasons set active=false where club_id=$1', [body.clubId]); await db.query('insert into seasons(club_id,season_number,name,created_by) values($1,$2,$3,$4)', [body.clubId,next,`Season ${next}`,caller.uid]); await db.query('update clubs set active_season_number=$1 where id=$2', [next,body.clubId]); return next }
       if (action === 'setActiveSeason') { await requireManager(body.clubId); await db.query('update clubs set active_season_number=$1 where id=$2', [body.seasonNumber,body.clubId]); return null }
+      if (action === 'createSession') {
+        await requireMember(body.clubId)
+        const input = body.input ?? {}, participants = Array.isArray(input.participants) ? input.participants.map(String) : []
+        const tableCount = Math.min(99, Math.max(1, Math.floor(Number(input.tableCount) || 1))), seasonNumber = Math.floor(Number(input.seasonNumber) || 0)
+        if (participants.length < 4) throw new Error('Select at least 4 players.')
+        if (new Set(participants).size !== participants.length) throw new Error('A player can only be selected once per session.')
+        if (!seasonNumber || !(await db.query('select 1 from seasons where club_id=$1 and season_number=$2', [body.clubId,seasonNumber])).rowCount) throw new Error('That season no longer exists. Refresh the app and try again.')
+        const validPlayers = await db.query('select id from players where club_id=$1 and active and id=any($2::text[])', [body.clubId,participants])
+        if (validPlayers.rowCount !== new Set(participants).size) throw new Error('One or more selected players are no longer on the roster. Refresh and try again.')
+        await db.query('select pg_advisory_xact_lock(hashtext($1))', [`session:${body.clubId}`])
+        const existing = (await db.query('select id,season_number from sessions where club_id=$1 and is_active for update', [body.clubId])).rows[0]
+        const tables = input.tables && typeof input.tables === 'object' ? input.tables : {}, sideline = Array.isArray(input.sideline) ? input.sideline.map(String) : participants
+        if (existing?.season_number === seasonNumber) {
+          await db.query('update sessions set table_count=$1,participants=$2,tables=$3,sideline=$4 where id=$5', [tableCount,participants,JSON.stringify(tables),sideline,existing.id])
+          return String(existing.id)
+        }
+        if (existing) await db.query('update sessions set is_active=false,closed_at=coalesce(closed_at,now()) where id=$1', [existing.id])
+        const created = await db.query('insert into sessions(club_id,created_by,season_number,table_count,participants,tables,sideline) values($1,$2,$3,$4,$5,$6,$7) returning id', [body.clubId,caller.uid,seasonNumber,tableCount,participants,JSON.stringify(tables),sideline])
+        return String(created.rows[0].id)
+      }
       if (action === 'saveTableArrangement') { const arrangement=body.arrangement,id=arrangement.id || rowId(); await db.query(`insert into table_arrangements(id,club_id,created_at,tables,sideline) values($1,$2,$3,$4,$5) on conflict(id) do update set tables=excluded.tables,sideline=excluded.sideline`, [id,body.clubId,arrangement.createdAt ? new Date(arrangement.createdAt.seconds*1000) : new Date(),JSON.stringify(arrangement.tables),arrangement.sideline]); return id }
       if (action === 'ensureConfig') { await db.query(`insert into app_configs(club_id,title_bands,elo_base_k,elo_veteran_games_threshold,elo_starting_rating,elo_new_player_k,elo_intermediate_k,elo_new_player_games_threshold) values($1,$2,16,50,1500,32,24,20) on conflict do nothing`, [body.clubId,JSON.stringify([{minPoints:3000,maxPoints:99999,title:'Messiah'},{minPoints:1800,maxPoints:2999,title:'Master'},{minPoints:350,maxPoints:1799,title:'Musketeer'},{minPoints:150,maxPoints:349,title:'Marshal'},{minPoints:-650,maxPoints:149,title:'Monk'},{minPoints:-700,maxPoints:-651,title:'Mortal'},{minPoints:-1150,maxPoints:-701,title:'Minion'},{minPoints:-1550,maxPoints:-1151,title:'Mongrel'},{minPoints:-99999,maxPoints:-1551,title:'Moron'}])]); return null }
       throw new Error(`Unsupported Supabase action: ${action}`)

@@ -176,7 +176,7 @@ export default function GameLogsModal({
   const filteredGames = useMemo(() => {
     return games
       .filter((game) => seasonFilter === 'all' || (game.seasonNumber ?? 1) === seasonFilter)
-      .sort((a, b) => (a.datetime?.toMillis?.() ?? 0) - (b.datetime?.toMillis?.() ?? 0))
+      .sort((a, b) => (b.datetime?.toMillis?.() ?? 0) - (a.datetime?.toMillis?.() ?? 0))
   }, [games, seasonFilter])
 
   const displayedGames = useMemo(() => {
@@ -268,7 +268,7 @@ export default function GameLogsModal({
         setGames((current) => current.filter((game) => game.id !== selectedGame.id))
       } else {
         const updated: GameDoc = { ...selectedGame, datetime: Timestamp.fromDate(new Date(draftDate)), seasonNumber: draftSeason, entries, notes: draftNotes.trim() || null }
-        setGames((current) => current.map((game) => game.id === updated.id ? updated : game).sort((a, b) => a.datetime.toMillis() - b.datetime.toMillis()))
+        setGames((current) => current.map((game) => game.id === updated.id ? updated : game).sort((a, b) => b.datetime.toMillis() - a.datetime.toMillis()))
       }
       setSelectedGame(null)
       setImportMessage(action === 'delete' ? 'Game deleted and all club statistics recalculated.' : 'Game updated and all club statistics recalculated.')
@@ -280,12 +280,12 @@ export default function GameLogsModal({
   }
 
   const loadOlderGames = async () => {
-    const oldest = games[0]?.datetime?.toMillis?.()
-    if (!oldest || loadingOlderGames) return
+    const oldest = games.reduce((minimum, game) => Math.min(minimum, game.datetime?.toMillis?.() ?? minimum), Number.POSITIVE_INFINITY)
+    if (!Number.isFinite(oldest) || loadingOlderGames) return
     setLoadingOlderGames(true)
     try {
       const older = await loadGamesPage(clubId, 100, oldest)
-      setGames((current) => [...older, ...current])
+      setGames((current) => [...current, ...older].sort((a, b) => b.datetime.toMillis() - a.datetime.toMillis()))
       setHasOlderGames(older.length === 100)
     } catch (error) {
       setImportMessage(error instanceof Error ? error.message : 'Unable to load older games.')

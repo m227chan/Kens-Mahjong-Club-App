@@ -317,35 +317,37 @@ Shared client-facing types live in `lib/types.ts`:
 ### Roster and player identity
 
 - Tracked players exist separately from authenticated accounts, allowing historical and guest play.
-- Managers can add players, choose an emoji, update an emoji by selecting the player icon, and deactivate a player.
+- Managers can add, rename, and deactivate players. Roster deletion controls are never rendered for regular members, and the API repeats the manager check before mutating data.
+- Managers can update a player emoji by selecting the player icon. The curated picker prevents duplicate active icons, while its custom input (opened directly by right-click on desktop) accepts an emoji outside the automatic default list.
 - New/imported players receive a random emoji from a curated set when one is not supplied.
 - Active emojis are kept unique per club where possible.
 - A signed-in member can link their account to one unlinked tracked player in a club and can unlink their own account.
-- The UI keeps player names visible, uses a compact remove control, and contains the emoji picker within a four-column responsive menu.
+- Once a user is linked, other unlinked profiles no longer show a link action until that user unlinks their current profile.
+- The UI keeps player names visible, uses a compact manager-only remove control, and contains the emoji picker within a four-column responsive menu.
 - Managers can review club members and promote additional managers from the roster modal.
 
 ### Seasons
 
 - Each club begins with a first season.
-- Managers can create the next numbered season and switch the active season.
+- Managers can create the next numbered season and switch the active season. Creating a season transactionally closes the previous live session and refreshes the workspace so every season-scoped subscription restarts cleanly.
 - Leaderboard, session, analytics, and logs can be season-scoped.
 - All-time and season statistics are stored separately but rebuilt from the same authoritative history.
 
 ### Session manager
 
-- Create or resume one active session per club/season.
+- Create or resume one active session per club. Session creation is transactional: a stale active session from an older season is closed before the new session is inserted, preventing the partial unique-index conflict on active sessions.
 - Choose participating players and a table count.
 - “All” selection includes the complete currently filtered roster selection.
 - New sessions begin with every participant on the sideline and empty numbered tables.
 - Mobile-only decrement/increment controls make table count editing reliable without text-selection quirks.
-- Move players between sideline and tables, fill open seats, clear tables, swap players, and edit the session.
+- Move players between sideline and tables, fill open seats, clear tables, swap players, and edit the session. The add-player dialog shows the table's selected players first and lets the user remove a selection without closing the dialog.
 - Search by player or table.
 - Table cards show capacity and readiness; four players marks a table ready.
 - Record self-draw wins, discard wins, or draws.
 - Winner, discarder, and fan selections have visible selected states.
 - Calculated scores are previewed and must sum to zero before saving.
 - Saved wins trigger a cheerful, viewport-centered announcement with winner identity and score changes.
-- Session dialogs are centered in the viewport regardless of page scroll.
+- Session dialogs are rendered through a document-body portal, centered in the viewport regardless of page scroll, and use a full-viewport opaque fade. The help dialog has an independently scrollable body and explains both sessions and seasons.
 - Session state is persisted collaboratively through Supabase and restored on another device.
 - Legacy malformed table keys are normalized safely; participants are recovered to the sideline rather than lost.
 
@@ -364,6 +366,7 @@ Every stored game must contain two to four distinct players, finite numeric scor
 - Loads a bounded recent page instead of the full club history.
 - Loads older pages on demand.
 - Filters by season, active-session participants, or a specific player.
+- Loaded records are always displayed newest first; loading an older page preserves that descending chronology.
 - Mobile condenses season and player filters into a collapsed disclosure with an active-filter summary, keeping records near the top of the viewport; desktop keeps the controls expanded.
 - Desktop uses a horizontally scrollable score table with sticky date and header cells.
 - Mobile uses readable game cards rather than compressing the wide table.

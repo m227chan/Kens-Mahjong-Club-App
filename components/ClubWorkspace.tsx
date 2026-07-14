@@ -22,6 +22,7 @@ import {
   setPlayerAuthLink,
   startNewSeason,
   updatePlayerIcon,
+  updatePlayerName,
   subscribeClub,
   subscribeClubMembers,
   subscribeJoinRequests,
@@ -63,6 +64,9 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [seasons, setSeasons] = useState<SeasonDoc[]>([])
   const [seasonAction, setSeasonAction] = useState(false)
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null)
+  const [customEmojiValue, setCustomEmojiValue] = useState('')
+  const [renamingPlayerId, setRenamingPlayerId] = useState<string | null>(null)
+  const [renamingPlayerValue, setRenamingPlayerValue] = useState('')
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleteConfirmName, setDeleteConfirmName] = useState('')
   const [deletingClub, setDeletingClub] = useState(false)
@@ -76,6 +80,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const usedIconKeys = new Set(players.map((player) => player.icon.trim().toLocaleLowerCase()))
   const latestSeasonNumber = seasons.length ? seasons[seasons.length - 1].seasonNumber : club?.activeSeasonNumber ?? 1
   const activeSeasonNumber = club?.activeSeasonNumber ?? latestSeasonNumber
+  const linkedPlayerForUser = user ? players.find((player) => player.authUid === user.uid) ?? null : null
 
   useEffect(() => subscribeClub(clubId, setClub), [clubId])
   useEffect(() => subscribeClubMembers(clubId, setMembers), [clubId])
@@ -143,12 +148,44 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   }
   const changePlayerIcon = async (player: PlayerDoc, icon: string) => {
     setPlayerMessage(null)
+    const nextIcon = icon.trim().slice(0, 12)
+    if (!nextIcon) {
+      setPlayerMessage('Enter an emoji.')
+      return
+    }
     try {
-      await updatePlayerIcon(clubId, player.id, icon)
+      await updatePlayerIcon(clubId, player.id, nextIcon)
       setEditingPlayerId(null)
+      setCustomEmojiValue('')
       setPlayerMessage(`${player.displayName}'s emoji was updated.`)
     } catch (error) {
       setPlayerMessage(error instanceof Error ? error.message : 'Unable to update emoji.')
+    }
+  }
+  const renamePlayer = async (player: PlayerDoc) => {
+    const nextName = renamingPlayerValue.trim()
+    if (!nextName) {
+      setPlayerMessage('Enter a player name.')
+      return
+    }
+    setPlayerMessage(null)
+    try {
+      await updatePlayerName(clubId, player.id, nextName)
+      setRenamingPlayerId(null)
+      setRenamingPlayerValue('')
+      setPlayerMessage(`${player.displayName} was renamed to ${nextName}.`)
+    } catch (error) {
+      setPlayerMessage(error instanceof Error ? error.message : 'Unable to rename player.')
+    }
+  }
+  const deleteRosterPlayer = async (player: PlayerDoc) => {
+    if (!isManager || !window.confirm(`Remove ${player.displayName} from the roster? Their historical game records will remain.`)) return
+    setPlayerMessage(null)
+    try {
+      await removePlayer(clubId, player.id)
+      setPlayerMessage(`${player.displayName} was removed from the roster.`)
+    } catch (error) {
+      setPlayerMessage(error instanceof Error ? error.message : 'Unable to remove player.')
     }
   }
 
@@ -223,6 +260,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
     try {
       await startNewSeason(clubId, { createdBy: user.uid })
       setSettingsOpen(false)
+      window.location.reload()
     } finally {
       setSeasonAction(false)
     }
@@ -489,7 +527,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                   {managerMessage ? <p className="mt-3 text-sm font-semibold text-slate-700">{managerMessage}</p> : null}
                 </section>
               ) : null}
-              <section className="rounded-lg border border-teal-200 bg-teal-50 p-4">
+              {isManager ? <section className="rounded-lg border border-teal-200 bg-teal-50 p-4">
                 <h4 className="text-sm font-black uppercase tracking-[0.16em] text-teal-800">Add player</h4>
                 <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_140px_auto]">
                   <label className="text-sm font-bold text-slate-700">
@@ -540,13 +578,15 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                   <button type="button" onClick={addPlayer} className="self-end rounded-lg bg-teal-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-teal-500">
                     Add player
                   </button>
-                  <label className="flex items-center gap-2 text-sm font-semibold text-slate-600 lg:col-span-3">
-                    <input type="checkbox" checked={linkToMe} onChange={(event) => setLinkToMe(event.target.checked)} />
-                    This player is me
-                  </label>
+                  {!linkedPlayerForUser ? (
+                    <label className="flex items-center gap-2 text-sm font-semibold text-slate-600 lg:col-span-3">
+                      <input type="checkbox" checked={linkToMe} onChange={(event) => setLinkToMe(event.target.checked)} />
+                      Link this new player to my account
+                    </label>
+                  ) : null}
                 </div>
                 {playerMessage ? <p className="mt-3 text-sm font-semibold text-slate-700">{playerMessage}</p> : null}
-              </section>
+              </section> : null}
 
               <section className="mt-5">
                 <div className="flex items-center justify-between gap-3">
@@ -557,30 +597,54 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                   {players.map((player) => (
                     <div key={player.id} className="relative rounded-xl border border-slate-200 bg-slate-50 p-3 transition hover:border-slate-300 hover:bg-white">
                       <div className="flex min-w-0 items-center gap-3">
-                        <button type="button" onClick={() => setEditingPlayerId(editingPlayerId === player.id ? null : player.id)} aria-label={`Change ${player.displayName} emoji`} title="Change emoji" className="flex h-11 w-11 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-lg text-slate-700 shadow-sm hover:border-[rgb(var(--bamboo))]">
-                          {player.icon}
-                        </button>
+                        {isManager ? (
+                          <button
+                            type="button"
+                            onClick={() => { setEditingPlayerId(editingPlayerId === player.id ? null : player.id); setCustomEmojiValue(player.icon) }}
+                            onContextMenu={(event) => { event.preventDefault(); setEditingPlayerId(player.id); setCustomEmojiValue('') }}
+                            aria-label={`Change ${player.displayName} emoji`}
+                            title="Change emoji. Right-click to enter a custom emoji."
+                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-lg text-slate-700 shadow-sm transition hover:scale-105 hover:border-[rgb(var(--bamboo))] hover:bg-[rgb(var(--bamboo)/0.12)] hover:ring-2 hover:ring-[rgb(var(--bamboo)/0.25)] focus-visible:ring-2 focus-visible:ring-[rgb(var(--bamboo))]"
+                          >
+                            {player.icon}
+                          </button>
+                        ) : <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-lg" aria-hidden="true">{player.icon}</span>}
                         <div className="min-w-0">
                           <p className="break-words text-sm font-black leading-5 text-slate-900">{player.displayName}</p>
                           <p className="mt-0.5 text-xs text-slate-500">{player.authUid ? 'Linked user' : 'Tracked player'}</p>
                         </div>
                       </div>
-                      <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-200 pt-3">
-                        {(!player.authUid || player.authUid === user?.uid) ? (
+                      <div className="mt-3 flex min-h-9 items-center justify-between gap-2 border-t border-slate-200 pt-3">
+                        {(player.authUid === user?.uid || (!player.authUid && !linkedPlayerForUser)) ? (
                           <button type="button" onClick={() => togglePlayerLink(player)} className="min-h-9 rounded border border-amber-200 px-2 py-1 text-xs font-bold text-slate-700 hover:bg-amber-50">
                             {player.authUid === user?.uid ? 'Unlink account' : 'Link account'}
                           </button>
                         ) : null}
-                        <button type="button" onClick={() => removePlayer(clubId, player.id)} aria-label={`Remove ${player.displayName}`} title="Remove player" className="flex h-9 w-9 items-center justify-center rounded border border-rose-200 text-lg font-bold text-rose-700 hover:bg-rose-50">
-                          ×
-                        </button>
+                        {isManager ? <div className="ml-auto flex items-center gap-2">
+                          <button type="button" onClick={() => { setRenamingPlayerId(player.id); setRenamingPlayerValue(player.displayName) }} className="min-h-9 rounded border border-slate-300 px-2 py-1 text-xs font-bold text-slate-700 hover:bg-white">Rename</button>
+                          <button type="button" onClick={() => deleteRosterPlayer(player)} aria-label={`Remove ${player.displayName}`} title="Remove player" className="flex h-9 w-9 items-center justify-center rounded border border-rose-200 text-lg font-bold text-rose-700 hover:bg-rose-50">×</button>
+                        </div> : null}
                       </div>
-                      {editingPlayerId === player.id ? (
-                        <div className="emoji-picker emoji-menu absolute right-2 top-full z-20 mt-2 grid w-56 grid-cols-4 gap-1 rounded border border-slate-200 bg-white p-3 shadow-xl">
-                          {iconChoices.map((choice) => {
+                      {renamingPlayerId === player.id ? (
+                        <form className="mt-3 flex gap-2" onSubmit={(event) => { event.preventDefault(); void renamePlayer(player) }}>
+                          <input autoFocus value={renamingPlayerValue} maxLength={80} onChange={(event) => setRenamingPlayerValue(event.target.value)} aria-label={`New name for ${player.displayName}`} className="min-h-10 min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 text-sm outline-none focus:border-[rgb(var(--bamboo))]" />
+                          <button type="submit" className="rounded bg-[rgb(var(--bamboo))] px-3 text-xs font-bold text-white">Save</button>
+                          <button type="button" onClick={() => setRenamingPlayerId(null)} className="rounded border border-slate-300 px-2 text-xs font-bold">Cancel</button>
+                        </form>
+                      ) : null}
+                      {isManager && editingPlayerId === player.id ? (
+                        <div className="emoji-menu absolute right-2 top-full z-20 mt-2 w-64 max-w-[calc(100vw-3rem)] rounded border border-slate-200 bg-white p-3 shadow-xl">
+                          <div className="emoji-picker grid grid-cols-4 gap-1">{iconChoices.map((choice) => {
                             const used = usedIconKeys.has(choice.toLocaleLowerCase()) && choice !== player.icon
                             return <button key={choice} type="button" disabled={used} onClick={() => changePlayerIcon(player, choice)} className="flex h-11 w-11 items-center justify-center rounded border border-transparent bg-transparent text-xl hover:border-[rgb(var(--bamboo))] hover:bg-[rgb(var(--bamboo)/0.08)] disabled:opacity-20">{choice}</button>
-                          })}
+                          })}</div>
+                          <form className="mt-3 border-t border-slate-200 pt-3" onSubmit={(event) => { event.preventDefault(); void changePlayerIcon(player, customEmojiValue) }}>
+                            <label className="text-xs font-bold text-slate-600">Custom emoji</label>
+                            <div className="mt-1 flex gap-2">
+                              <input value={customEmojiValue} onChange={(event) => setCustomEmojiValue(event.target.value.slice(0, 12))} placeholder="Paste any emoji" aria-label={`Custom emoji for ${player.displayName}`} className="min-h-10 min-w-0 flex-1 rounded border border-slate-300 px-2 text-sm outline-none focus:border-[rgb(var(--bamboo))]" />
+                              <button type="submit" className="rounded bg-[rgb(var(--bamboo))] px-3 text-xs font-bold text-white">Use</button>
+                            </div>
+                          </form>
                         </div>
                       ) : null}
                     </div>

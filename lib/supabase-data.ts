@@ -106,6 +106,7 @@ export const createPlayer = (clubId: string, input: { displayName: string; icon?
 export const removePlayer = (clubId: string, playerId: string) => serverAction<void>('removePlayer', { clubId, playerId })
 export const setPlayerAuthLink = (clubId: string, playerId: string, uid: string, linked: boolean) => serverAction<void>('setPlayerAuthLink', { clubId, playerId, uid, linked })
 export const updatePlayerIcon = (clubId: string, playerId: string, nextIcon: string) => serverAction<void>('updatePlayerIcon', { clubId, playerId, nextIcon })
+export const updatePlayerName = (clubId: string, playerId: string, nextName: string) => serverAction<void>('updatePlayerName', { clubId, playerId, nextName })
 export const deleteClub = (clubId: string, managerUid: string) => serverAction<void>('deleteClub', { clubId, managerUid })
 export const createGame = (clubId: string, input: Row) => serverAction<string>('createGame', { clubId, input })
 export const deleteGameAndRebuild = (clubId: string, gameId: string) => serverAction<void>('deleteGameAndRebuild', { clubId, gameId })
@@ -155,16 +156,14 @@ export function subscribeLatestTableArrangement(clubId: string, callback: (arran
 export const saveTableArrangement = (clubId: string, arrangement: TableArrangementDoc) => serverAction<string>('saveTableArrangement', { clubId, arrangement })
 export function subscribeActiveSession(clubId: string, seasonNumber: number, callback: (session: SessionDoc | null) => void, onError?: (error: Error) => void) {
   const load = async () => { const { data, error } = await client().from('sessions').select('*').eq('club_id', clubId).eq('season_number', seasonNumber).eq('is_active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(); if (error) throw error; return data ? mapSession(data) : null }
-  return realtime(`session:${clubId}`, 'sessions', `club_id=eq.${clubId}`, load, callback, onError)
+  return realtime(`session:${clubId}:${seasonNumber}`, 'sessions', `club_id=eq.${clubId}`, load, callback, onError)
 }
 export async function createSession(clubId: string, input: { createdBy: string; participants: string[]; tableCount: number; seasonNumber: number; tables?: Record<string, string[]>; sideline?: string[] }) {
   const initialLayout = createInitialSessionLayout(input.participants, input.tableCount)
   const tables = input.tables ?? initialLayout.tables
   const assigned = new Set(Object.values(tables).flat())
   const sideline = input.sideline ?? initialLayout.sideline.filter((playerId) => !assigned.has(playerId))
-  const { data, error } = await client().from('sessions').insert({ club_id: clubId, created_by: input.createdBy, season_number: input.seasonNumber, table_count: input.tableCount, participants: input.participants, tables, sideline }).select('id').single()
-  if (error) throw error
-  return String(data.id)
+  return serverAction<string>('createSession', { clubId, input: { ...input, tables, sideline } })
 }
 export async function updateSession(clubId: string, sessionId: string, values: Partial<Omit<SessionDoc, 'id' | 'createdAt' | 'createdBy'>>) { const mapped: Row = {}; if (values.seasonNumber != null) mapped.season_number = values.seasonNumber; if (values.isActive != null) mapped.is_active = values.isActive; if (values.tableCount != null) mapped.table_count = values.tableCount; if (values.participants) mapped.participants = values.participants; if (values.tables) mapped.tables = values.tables; if (values.sideline) mapped.sideline = values.sideline; if (values.closedAt !== undefined) mapped.closed_at = values.closedAt?.toDate().toISOString() ?? null; const { error } = await client().from('sessions').update(mapped).eq('id', sessionId).eq('club_id', clubId); if (error) throw error }
 export const closeSession = (clubId: string, sessionId: string) => updateSession(clubId, sessionId, { isActive: false, closedAt: Timestamp.now() })
