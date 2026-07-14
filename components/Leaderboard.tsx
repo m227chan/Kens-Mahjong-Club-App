@@ -58,12 +58,12 @@ export function LeaderboardPanel({ clubId, seasonNumber, compact = false, player
       {visibleRows.length > 0 ? (
         <>
           <div className="mobile-leaderboard md:hidden">
-            <div className="grid grid-cols-[42px_minmax(0,1fr)_64px_64px] items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">
-              <span>Rank</span><span>Player</span><span>ELO</span><span>Win</span>
+            <div className="grid grid-cols-[42px_minmax(0,1fr)_72px_64px] items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">
+              <span>Rank</span><span>Player</span><span>Points</span><span>ELO</span>
             </div>
             <div className="divide-y divide-slate-200">
               {mobileRows.map((row, index) => (
-                <article key={row.playerId} className="grid min-h-16 grid-cols-[42px_minmax(0,1fr)_64px_64px] items-center gap-2 px-3 py-2.5">
+                <article key={row.playerId} className="grid min-h-16 grid-cols-[42px_minmax(0,1fr)_72px_64px] items-center gap-2 px-3 py-2.5">
                   <span className="font-mono text-base font-black text-[rgb(var(--cinnabar))]">#{row.pointsRank || index + 1}</span>
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="flex h-9 w-8 shrink-0 items-center justify-center rounded border border-slate-200 bg-slate-50 text-base">{row.icon}</span>
@@ -72,8 +72,8 @@ export function LeaderboardPanel({ clubId, seasonNumber, compact = false, player
                       <p className="truncate text-xs leading-5 text-slate-500">{titleForStanding(index + 1, rows.length, row.gamesPlayed)}</p>
                     </div>
                   </div>
+                  <span className="font-mono text-sm font-bold text-slate-900">{row.totalPoints}</span>
                   <span className="font-mono text-sm font-bold text-slate-900">{row.eloRating}</span>
-                  <span className="font-mono text-sm font-bold text-slate-900">{formatWinRate(row.gamesWon, row.gamesPlayed)}</span>
                 </article>
               ))}
             </div>

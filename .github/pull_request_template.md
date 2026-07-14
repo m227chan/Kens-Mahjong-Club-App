@@ -6,6 +6,7 @@
 
 - [ ] I tested the app locally.
 - [ ] I ran the relevant automated checks.
+- [ ] I ran `npm run security:scan` and did not commit secrets, local environment files, or generated build output.
 
 ## Documentation
 

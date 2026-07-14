@@ -381,7 +381,7 @@ Every stored game must contain two to four distinct players, finite numeric scor
 - Desktop columns show rank, player, points, ELO value, games, wins, losses, and win ratio.
 - ELO rank is intentionally not displayed beside the ELO value.
 - The player subtitle contains only the derived rank title—no duplicate ELO or “last five” metric.
-- Mobile shows a focused rank/player/ELO/win table, initially limited to the top five with an explicit expansion control.
+- Mobile shows a focused rank/player/points/ELO table, initially limited to the top five with an explicit expansion control.
 - Desktop preserves the full final column with a deliberate minimum width and horizontal scrolling.
 
 #### Rank-title distribution

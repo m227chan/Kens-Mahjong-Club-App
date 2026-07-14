@@ -56,6 +56,7 @@ Open [http://localhost:3000](http://localhost:3000).
 ```bash
 npm test -- --run
 npm run lint
+npm run security:scan
 npm run build
 ```
 
