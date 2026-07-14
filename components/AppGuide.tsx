@@ -47,7 +47,7 @@ const TOUR_STEPS: TourStep[] = [
   { selector: '[data-tour="club-header"]', title: 'The club workspace', body: 'This header identifies the current club and keeps its season, roster, analytics, game logs, share ID, and manager settings together.', action: 'next' },
   { selector: '[data-tour="season-selector"]', title: 'Seasons are chapters', body: 'Switch seasons to review a different chapter of standings and history. Starting a new season is a manager action in Settings; the tour will not change it.', action: 'next' },
   { selector: '[data-tour="session-manager"]', title: 'Run the live session here', body: 'Choose attendees and tables, seat players from the sideline, then record a winner or draw. Four players make a table ready. Ming will not start a session or record a game.', action: 'next' },
-  { selector: '[data-tour="roster-open"]', title: 'Open the real roster', body: 'The roster manages tracked players, account links, emojis, names, and manager access.', action: 'click', instruction: 'Click the highlighted roster control.' },
+  { selector: '[data-tour="roster-open"], [data-tour="roster-tab"]', clickTarget: 'roster-open', title: 'Open the real roster', body: 'The roster manages tracked players, account links, emojis, names, and manager access. On mobile, open the Roster tab first, then use Manage players.', action: 'responsive', instruction: 'On mobile, tap Roster and then Manage players. On desktop, click Roster.' },
   { selector: '[data-tour="roster-modal"]', title: 'Roster and linked users', body: 'Members can link themselves to one available player. Managers also see player and manager controls. Nothing is changed unless you deliberately use one of those controls.', action: 'next' },
   { selector: '[data-tour="roster-close"]', title: 'Return to the workspace', body: 'Close the real roster to continue.', action: 'click', instruction: 'Click Close.' },
   { selector: '[data-tour="leaderboard"], [data-tour="standings-tab"]', clickTarget: 'standings-tab', title: 'Standings update from games', body: 'Points, ELO, activity, and results are recalculated for the selected season. On mobile, open the Standings tab to reveal the same leaderboard.', action: 'responsive', instruction: 'On mobile, click Standings. On desktop, choose Next.' },
@@ -97,7 +97,9 @@ export default function AppGuide() {
   const [stepIndex, setStepIndex] = useState(0)
   const [spotlight, setSpotlight] = useState<SpotlightRect | null>(null)
   const targetRef = useRef<HTMLElement | null>(null)
+  const bubbleRef = useRef<HTMLElement | null>(null)
   const lastScrolledRef = useRef<HTMLElement | null>(null)
+  const allowProgrammaticTourClickRef = useRef(false)
   const step = TOUR_STEPS[stepIndex]
 
   useEffect(() => setMounted(true), [])
@@ -112,6 +114,28 @@ export default function AppGuide() {
   const advance = useCallback(() => {
     setStepIndex((current) => Math.min(current + 1, TOUR_STEPS.length - 1))
   }, [])
+
+  const clickTourElement = useCallback((tourName: string) => {
+    const element = visibleTarget(`[data-tour="${tourName}"]`)
+    if (!element) return
+    allowProgrammaticTourClickRef.current = true
+    element.click()
+    allowProgrammaticTourClickRef.current = false
+  }, [])
+
+  const goBack = useCallback(() => {
+    if (stepIndex === 0) return
+
+    // Restore UI that a forward-only step changed before returning to its control.
+    if (stepIndex === 5) router.push('/')
+    if (stepIndex === 9) clickTourElement('roster-close')
+    if (stepIndex === 11) clickTourElement('roster-open')
+    if (stepIndex === 13) clickTourElement('analytics-close')
+    if (stepIndex === 16) clickTourElement('logs-close')
+    if (stepIndex === 19) clickTourElement('settings-close')
+
+    setStepIndex((current) => Math.max(0, current - 1))
+  }, [clickTourElement, router, stepIndex])
 
   const exitTour = useCallback(() => {
     setTourOpen(false)
@@ -184,6 +208,43 @@ export default function AppGuide() {
     return () => document.removeEventListener('click', handleClick, true)
   }, [advance, step, targetRequiresClick, tourOpen])
 
+  useEffect(() => {
+    if (!tourOpen) return
+
+    const isAllowed = (eventTarget: EventTarget | null) => {
+      if (allowProgrammaticTourClickRef.current) return true
+      if (!(eventTarget instanceof Node)) return false
+      return Boolean(targetRef.current?.contains(eventTarget) || bubbleRef.current?.contains(eventTarget))
+    }
+    const blockOutsideInteraction = (event: Event) => {
+      if (isAllowed(event.target)) return
+      event.preventDefault()
+      event.stopPropagation()
+      if ('stopImmediatePropagation' in event) event.stopImmediatePropagation()
+    }
+    const blockOutsideKeyboard = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' || event.key === 'Tab' || isAllowed(event.target)) return
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+    }
+
+    document.addEventListener('pointerdown', blockOutsideInteraction, true)
+    document.addEventListener('click', blockOutsideInteraction, true)
+    document.addEventListener('input', blockOutsideInteraction, true)
+    document.addEventListener('change', blockOutsideInteraction, true)
+    document.addEventListener('submit', blockOutsideInteraction, true)
+    document.addEventListener('keydown', blockOutsideKeyboard, true)
+    return () => {
+      document.removeEventListener('pointerdown', blockOutsideInteraction, true)
+      document.removeEventListener('click', blockOutsideInteraction, true)
+      document.removeEventListener('input', blockOutsideInteraction, true)
+      document.removeEventListener('change', blockOutsideInteraction, true)
+      document.removeEventListener('submit', blockOutsideInteraction, true)
+      document.removeEventListener('keydown', blockOutsideKeyboard, true)
+    }
+  }, [tourOpen])
+
   const startTour = () => {
     if (!user) return
     setGuideOpen(false)
@@ -225,13 +286,14 @@ export default function AppGuide() {
       {tourOpen ? createPortal(
         <div className="real-tour-layer" aria-live="polite">
           {spotlight ? <div className="real-tour-spotlight" style={{ top: spotlight.top, left: spotlight.left, width: spotlight.width, height: spotlight.height }} aria-hidden="true" /> : <div className="real-tour-dimmer" aria-hidden="true" />}
-          <aside className={`real-tour-bubble ${bubbleAbove ? 'is-above' : 'is-below'}`} role="status">
+          <aside ref={bubbleRef} className={`real-tour-bubble ${bubbleAbove ? 'is-above' : 'is-below'}`} role="status">
             <div className="real-tour-heading"><span className="app-guide-avatar" aria-hidden="true">🀄</span><div><p className="app-guide-kicker">Ming says · {stepIndex + 1}/{TOUR_STEPS.length}</p><h2>{step.title}</h2></div><button type="button" onClick={exitTour} aria-label="Exit tour">×</button></div>
             <p>{step.body}</p>
             {!spotlight ? <p className="real-tour-searching">Finding this part of the page…</p> : null}
             {step.instruction ? <strong>{step.instruction}</strong> : null}
             <div className="real-tour-actions">
               <button type="button" onClick={exitTour}>Exit tour</button>
+              {stepIndex > 0 ? <button type="button" onClick={goBack}>Go back</button> : null}
               {step.action === 'finish' ? <button type="button" onClick={exitTour}>Finish</button> : targetRequiresClick ? <button type="button" onClick={advance} className="real-tour-skip">Skip this stop</button> : <button type="button" onClick={advance}>Next</button>}
             </div>
           </aside>

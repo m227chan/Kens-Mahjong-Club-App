@@ -53,4 +53,27 @@ describe('AppGuide', () => {
     expect(push).toHaveBeenCalledWith('/')
     expect(screen.queryByText('Your personal dashboard')).not.toBeInTheDocument()
   })
+
+  it('supports going back and blocks interaction outside the spotlight', async () => {
+    const spotlightClick = vi.fn()
+    const outsideClick = vi.fn()
+    render(<>
+      <button data-tour="dashboard-intro" onClick={spotlightClick}>Spotlight target</button>
+      <button onClick={outsideClick}>Unrelated control</button>
+      <AppGuide />
+    </>)
+    fireEvent.click(screen.getByRole('button', { name: 'Open app guide' }))
+    fireEvent.click(screen.getByRole('button', { name: /Take a Tour/ }))
+    await waitFor(() => expect(document.querySelector('.real-tour-spotlight')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unrelated control' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Spotlight target' }))
+    expect(outsideClick).not.toHaveBeenCalled()
+    expect(spotlightClick).toHaveBeenCalledOnce()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(screen.getByRole('button', { name: 'Go back' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Go back' }))
+    expect(screen.getByText('Your personal dashboard')).toBeInTheDocument()
+  })
 })

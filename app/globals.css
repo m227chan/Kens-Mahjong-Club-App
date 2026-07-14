@@ -286,7 +286,8 @@ html.dark .app-guide-panel footer button:last-child { color: rgb(7 28 21); }
 .app-guide-fan-map tbody tr:last-child td { border-bottom: 0; }
 .real-tour-layer { position: fixed; inset: 0; z-index: 30000; pointer-events: none; }
 .real-tour-dimmer { position: fixed; inset: 0; background: rgb(4 15 12 / .74); }
-.real-tour-spotlight { position: fixed; z-index: 1; border: 3px solid rgb(var(--gold)); border-radius: 8px; box-shadow: 0 0 0 9999px rgb(4 15 12 / .72), 0 0 0 5px rgb(var(--surface-1) / .92), 0 0 0 9px rgb(var(--gold) / .3); animation: real-tour-pulse 1.65s ease-in-out infinite; pointer-events: none; transition: top 180ms ease,left 180ms ease,width 180ms ease,height 180ms ease; }
+.real-tour-spotlight { position: fixed; z-index: 1; border: 4px solid rgb(var(--cinnabar)); border-radius: 8px; box-shadow: 0 0 0 9999px rgb(4 15 12 / .72), 0 0 0 5px rgb(var(--surface-1) / .96), 0 0 0 10px rgb(var(--cinnabar) / .72); animation: real-tour-pulse 1.65s ease-in-out infinite; pointer-events: none; transition: top 180ms ease,left 180ms ease,width 180ms ease,height 180ms ease; }
+html.dark .real-tour-spotlight { border-color: rgb(var(--gold)); box-shadow: 0 0 0 9999px rgb(4 15 12 / .72), 0 0 0 5px rgb(var(--surface-1) / .92), 0 0 0 9px rgb(var(--gold) / .45); }
 .real-tour-bubble { position: fixed; left: 50%; z-index: 2; width: min(600px,calc(100% - 2rem)); transform: translateX(-50%); border: 1px solid rgb(var(--bamboo)); border-radius: 8px; padding: 1rem; background: rgb(var(--surface-1)); color: rgb(var(--ink)); box-shadow: 7px 9px 0 rgb(var(--shadow) / .18),0 20px 60px rgb(0 0 0 / .3); pointer-events: auto; }
 .real-tour-bubble.is-above { top: 1rem; }
 .real-tour-bubble.is-below { bottom: 1rem; }

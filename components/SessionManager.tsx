@@ -1560,7 +1560,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         .session-manager input:focus { border-color:rgb(var(--bamboo))!important; box-shadow:inset 3px 0 0 rgb(var(--cinnabar)),0 0 0 2px rgb(var(--bamboo)/.12); }
         .session-manager .sideline-section { order:1; margin:12px 12px 0; padding:12px; border:1px solid rgb(var(--line)); border-left:4px solid rgb(var(--gold)); border-radius:3px; background:rgb(var(--surface-2)); box-shadow:none; }
         .session-manager .section-label { margin:0 0 10px; color:rgb(var(--ink)); font-size:10px; letter-spacing:.16em; }
-        .session-manager .section-label .badge { border-radius:2px; padding:2px 7px; background:rgb(var(--cinnabar)); }
+        .session-manager .section-label .badge { border:1px solid rgb(var(--gold)/.32); border-radius:2px; padding:1px 7px; background:rgb(var(--gold)/.12); color:rgb(var(--muted)); }
         .session-manager .sideline-area { min-height:74px; padding:10px; gap:12px; border:1px dashed rgb(var(--line)); border-radius:2px; background:rgb(var(--surface)); }
         .session-manager .table-card { border:1px solid rgb(var(--line)); border-left:4px solid rgb(var(--muted)); border-radius:3px; background:rgb(var(--surface)); box-shadow:4px 4px 0 rgb(var(--shadow)/.06); overflow:visible; }
         .session-manager .table-card.valid { border-color:rgb(var(--line)); border-left-color:rgb(var(--bamboo)); box-shadow:4px 4px 0 rgb(var(--bamboo)/.12); }
