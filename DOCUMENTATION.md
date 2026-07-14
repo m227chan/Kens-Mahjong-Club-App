@@ -305,7 +305,7 @@ Shared client-facing types live in `lib/types.ts`:
 - Create a club with a generated, human-shareable ID.
 - Request membership using a club ID.
 - Optional manager email notification with an authenticated review link.
-- Manager approval or rejection of pending requests.
+- Manager approval or rejection of pending requests. The selected request is removed optimistically, restored if the mutation fails, and accompanied by a short accessible success/error notice.
 - Leave an eligible non-manager membership.
 - Default/global membership enrollment during authentication.
 - Manager promotion by email:
@@ -329,7 +329,7 @@ Shared client-facing types live in `lib/types.ts`:
 ### Seasons
 
 - Each club begins with a first season.
-- Managers can create the next numbered season and switch the active season. Creating a season transactionally closes the previous live session and refreshes the workspace so every season-scoped subscription restarts cleanly.
+- Managers can create the next numbered season and switch the active season. Selecting an existing season updates local club/season state immediately after the API confirms, causing the leaderboard, session, analytics, and logs to resubscribe without a manual browser refresh. Creating a season transactionally closes the previous live session and refreshes the workspace so every season-scoped subscription restarts cleanly.
 - Leaderboard, session, analytics, and logs can be season-scoped.
 - All-time and season statistics are stored separately but rebuilt from the same authoritative history.
 

@@ -56,6 +56,8 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [linkToMe, setLinkToMe] = useState(false)
   const [playerMessage, setPlayerMessage] = useState<string | null>(null)
   const [joiningAction, setJoiningAction] = useState<string | null>(null)
+  const [joinRequestNotice, setJoinRequestNotice] = useState<{ message: string; error: boolean } | null>(null)
+  const [seasonMessage, setSeasonMessage] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [rosterOpen, setRosterOpen] = useState(false)
   const [analyticsOpen, setAnalyticsOpen] = useState(false)
@@ -103,6 +105,18 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
     if (clubId !== 'KEN' || !isManager || !user) return
     void rebuildClubStats(clubId).catch(() => undefined)
   }, [clubId, isManager, user])
+
+  useEffect(() => {
+    if (!joinRequestNotice) return
+    const timer = window.setTimeout(() => setJoinRequestNotice(null), 2800)
+    return () => window.clearTimeout(timer)
+  }, [joinRequestNotice])
+
+  useEffect(() => {
+    if (!seasonMessage) return
+    const timer = window.setTimeout(() => setSeasonMessage(null), 2200)
+    return () => window.clearTimeout(timer)
+  }, [seasonMessage])
 
   const addPlayer = async () => {
     setPlayerMessage(null)
@@ -203,6 +217,8 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const approveRequest = async (request: JoinRequestDoc, approved: boolean) => {
     if (!user || !club) return
     setJoiningAction(request.uid)
+    setJoinRequests((current) => current.filter((item) => item.uid !== request.uid))
+    setJoinRequestNotice({ message: approved ? 'Accepting join request…' : 'Declining join request…', error: false })
     try {
       await resolveJoinRequest({
         clubId,
@@ -211,6 +227,12 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         managerUid: user.uid,
         clubName: club.name
       })
+      setJoinRequestNotice({ message: approved ? 'Join request accepted.' : 'Join request declined.', error: false })
+      play('confirmation')
+    } catch (error) {
+      setJoinRequests((current) => current.some((item) => item.uid === request.uid) ? current : [...current, request])
+      setJoinRequestNotice({ message: error instanceof Error ? error.message : 'Unable to update the join request.', error: true })
+      play('error')
     } finally {
       setJoiningAction(null)
     }
@@ -246,8 +268,16 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
     const seasonNumber = Number(value)
     if (!seasonNumber || seasonNumber === activeSeasonNumber) return
     setSeasonAction(true)
+    setSeasonMessage(null)
     try {
       await setActiveSeason(clubId, seasonNumber)
+      setClub((current) => current ? { ...current, activeSeasonNumber: seasonNumber } : current)
+      setSeasons((current) => current.map((season) => ({ ...season, active: season.seasonNumber === seasonNumber })))
+      setSeasonMessage(`Showing Season ${seasonNumber}.`)
+      router.refresh()
+    } catch (error) {
+      setSeasonMessage(error instanceof Error ? error.message : 'Unable to change season.')
+      play('error')
     } finally {
       setSeasonAction(false)
     }
@@ -291,6 +321,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
               ))}
             </select>
           </label>
+          {seasonMessage ? <span role="status" aria-live="polite" className="flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">{seasonMessage}</span> : null}
           <button
             type="button"
             onClick={copyShare}
@@ -427,6 +458,11 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_460px]">
         <div className="min-w-0 space-y-6">
+          {joinRequestNotice ? (
+            <div role="status" aria-live="polite" className={`rounded-lg border px-4 py-3 text-sm font-bold shadow-sm ${joinRequestNotice.error ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
+              {joinRequestNotice.message}
+            </div>
+          ) : null}
           {isManager && joinRequests.length > 0 ? (
             <section className="rounded-lg border border-amber-200 bg-amber-50 p-5">
               <h3 className="text-sm font-black uppercase tracking-[0.16em] text-amber-800">Join requests</h3>
