@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSound } from '@/contexts/SoundContext'
 import {
@@ -13,20 +14,8 @@ import {
   updateSession
 } from '@/lib/data'
 import type { PlayerDoc } from '@/lib/types'
-
-const FAN_POINTS: Record<number, number> = {
-  3: 8,
-  4: 16,
-  5: 24,
-  6: 32,
-  7: 48,
-  8: 64,
-  9: 96,
-  10: 128,
-  11: 192,
-  12: 256,
-  13: 384
-}
+import { calculateTableScores, FAN_POINTS } from '@/lib/table-scoring'
+import { getQrEnrollmentSetting, setQrEnrollmentSetting, tableAction, type TableSession } from '@/lib/table-checkin-client'
 
 type WinType = 'self' | 'discard' | 'draw'
 
@@ -63,7 +52,7 @@ const initialWinState: WinState = {
   fan: null
 }
 
-export default function SessionManager({ clubId, seasonNumber, players: suppliedPlayers }: { clubId: string; seasonNumber: number; players?: PlayerDoc[] }) {
+export default function SessionManager({ clubId, seasonNumber, players: suppliedPlayers, isManager = false }: { clubId: string; seasonNumber: number; players?: PlayerDoc[]; isManager?: boolean }) {
   const { user, loading, isAdmin } = useAuth()
   const { play } = useSound()
   const [subscribedPlayers, setSubscribedPlayers] = useState<PlayerDoc[]>([])
@@ -88,6 +77,8 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
   const [sidelineCollapsed, setSidelineCollapsed] = useState(false)
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
   const [savingSession, setSavingSession] = useState(false)
+  const [qrAutoEnroll, setQrAutoEnroll] = useState<boolean | null>(null)
+  const [savingQrEnrollment, setSavingQrEnrollment] = useState(false)
 
   const dragPlayerRef = useRef<string | null>(null)
   const dragSourceRef = useRef<string | null>(null)
@@ -100,6 +91,28 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
     const key = crypto.randomUUID()
     gameRequestRef.current.set(tableId, { fingerprint, key })
     return key
+  }
+
+  useEffect(() => {
+    if (!isManager || !user) return
+    void getQrEnrollmentSetting(clubId)
+      .then((setting) => setQrAutoEnroll(setting.autoEnroll))
+      .catch(() => setQrAutoEnroll(null))
+  }, [clubId, isManager, user])
+
+  const toggleQrEnrollment = async () => {
+    if (qrAutoEnroll === null || savingQrEnrollment) return
+    const next = !qrAutoEnroll
+    setSavingQrEnrollment(true)
+    try {
+      const setting = await setQrEnrollmentSetting(clubId, next)
+      setQrAutoEnroll(setting.autoEnroll)
+      showToast(setting.autoEnroll ? 'QR automatic enrollment enabled.' : 'QR scans now require manager approval.')
+    } catch {
+      showToast('Unable to update QR enrollment.')
+    } finally {
+      setSavingQrEnrollment(false)
+    }
   }
 
   useEffect(() => {
@@ -257,6 +270,10 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
     }
   }
 
+  const applyTableSession = (next: TableSession) => {
+    setSession({ id: next.id, active: true, tableCount: next.tableCount, participants: next.participants, tables: next.tables, sideline: next.sideline })
+  }
+
   const startSession = async () => {
     if (setupParticipants.length < 4) {
       showSetupError('Select at least 4 players.')
@@ -344,30 +361,11 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
 
   const calcScores = () => {
     const { winner, winType: type, loser, fan: fanCount, tableId } = winState
-    if (!winner || !type || !fanCount || !tableId) return null
+    if (!winner || !type || type === 'draw' || !fanCount || !tableId) return null
     if (type === 'discard' && !loser) return null
 
     const playersOnTable = session.tables[tableId] || []
-    const base = fanCount >= 13 ? 384 : FAN_POINTS[fanCount]
-    if (!base) return null
-
-    const scores: Record<string, number> = {}
-    const nonWinners = playersOnTable.filter((playerId) => playerId !== winner)
-
-    if (type === 'self') {
-      scores[winner] = base * 3
-      nonWinners.forEach((playerId) => {
-        scores[playerId] = -base
-      })
-    } else {
-      scores[winner] = base * 2
-      scores[loser!] = -base * 2
-      nonWinners.filter((playerId) => playerId !== loser).forEach((playerId) => {
-        scores[playerId] = 0
-      })
-    }
-
-    return scores
+    return calculateTableScores({ players: playersOnTable, winner, winType: type, loser, fan: fanCount })
   }
 
   const submitWin = async (tableId: string) => {
@@ -462,43 +460,24 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
   }
 
   const clearAllTables = async () => {
-    const nextSideline = [...session.sideline]
-    const nextTables: Record<string, string[]> = {}
-
-    for (let i = 1; i <= session.tableCount; i += 1) {
-      const key = String(i)
-      const playersOnTable = session.tables[key] || []
-      playersOnTable.forEach((playerId) => {
-        if (!nextSideline.includes(playerId)) {
-          nextSideline.push(playerId)
-        }
-      })
-      nextTables[key] = []
-    }
-
-    const nextSession = { ...session, tables: nextTables, sideline: nextSideline }
-    await persistSession(nextSession)
-    play('tile')
-    showToast('All tables cleared.')
+    try {
+      const result = await tableAction<{ status: 'ok'; session: TableSession }>({ action: 'clearAll', clubId })
+      applyTableSession(result.session); play('tile'); showToast('All tables cleared.')
+    } catch { showToast('Unable to clear tables.') }
   }
 
   const clearSingleTable = async (tableId: string) => {
-    const playersOnTable = session.tables[tableId] || []
-    const nextSideline = [...session.sideline]
-    playersOnTable.forEach((playerId) => {
-      if (!nextSideline.includes(playerId)) nextSideline.push(playerId)
-    })
-    const nextTables = { ...session.tables, [tableId]: [] }
-    await persistSession({ ...session, tables: nextTables, sideline: nextSideline })
-    play('tile')
-    showToast('Table cleared.')
+    try {
+      const result = await tableAction<{ status: 'ok'; session: TableSession }>({ action: 'clear', clubId, tableNumber: Number(tableId) })
+      applyTableSession(result.session); play('tile'); showToast('Table cleared.')
+    } catch { showToast('Unable to clear table.') }
   }
 
   const removeToSideline = async (tableId: string, playerId: string) => {
-    const nextTables = { ...session.tables, [tableId]: (session.tables[tableId] || []).filter((id) => id !== playerId) }
-    const nextSideline = session.sideline.includes(playerId) ? session.sideline : [...session.sideline, playerId]
-    await persistSession({ ...session, tables: nextTables, sideline: nextSideline })
-    play('tile')
+    try {
+      const result = await tableAction<{ status: 'ok'; session: TableSession }>({ action: 'remove', clubId, tableNumber: Number(tableId), playerId })
+      applyTableSession(result.session); play('tile')
+    } catch { showToast('Unable to remove player.') }
   }
 
   const toggleTable = (tableId: string) => {
@@ -529,14 +508,12 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
     }
     if (playersOnTable.includes(playerId)) return
 
-    const nextTables = { ...session.tables, [pickerTableId]: [...playersOnTable, playerId] }
-    const nextSideline = session.sideline.filter((id) => id !== playerId)
-    await persistSession({ ...session, tables: nextTables, sideline: nextSideline })
-    play('tile')
-
-    if (nextTables[pickerTableId].length >= 4) {
-      closePicker()
-    }
+    try {
+      const result = await tableAction<{ status: 'ok'; session: TableSession } | { status: 'table_full' }>({ action: 'seat', clubId, tableNumber: Number(pickerTableId), playerId })
+      if (result.status === 'table_full') { showToast('Table is full.'); return }
+      applyTableSession(result.session); play('tile')
+      if ((result.session.tables[pickerTableId] ?? []).length >= 4) closePicker()
+    } catch { showToast('Unable to add player.') }
   }
 
   const openSwapPicker = (tableId: string, playerId: string) => {
@@ -883,6 +860,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
             <span className={`table-status ${isValid ? 'valid' : 'waiting'}`}>
               {isValid ? '✓ Ready' : `${playersOnTable.length}/4`}
             </span>
+            <Link href={`/club/${encodeURIComponent(clubId)}/table/${tableId}`} className="table-focus-link" aria-label={`Open Table ${tableId} in focused view`} title="Open focused table">↗</Link>
             <span id={`tableChevron-${tableId}`} onClick={() => toggleTable(tableId)} style={{ fontSize: 10, color: 'var(--gray)', marginLeft: 4, cursor: 'pointer' }}>
               {collapsedTables[tableId] ? '▼' : '▲'}
             </span>
@@ -1478,6 +1456,15 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         }
         .menu-item:last-child { border-bottom: none; }
         .menu-item:hover { background: #f7fafc; }
+        .qr-enrollment-setting { padding:11px 14px; border-bottom:1px solid rgb(var(--line)); background:rgb(var(--surface)); }
+        .qr-enrollment-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+        .qr-enrollment-label { color:rgb(var(--ink)); font-size:12px; font-weight:800; }
+        .qr-enrollment-help { margin-top:5px; color:rgb(var(--muted)); font-size:10px; line-height:1.35; }
+        .qr-enrollment-switch { position:relative; width:42px; height:24px; flex:none; border:1px solid rgb(var(--line)); border-radius:999px; background:rgb(var(--surface-2)); transition:background .15s; }
+        .qr-enrollment-switch span { position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:rgb(var(--muted)); transition:transform .15s,background .15s; }
+        .qr-enrollment-switch[aria-checked="true"] { background:rgb(var(--bamboo)); }
+        .qr-enrollment-switch[aria-checked="true"] span { transform:translateX(18px); background:white; }
+        .qr-enrollment-switch:disabled { opacity:.45; cursor:wait; }
         .danger-item { color: #e53e3e; }
         .danger-item:hover { background: #fff5f5; }
 
@@ -1559,6 +1546,9 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         .table-card:hover .clear-table-btn {
           opacity: 1;
         }
+        .table-focus-link { display:flex; width:26px; height:26px; align-items:center; justify-content:center; border:1px solid rgb(var(--line)); border-radius:4px; color:rgb(var(--muted)); text-decoration:none; opacity:.35; transition:opacity .15s,background .15s; }
+        .table-card:hover .table-focus-link,.table-focus-link:focus-visible { opacity:1; background:rgb(var(--surface)); }
+        @media(max-width:767px){.table-focus-link{opacity:1;min-width:32px;min-height:32px}}
         .clear-table-btn:hover {
           background: #fed7d7;
           color: #c53030;
@@ -1651,10 +1641,12 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
                 boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
                 overflow: 'hidden',
                 zIndex: 200,
-                minWidth: 160
+                minWidth: 280
               }}
             >
               <button type="button" onClick={() => { setPage('setup'); setHeaderMenuOpen(false) }} className="menu-item">⚙️ Edit Session</button>
+              <Link href={`/club/${encodeURIComponent(clubId)}/session/qr-print`} target="_blank" onClick={() => setHeaderMenuOpen(false)} className="menu-item">▦ Print table QR codes</Link>
+              {isManager ? <div className="qr-enrollment-setting"><div className="qr-enrollment-row"><span className="qr-enrollment-label">Automatic club enrollment</span><button type="button" role="switch" aria-checked={qrAutoEnroll === true} aria-label="Automatic club enrollment through table QR codes" disabled={qrAutoEnroll === null || savingQrEnrollment} onClick={() => void toggleQrEnrollment()} className="qr-enrollment-switch"><span /></button></div><p className="qr-enrollment-help">When on, anyone with a table QR can join this club immediately. When off, new people must be approved by a manager first.</p></div> : null}
               <button type="button" onClick={() => { clearAllTables(); setHeaderMenuOpen(false) }} className="menu-item">⬇️ Clear All Tables</button>
               <button type="button" onClick={() => { confirmClearSession(); setHeaderMenuOpen(false) }} className="menu-item danger-item">🗑 Reset Session</button>
             </div>

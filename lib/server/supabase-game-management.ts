@@ -298,6 +298,14 @@ export async function mutateSupabaseGames(input: { callerUid: string; clubId: st
       const inserted = await insertGame(client, clubId, input.game!, input.callerUid)
       if (inserted.created) {
         await appendNewGame(client, clubId, inserted.game)
+        const tableNumber = Number(inserted.game.tableId)
+        if (Number.isInteger(tableNumber) && tableNumber > 0) {
+          await client.query(`insert into session_table_activity(session_id,table_number,occupied_since,last_game_at,last_roster_change_at,cleared_at)
+            select s.id,$2,coalesce(a.occupied_since,now()),now(),now(),null from sessions s
+            left join session_table_activity a on a.session_id=s.id and a.table_number=$2
+            where s.club_id=$1 and s.is_active
+            on conflict(session_id,table_number) do update set last_game_at=now(),last_roster_change_at=now(),cleared_at=null`, [clubId, tableNumber])
+        }
       }
       return { gameId: inserted.gameId }
     }
