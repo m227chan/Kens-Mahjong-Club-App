@@ -860,7 +860,23 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
             <span className={`table-status ${isValid ? 'valid' : 'waiting'}`}>
               {isValid ? '✓ Ready' : `${playersOnTable.length}/4`}
             </span>
-            <Link href={`/club/${encodeURIComponent(clubId)}/table/${tableId}`} className="table-focus-link" aria-label={`Open Table ${tableId} in focused view`} title="Open focused table">↗</Link>
+            <Link href={`/club/${encodeURIComponent(clubId)}/table/${tableId}`} className="table-focus-link" aria-label={`Open Table ${tableId} in focused view`} title="Open focused table">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ display: 'block' }}
+              >
+                <line x1="7" y1="17" x2="17" y2="7"></line>
+                <polyline points="7 7 17 7 17 17"></polyline>
+              </svg>
+            </Link>
             <span id={`tableChevron-${tableId}`} onClick={() => toggleTable(tableId)} style={{ fontSize: 10, color: 'var(--gray)', marginLeft: 4, cursor: 'pointer' }}>
               {collapsedTables[tableId] ? '▼' : '▲'}
             </span>
@@ -1546,9 +1562,41 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         .table-card:hover .clear-table-btn {
           opacity: 1;
         }
-        .table-focus-link { display:flex; width:26px; height:26px; align-items:center; justify-content:center; border:1px solid rgb(var(--line)); border-radius:4px; color:rgb(var(--muted)); text-decoration:none; opacity:.35; transition:opacity .15s,background .15s; }
-        .table-card:hover .table-focus-link,.table-focus-link:focus-visible { opacity:1; background:rgb(var(--surface)); }
-        @media(max-width:767px){.table-focus-link{opacity:1;min-width:32px;min-height:32px}}
+        .table-focus-link {
+          display: flex;
+          width: 26px;
+          height: 26px;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid rgb(var(--line));
+          border-radius: 6px;
+          color: rgb(var(--muted));
+          text-decoration: none;
+          opacity: .45;
+          transition: opacity 0.15s, background 0.15s, border-color 0.15s, color 0.15s;
+        }
+        .table-card:hover .table-focus-link, .table-focus-link:focus-visible {
+          opacity: 1;
+          background: rgb(var(--surface));
+          color: rgb(var(--ink));
+          border-color: rgb(var(--muted) / 0.5);
+        }
+        @media (max-width: 767px) {
+          .table-focus-link {
+            opacity: 1;
+            min-width: 32px;
+            min-height: 32px;
+            border-radius: 6px;
+            background: rgb(var(--surface-2));
+            border-color: rgb(var(--line));
+            color: rgb(var(--muted));
+          }
+          .table-focus-link:active {
+            background: rgb(var(--surface));
+            color: rgb(var(--ink));
+            border-color: rgb(var(--muted) / 0.3);
+          }
+        }
         .clear-table-btn:hover {
           background: #fed7d7;
           color: #c53030;
