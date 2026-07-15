@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import DashboardContent from '@/components/DashboardContent'
 import GameLogsModal from '@/components/GameLogsModal'
 import { LeaderboardPanel } from '@/components/Leaderboard'
@@ -34,11 +34,58 @@ import { PLAYER_EMOJIS, randomUnusedPlayerEmoji } from '@/lib/players'
 
 const iconChoices = PLAYER_EMOJIS
 
-function StatCard({ label, value, tone }: { label: string; value: string; tone: string }) {
+function StatCard({ label, value, tone, explanation }: { label: string; value: string; tone: string; explanation: string }) {
+  const [showInfo, setShowInfo] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showInfo) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setShowInfo(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showInfo])
+
   return (
-    <div className={`rounded-lg border p-4 ${tone}`}>
-      <p className="text-xs font-bold uppercase tracking-[0.16em] opacity-70">{label}</p>
+    <div ref={ref} className={`relative group rounded-lg border p-4 transition-all duration-200 hover:shadow-sm ${tone}`}>
+      <div className="flex items-start justify-between">
+        <p className="text-xs font-bold uppercase tracking-[0.16em] opacity-70">{label}</p>
+        <button
+          type="button"
+          onClick={() => setShowInfo(!showInfo)}
+          className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-500/10 hover:bg-slate-500/20 text-current opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-200"
+          aria-label={`Learn more about ${label}`}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+        </button>
+      </div>
       <p className="mt-2 text-2xl font-black">{value}</p>
+
+      {/* Explanation Popup */}
+      {showInfo && (
+        <div className="absolute left-1/2 bottom-[calc(100%+8px)] z-20 w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white p-3 shadow-lg text-slate-800 text-xs font-semibold leading-relaxed">
+          <p>{explanation}</p>
+          <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-white"></div>
+          <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-200 -z-10 translate-y-[1px]"></div>
+        </div>
+      )}
     </div>
   )
 }
@@ -304,8 +351,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
     <main className="px-4 py-6">
       <div data-tour="club-header" className="club-workspace-header mb-5 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Current club</p>
-          <h1 className="mt-1 text-2xl font-black text-slate-950">{club?.name ?? membership.clubName}</h1>
+          <h1 className="text-2xl font-black text-slate-950">{club?.name ?? membership.clubName}</h1>
         </div>
         <div className="club-action-bar flex flex-wrap gap-2">
           <label data-tour="season-selector" className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
@@ -500,18 +546,14 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           <section id="players" className={mobileView === 'roster' ? 'block rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:block' : 'hidden rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:block'}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Players</p>
-                <h3 className="mt-2 text-lg font-black text-slate-950">Club roster</h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  {members.length} signed-in users, {players.length} tracked players. Open the roster to add, review, or remove players.
-                </p>
+                <h3 className="text-lg font-black text-white">Club Roster</h3>
               </div>
             </div>
-            <div className="club-roster-stats mt-5 grid gap-3 sm:grid-cols-3">
-              <StatCard label="Tracked players" value={String(players.length)} tone="border-slate-200 bg-slate-50 text-slate-900" />
-              <StatCard label="Linked users" value={String(players.filter((player) => player.authUid).length)} tone="border-blue-200 bg-blue-50 text-blue-900" />
-              <StatCard label="Club members" value={String(members.length)} tone="border-teal-200 bg-teal-50 text-teal-900" />
-            </div>
+             <div className="club-roster-stats mt-5 grid gap-3 sm:grid-cols-3">
+               <StatCard label="Tracked players" value={String(players.length)} tone="border-slate-200 bg-slate-50 text-slate-900" explanation="Tracked players are individual profiles created for the club roster to record game statistics." />
+               <StatCard label="Linked users" value={String(players.filter((player) => player.authUid).length)} tone="border-blue-200 bg-blue-50 text-blue-900" explanation="Linked users are roster players who have linked their signed-in account to their player profile." />
+               <StatCard label="Club members" value={String(members.length)} tone="border-teal-200 bg-teal-50 text-teal-900" explanation="Club members are registered users who have joined the club to view matches, standings, and stats." />
+             </div>
             <button
               data-tour="roster-open"
               type="button"

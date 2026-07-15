@@ -77,15 +77,15 @@ export function LeaderboardPanel({ clubId, seasonNumber, compact = false, player
   }
   const activeFilterCount = [Boolean(nameFilter.trim()), Boolean(minimumGames), Boolean(minimumSkill), pointsFilter !== 'all'].filter(Boolean).length
 
+
   const visibleRows = compact ? rows.slice(0, 8) : rows
   const mobileRows = mobileExpanded ? visibleRows : visibleRows.slice(0, 5)
 
   return (
     <section data-tour="leaderboard" className="leaderboard-board overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
       <header className="border-b border-slate-200 px-5 py-4">
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Leaderboard</p>
-        <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
-          <h2 className="text-lg font-bold text-slate-900">Current club standings</h2>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h2 className="text-lg font-bold text-slate-900">Leaderboard</h2>
           <div className="flex items-center gap-2"><p className="text-sm font-medium text-slate-500">{rows.length} ranked players</p><button type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen((current) => !current)} className={`rounded border px-3 py-1.5 text-xs font-bold ${activeFilterCount ? 'border-[rgb(var(--bamboo))] bg-[rgb(var(--bamboo)/.08)] text-[rgb(var(--bamboo))]' : 'border-slate-300 bg-white text-slate-600'}`}>Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}</button></div>
         </div>
       </header>
