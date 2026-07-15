@@ -126,7 +126,123 @@ export default function FocusedTableView({ clubId, tableNumber }: { clubId: stri
       <button type="button" disabled={occupants.length !== 4 || busy} onClick={openResults} className="min-h-12 flex-1 rounded-lg bg-[rgb(var(--bamboo))] font-black text-white disabled:opacity-40">Winner…</button>
     </footer>
 
-    {pickerOpen ? <div className="fixed inset-0 z-50 flex items-end bg-black/60" onMouseDown={(event) => event.target === event.currentTarget && setPickerOpen(false)}><section className="max-h-[82dvh] w-full overflow-y-auto rounded-t-2xl bg-[rgb(var(--surface))] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"><div className="mx-auto max-w-xl"><div className="flex items-center justify-between"><h2 className="text-xl font-black">Add a player</h2><button onClick={() => setPickerOpen(false)} className="h-11 w-11 rounded-full border">×</button></div><input autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search roster…" className="mt-3 min-h-12 w-full rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface-2))] px-3"/><div className="mt-3 space-y-2">{filteredPlayers.map((item) => { const other = Object.entries(session?.tables ?? {}).find(([, ids]) => ids.includes(item.id))?.[0]; const status = other ? `Table ${other}` : session?.sideline.includes(item.id) ? 'Sideline' : 'Not in session'; return <button key={item.id} type="button" onClick={async () => { if (other && !window.confirm(`Move ${item.displayName} from Table ${other} to Table ${tableNumber}?`)) return; if (await mutate('seat', { playerId: item.id })) setPickerOpen(false) }} className="flex min-h-14 w-full items-center gap-3 rounded-lg border border-[rgb(var(--line))] px-3 text-left"><span className="text-2xl">{item.icon}</span><span className="min-w-0 flex-1 truncate font-black">{item.displayName}</span><span className="text-xs font-bold text-[rgb(var(--muted))]">{status}</span></button>})}</div></div></section></div> : null}
+    {pickerOpen ? (
+      <div
+        className="fixed inset-0 z-50 flex items-end bg-black/60"
+        onMouseDown={(event) => event.target === event.currentTarget && setPickerOpen(false)}
+      >
+        <section className="max-h-[88dvh] w-full flex flex-col rounded-t-2xl bg-[rgb(var(--surface))]">
+          <div className="flex-shrink-0 p-4 pb-0">
+            <div className="mx-auto max-w-xl">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-black">Add players</h2>
+                <button
+                  onClick={() => { setPickerOpen(false); setSearch('') }}
+                  className="h-11 w-11 rounded-full border"
+                >×</button>
+              </div>
+
+              {/* Seated players chips */}
+              {occupants.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {occupants.map((id) => {
+                    const info = player(id)
+                    return (
+                      <span
+                        key={id}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-[rgb(var(--bamboo)/.4)] bg-[rgb(var(--bamboo)/.1)] pl-2 pr-1 py-1 text-sm font-black text-[rgb(var(--bamboo))]"
+                      >
+                        <span>{info.icon}</span>
+                        <span className="max-w-[120px] truncate">{info.displayName}</span>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          aria-label={`Remove ${info.displayName}`}
+                          onClick={() => void mutate('remove', { playerId: id })}
+                          className="flex h-5 w-5 items-center justify-center rounded-full bg-[rgb(var(--bamboo)/.2)] text-xs font-black leading-none hover:bg-[rgb(var(--bamboo)/.35)]"
+                        >×</button>
+                      </span>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Seat counter */}
+              <p className="mt-3 text-xs font-bold text-[rgb(var(--muted))]">
+                {occupants.length === 4
+                  ? 'Table is full'
+                  : `${occupants.length} of 4 seated · select ${4 - occupants.length} more`}
+              </p>
+
+              {/* Search */}
+              <input
+                autoFocus
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search roster…"
+                className="mt-2 min-h-12 w-full rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface-2))] px-3"
+              />
+            </div>
+          </div>
+
+          {/* Scrollable player list */}
+          <div className="flex-1 overflow-y-auto p-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <div className="mx-auto max-w-xl space-y-2">
+              {occupants.length === 4 ? (
+                <p className="py-6 text-center text-sm font-bold text-[rgb(var(--muted))]">
+                  All 4 seats are filled.
+                </p>
+              ) : filteredPlayers.length === 0 ? (
+                <p className="py-6 text-center text-sm font-bold text-[rgb(var(--muted))]">
+                  No players match your search.
+                </p>
+              ) : (
+                filteredPlayers.map((item) => {
+                  const other = Object.entries(session?.tables ?? {}).find(([, ids]) => ids.includes(item.id))?.[0]
+                  const status = other
+                    ? `Table ${other}`
+                    : session?.sideline.includes(item.id)
+                    ? 'Sideline'
+                    : 'Not in session'
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      disabled={busy || occupants.length >= 4}
+                      onClick={async () => {
+                        if (other && !window.confirm(`Move ${item.displayName} from Table ${other} to Table ${tableNumber}?`)) return
+                        const ok = await mutate('seat', { playerId: item.id })
+                        // Auto-close only when table is now full
+                        if (ok && (occupants.length + 1) >= 4) { setPickerOpen(false); setSearch('') }
+                      }}
+                      className="flex min-h-14 w-full items-center gap-3 rounded-lg border border-[rgb(var(--line))] px-3 text-left disabled:opacity-40"
+                    >
+                      <span className="text-2xl">{item.icon}</span>
+                      <span className="min-w-0 flex-1 truncate font-black">{item.displayName}</span>
+                      <span className="text-xs font-bold text-[rgb(var(--muted))]">{status}</span>
+                    </button>
+                  )
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Done button */}
+          <div className="flex-shrink-0 border-t border-[rgb(var(--line))] p-3 pb-[max(.75rem,env(safe-area-inset-bottom))]">
+            <div className="mx-auto max-w-xl">
+              <button
+                type="button"
+                onClick={() => { setPickerOpen(false); setSearch('') }}
+                className="min-h-12 w-full rounded-lg bg-[rgb(var(--ink))] font-black text-[rgb(var(--surface))]"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    ) : null}
 
     {resultOpen ? <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 sm:items-center"><section className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-[rgb(var(--surface))] p-4 sm:rounded-xl"><div className="flex items-center justify-between"><h2 className="text-xl font-black">Record winner</h2><button onClick={() => setResultOpen(false)} className="h-11 w-11 rounded-full border">×</button></div><p className="mt-4 text-xs font-black uppercase tracking-widest text-[rgb(var(--muted))]">Who won?</p><div className="mt-2 grid grid-cols-2 gap-2">{occupants.map((id) => { const info = player(id); return <button key={id} onClick={() => { setWinner(id); if (loser === id) setLoser('') }} className={`min-h-16 rounded-lg border p-2 font-black ${winner === id ? 'border-[rgb(var(--bamboo))] bg-[rgb(var(--bamboo))] text-white' : 'border-[rgb(var(--line))]'}`}>{info.icon} {info.displayName}</button>})}</div><p className="mt-4 text-xs font-black uppercase tracking-widest text-[rgb(var(--muted))]">How?</p><div className="mt-2 grid grid-cols-2 gap-2"><button onClick={() => { setWinType('self'); setLoser('') }} className={`min-h-12 rounded-lg border font-black ${winType === 'self' ? 'bg-[rgb(var(--bamboo))] text-white' : ''}`}>Self-draw</button><button onClick={() => setWinType('discard')} className={`min-h-12 rounded-lg border font-black ${winType === 'discard' ? 'bg-[rgb(var(--cinnabar))] text-white' : ''}`}>Discard win</button></div>{winType === 'discard' ? <><p className="mt-4 text-xs font-black uppercase tracking-widest text-[rgb(var(--muted))]">Who discarded?</p><div className="mt-2 grid grid-cols-3 gap-2">{occupants.filter((id) => id !== winner).map((id) => { const info = player(id); return <button key={id} onClick={() => setLoser(id)} className={`min-h-12 rounded-lg border text-sm font-black ${loser === id ? 'bg-[rgb(var(--cinnabar))] text-white' : ''}`}>{info.icon} {info.displayName}</button>})}</div></> : null}<p className="mt-4 text-xs font-black uppercase tracking-widest text-[rgb(var(--muted))]">Fan</p><div className="mt-2 grid grid-cols-6 gap-1">{Array.from({ length: 11 }, (_, i) => i + 3).map((value) => <button key={value} onClick={() => setFan(value)} className={`min-h-11 rounded border text-sm font-black ${fan === value ? 'bg-[rgb(var(--bamboo))] text-white' : ''}`}>{value === 13 ? '13+' : value}</button>)}</div><p className="mt-2 text-right text-xs font-bold text-[rgb(var(--muted))]">{FAN_POINTS[fan] ?? 384} base points</p>{scorePreview ? <div className="focused-score-preview mt-4 grid grid-cols-2 gap-2 rounded-xl border p-2 shadow-inner" aria-label="Calculated score changes">{occupants.map((id) => { const info = player(id); const score = scorePreview[id] ?? 0; return <div key={id} className="focused-score-preview-item rounded-lg px-3 py-2"><div className="truncate text-xs font-bold text-white/80">{info.icon} {info.displayName}</div><div className={`mt-1 text-lg font-black ${score > 0 ? 'text-emerald-300' : score < 0 ? 'text-rose-300' : 'text-slate-300'}`}>{score > 0 ? `+${score}` : score}</div></div>})}</div> : null}<button type="button" disabled={busy || !scorePreview} onClick={() => void saveGame(false)} className="mt-5 min-h-12 w-full rounded-lg bg-[rgb(var(--bamboo))] font-black text-white disabled:cursor-not-allowed disabled:opacity-40">{busy ? 'Saving…' : 'Save result'}</button></section></div> : null}
 
