@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "security:scan": "node scripts/check-tracked-secrets.mjs",
     "test": "vitest",
+    "test:integration": "node --env-file=.env.local node_modules/vitest/vitest.mjs run __tests__/incremental-game-save.integration.test.ts",
     "test:ui": "vitest --ui",
     "supabase:schema": "node --env-file=.env.local scripts/apply-supabase-schema.mjs",
     "supabase:claims": "node --env-file=.env.local scripts/set-supabase-firebase-claims.mjs"

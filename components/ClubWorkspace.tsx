@@ -336,7 +336,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
               setPlayerMessage(null)
               setRosterOpen(true)
             }}
-            className="club-roster-action rounded-lg bg-teal-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-teal-500"
+            className="club-secondary-action club-roster-action rounded-lg px-3 py-2 text-sm font-bold transition"
           >
             Roster
           </button>
@@ -344,7 +344,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             data-tour="analytics-open"
             type="button"
             onClick={() => setAnalyticsOpen(true)}
-            className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-indigo-500"
+            className="club-secondary-action rounded-lg px-3 py-2 text-sm font-bold transition"
           >
             Analytics
           </button>
@@ -352,7 +352,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             data-tour="logs-open"
             type="button"
             onClick={() => setGameLogsOpen(true)}
-            className="rounded-lg bg-sky-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-sky-500"
+            className="club-secondary-action rounded-lg px-3 py-2 text-sm font-bold transition"
           >
             Game logs
           </button>
@@ -362,7 +362,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             onClick={() => setSettingsOpen(true)}
             aria-label="Settings"
             title="Settings"
-            className="club-settings-action flex h-10 w-10 items-center justify-center rounded-lg bg-teal-600 text-lg font-bold text-white transition hover:bg-teal-500"
+            className="club-secondary-action club-settings-action flex h-10 w-10 items-center justify-center rounded-lg text-lg font-bold transition"
           >
             ⚙️
           </button>

@@ -21,6 +21,8 @@
   --bamboo-bright: 35 139 99;
   --cinnabar: 185 57 44;
   --gold: 193 139 48;
+  --action-muted: 225 218 193;
+  --action-muted-hover: 215 205 171;
   --shadow: 38 35 25;
   --radius-panel: 4px;
 }
@@ -44,6 +46,8 @@ html.dark {
   --bamboo-bright: 95 211 151;
   --cinnabar: 232 91 67;
   --gold: 225 174 75;
+  --action-muted: 43 52 47;
+  --action-muted-hover: 54 64 57;
   --shadow: 0 8 5;
 }
 
@@ -575,4 +579,20 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
   .club-settings-action:hover,.club-settings-action:active{background:rgb(var(--bamboo-bright))!important}
   .club-settings-action:focus-visible{outline:2px solid rgb(var(--bamboo));outline-offset:2px}
   .mobile-manage-players{min-height:46px}
+}
+
+/* Club navigation stays intentionally quieter than the live session controls. */
+.club-secondary-action{
+  border:1px solid rgb(var(--line))!important;
+  background:rgb(var(--action-muted))!important;
+  color:rgb(var(--ink))!important;
+  box-shadow:0 2px 0 rgb(var(--shadow)/.08)!important;
+}
+.club-secondary-action:hover,.club-secondary-action:active{
+  border-color:rgb(var(--gold)/.55)!important;
+  background:rgb(var(--action-muted-hover))!important;
+}
+.club-secondary-action:focus-visible{
+  outline:2px solid rgb(var(--gold))!important;
+  outline-offset:2px;
 }

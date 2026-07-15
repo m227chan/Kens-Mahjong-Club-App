@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url'
 export default defineConfig({
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('.', import.meta.url))
+      '@': fileURLToPath(new URL('.', import.meta.url)),
+      'server-only': fileURLToPath(new URL('./__tests__/server-only-stub.ts', import.meta.url))
     }
   },
   test: {

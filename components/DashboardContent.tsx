@@ -238,7 +238,7 @@ export default function DashboardContent({ clubId, seasonNumber }: { clubId: str
           )}
         </div>
       </section>
-      <AnalyticsPanel clubId={clubId} seasonNumber={seasonNumber} selectedPlayerIds={selectedPlayerIds} />
+      <AnalyticsPanel playerStats={playerStats} players={players} selectedPlayerIds={selectedPlayerIds} />
     </div>
   )
 }

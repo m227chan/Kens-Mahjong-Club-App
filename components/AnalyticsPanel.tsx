@@ -1,8 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { subscribePlayerStats, subscribePlayers } from '@/lib/data'
 import type { PlayerDoc, PlayerStatsDoc } from '@/lib/types'
 
 function MiniBarChart({ data, color = '#18694f' }: { data: Array<{ id: string; label: string; value: number }>; color?: string }) {
@@ -29,12 +28,7 @@ function MiniBarChart({ data, color = '#18694f' }: { data: Array<{ id: string; l
   )
 }
 
-export default function AnalyticsPanel({ clubId, seasonNumber, selectedPlayerIds }: { clubId: string; seasonNumber?: number; selectedPlayerIds?: string[] }) {
-  const [playerStats, setPlayerStats] = useState<PlayerStatsDoc[]>([])
-  const [players, setPlayers] = useState<PlayerDoc[]>([])
-
-  useEffect(() => subscribePlayerStats(clubId, (nextStats) => setPlayerStats(nextStats), seasonNumber), [clubId, seasonNumber])
-  useEffect(() => subscribePlayers(clubId, (nextPlayers) => setPlayers(nextPlayers)), [clubId])
+export default function AnalyticsPanel({ playerStats, players, selectedPlayerIds }: { playerStats: PlayerStatsDoc[]; players: PlayerDoc[]; selectedPlayerIds?: string[] }) {
 
   const top = useMemo(() => {
     const selected = selectedPlayerIds ? new Set(selectedPlayerIds) : null

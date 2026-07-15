@@ -76,15 +76,24 @@ function mapSkill(row: Row): SkillEventDoc {
 
 function realtime<T>(name: string, table: string, filter: string, load: () => Promise<T>, callback: (value: T) => void, onError?: (error: Error) => void) {
   let active = true
-  let queued = false
-  const refresh = async () => {
-    if (queued) return
-    queued = true
-    try { const value = await load(); if (active) callback(value) } catch (error) { if (active) onError?.(error as Error) } finally { queued = false }
+  let running = false
+  let rerun = false
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const run = async () => {
+    if (running) { rerun = true; return }
+    running = true
+    try { const value = await load(); if (active) callback(value) } catch (error) { if (active) onError?.(error as Error) } finally {
+      running = false
+      if (rerun && active) { rerun = false; refresh() }
+    }
   }
-  void refresh()
+  const refresh = () => {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => { timer = undefined; void run() }, 40)
+  }
+  void run()
   const channel = client().channel(name).on('postgres_changes', { event: '*', schema: 'public', table, filter }, refresh).subscribe()
-  return () => { active = false; void client().removeChannel(channel) }
+  return () => { active = false; if (timer) clearTimeout(timer); void client().removeChannel(channel) }
 }
 
 export const createClub = (input: { name: string; user: UserLike }) => serverAction<string>('createClub', { name: input.name, user: input.user })

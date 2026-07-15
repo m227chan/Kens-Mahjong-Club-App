@@ -91,6 +91,16 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
 
   const dragPlayerRef = useRef<string | null>(null)
   const dragSourceRef = useRef<string | null>(null)
+  const gameRequestRef = useRef(new Map<string, { fingerprint: string; key: string }>())
+
+  const gameRequestKey = (tableId: string, value: unknown) => {
+    const fingerprint = JSON.stringify(value)
+    const pending = gameRequestRef.current.get(tableId)
+    if (pending?.fingerprint === fingerprint) return pending.key
+    const key = crypto.randomUUID()
+    gameRequestRef.current.set(tableId, { fingerprint, key })
+    return key
+  }
 
   useEffect(() => {
     const playerUnsub = suppliedPlayers ? undefined : subscribePlayers(clubId, setSubscribedPlayers)
@@ -369,6 +379,8 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
       return
     }
 
+    const requestValue = { scores, seasonNumber, winType: winState.winType, loser: winState.loser, fan: winState.fan }
+    const idempotencyKey = gameRequestKey(tableId, requestValue)
     setSavingGameTable(tableId)
     try {
       await createGame(clubId, {
@@ -379,8 +391,10 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         winType: winState.winType === 'self' ? 'self_draw' : 'discard',
         loserPlayerId: winState.winType === 'discard' ? winState.loser : null,
         fan: winState.winType === 'draw' ? null : winState.fan,
-        notes: null
+        notes: null,
+        idempotencyKey
       })
+      gameRequestRef.current.delete(tableId)
       play('win')
       setFlash({ scores, winner: winState.winner })
       closeAllWinPanels()
@@ -404,6 +418,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
       return
     }
 
+    const idempotencyKey = gameRequestKey(tableId, { scores, seasonNumber, winType: 'draw' })
     setSavingGameTable(tableId)
     try {
       await createGame(clubId, {
@@ -414,8 +429,10 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         winType: 'draw',
         loserPlayerId: null,
         fan: null,
-        notes: null
+        notes: null,
+        idempotencyKey
       })
+      gameRequestRef.current.delete(tableId)
       play('draw')
       setFlash({ scores, winner: null })
       showToast('Draw saved.')

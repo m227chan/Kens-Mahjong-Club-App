@@ -14,7 +14,9 @@ function getPool() {
   if (pool) return pool
   const connectionString = cleanEnvironmentValue(process.env.SUPABASE_DATABASE_URL)
   if (!connectionString) throw new Error('SUPABASE_DATABASE_URL is not configured.')
-  pool = new Pool({ connectionString, max: 5, ssl: { rejectUnauthorized: false } })
+  // A small per-instance pool is enough for short game transactions and avoids
+  // multiplying database connections when the serverless app scales out.
+  pool = new Pool({ connectionString, max: 2, connectionTimeoutMillis: 10_000, idleTimeoutMillis: 30_000, ssl: { rejectUnauthorized: false } })
   return pool
 }
 
