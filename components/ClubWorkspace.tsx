@@ -546,7 +546,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           <section id="players" className={mobileView === 'roster' ? 'block rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:block' : 'hidden rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:block'}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <h3 className="text-lg font-black text-white">Club Roster</h3>
+                <h3 className="text-lg font-black text-slate-950">Club Roster</h3>
               </div>
             </div>
              <div className="club-roster-stats mt-5 grid gap-3 sm:grid-cols-3">
