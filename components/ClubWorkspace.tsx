@@ -76,6 +76,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [managerEmail, setManagerEmail] = useState('')
   const [managerMessage, setManagerMessage] = useState<string | null>(null)
   const [promotingManager, setPromotingManager] = useState(false)
+  const [linkingPlayerId, setLinkingPlayerId] = useState<string | null>(null)
 
   const isManager = membership.role === 'manager'
   const { play } = useSound()
@@ -153,11 +154,14 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const togglePlayerLink = async (player: PlayerDoc) => {
     if (!user) return
     setPlayerMessage(null)
+    setLinkingPlayerId(player.id)
     try {
       await setPlayerAuthLink(clubId, player.id, user.uid, player.authUid !== user.uid)
       setPlayerMessage(player.authUid === user.uid ? `Unlinked from ${player.displayName}.` : `You are now linked to ${player.displayName}.`)
     } catch (error) {
       setPlayerMessage(error instanceof Error ? error.message : 'Unable to update player link.')
+    } finally {
+      setLinkingPlayerId(null)
     }
   }
   const changePlayerIcon = async (player: PlayerDoc, icon: string) => {
@@ -658,11 +662,20 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                         </div>
                       </div>
                       <div className="mt-3 flex min-h-9 items-center justify-between gap-2 border-t border-slate-200 pt-3">
-                        {(player.authUid === user?.uid || (!player.authUid && !linkedPlayerForUser)) ? (
-                          <button type="button" onClick={() => togglePlayerLink(player)} className="min-h-9 rounded border border-amber-200 px-2 py-1 text-xs font-bold text-slate-700 hover:bg-amber-50">
-                            {player.authUid === user?.uid ? 'Unlink account' : 'Link account'}
-                          </button>
-                        ) : null}
+                         {(player.authUid === user?.uid || (!player.authUid && !linkedPlayerForUser)) ? (
+                           <button
+                             type="button"
+                             onClick={() => togglePlayerLink(player)}
+                             disabled={linkingPlayerId !== null}
+                             className="min-h-9 rounded border border-amber-200 px-2 py-1 text-xs font-bold text-slate-700 hover:bg-amber-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                           >
+                             {linkingPlayerId === player.id ? (
+                               player.authUid === user?.uid ? 'Unlinking...' : 'Linking...'
+                             ) : (
+                               player.authUid === user?.uid ? 'Unlink account' : 'Link account'
+                             )}
+                           </button>
+                         ) : null}
                         {isManager ? <div className="ml-auto flex items-center gap-2">
                           <button type="button" onClick={() => { setRenamingPlayerId(player.id); setRenamingPlayerValue(player.displayName) }} className="min-h-9 rounded border border-slate-300 px-2 py-1 text-xs font-bold text-slate-700 hover:bg-white">Rename</button>
                           <button type="button" onClick={() => deleteRosterPlayer(player)} aria-label={`Remove ${player.displayName}`} title="Remove player" className="flex h-9 w-9 items-center justify-center rounded border border-rose-200 text-lg font-bold text-rose-700 hover:bg-rose-50">×</button>
