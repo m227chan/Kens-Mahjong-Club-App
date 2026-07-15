@@ -158,7 +158,10 @@ export default function AppGuide() {
     if (!tourOpen || !step) return
     let frame = 0
     const update = () => {
-      const target = visibleTarget(step.selector)
+      const clickTarget = step.action === 'responsive' && step.clickTarget
+        ? visibleTarget(`[data-tour="${step.clickTarget}"]`)
+        : null
+      const target = clickTarget ?? visibleTarget(step.selector)
       targetRef.current = target
       if (!target) {
         setSpotlight(null)
