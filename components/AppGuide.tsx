@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
+import { claimMingWelcome } from '@/lib/data'
 
 const FAN_POINTS = [
   [3, 8], [4, 16], [5, 24], [6, 32], [7, 48], [8, 64],
@@ -11,7 +12,7 @@ const FAN_POINTS = [
 ] as const
 
 const GUIDE_SECTIONS = [
-  { icon: '🏠', title: 'Start on your dashboard', body: 'Your personal dashboard combines your play across every club. Review overall games, win rate, recent ELO movement, memberships, and the player profile linked to your account in each club.' },
+  { icon: '🏠', title: 'Start on your dashboard', body: 'Your personal dashboard combines your play across every club. Review overall games, win rate, recent Skill movement, memberships, and the player profile linked to your account in each club.' },
   { icon: '🀄', title: 'Clubs', body: 'A club is a shared roster, game history, and set of standings for one mahjong group. Open one of your clubs, create a new club, or join an existing club using its six-character club ID. Creating and joining are separate: the creation limit does not restrict clubs you join or manage.' },
   { icon: '👥', title: 'Roster and account links', body: 'The roster contains the player profiles used in games. A signed-in member can link their account to one unlinked player profile, and can unlink it later. Managers can add, rename, remove, or change player emojis, and can promote other club members to manager.' },
   { icon: '📅', title: 'What is a Season?', body: 'A season is a chapter of club standings. Starting a new season closes the current live session and gives the leaderboard a fresh set of season statistics, while keeping earlier seasons and game history available to review.' },
@@ -22,8 +23,8 @@ const GUIDE_SECTIONS = [
   { icon: '🎴', title: 'Recording a Game', body: 'Once a table has 4 players it shows ✓ Ready. After a game finishes, tap Winner... to record who won, the win type (self-draw or discard), and the fan count. Or tap Draw if no one won.' },
   { icon: '🧮', title: 'Fan Scoring', body: 'Scores are based on fan count (3–13+). Self-draw: the winner gets 3× base and each loser pays 1× base. Discard win: the winner gets 2× base, the discarder pays 2× base, and the other players pay nothing.', fanMap: true },
   { icon: '⚙️', title: 'Edit / Clear All Tables / Reset', body: 'Edit lets you change which players are in the session or the number of tables. Clear All Tables moves everyone back to the sideline without ending the session. Reset Session wipes everything and starts fresh.' },
-  { icon: '🏆', title: 'Standings', body: 'The leaderboard recalculates from the selected season’s game records. Points show cumulative score, ELO estimates playing strength, and the remaining columns summarize games, wins, losses, and win ratio.' },
-  { icon: '📈', title: 'Analytics', body: 'Analytics shows score and ELO movement over time. It starts with the current session players, and you can clear or multi-select players, change the game range, and compare trends using real game dates.' },
+  { icon: '🏆', title: 'Standings', body: 'The leaderboard recalculates from the selected season’s game records. Points preserve raw scores, while Skill estimates playing strength with experience and uncertainty built in.' },
+  { icon: '📈', title: 'Analytics', body: 'Analytics shows score and Skill movement over time. Its Metric Definitions link explains every number in plain language.' },
   { icon: '🗂️', title: 'Game logs', body: 'Game logs are the record-level source of truth, with newest games first. Filter by session players, all data, or one player. Managers can select a record to correct or delete it; standings and analytics then recalculate.' },
   { icon: '🔐', title: 'Club settings and managers', body: 'Settings contains season controls, join requests, manager access, navigation, and—where permitted—club deletion. Manager-only actions stay hidden or disabled for regular members.' }
 ] as const
@@ -41,7 +42,7 @@ type TourStep = {
 
 const TOUR_STEPS: TourStep[] = [
   { selector: '[data-tour="dashboard-intro"]', title: 'Your personal dashboard', body: 'This is your starting point after sign-in. It keeps your clubs and personal results together without changing any club data.', action: 'next' },
-  { selector: '[data-tour="dashboard-performance"]', title: 'Your performance at a glance', body: 'These totals combine the player profiles linked to your account across clubs: games, win rate, recent ELO movement, and memberships.', action: 'next' },
+  { selector: '[data-tour="dashboard-performance"]', title: 'Your performance at a glance', body: 'These totals combine the player profiles linked to your account across clubs: games, win rate, recent Skill movement, and memberships.', action: 'next' },
   { selector: '[data-tour="clubs-list"]', title: 'Your clubs', body: 'Each card opens a real club and shows your linked player summary. The universal club is available to first-time users too.', action: 'next' },
   { selector: '[data-tour="club-actions"]', title: 'Create or join', body: 'Create a club for a new group, or join an existing one with its club ID. The tour will not submit either form.', action: 'next' },
   { selector: '[data-tour="open-club"]', title: 'Open a real club', body: 'Choose a club you already belong to. Ming will stay with you while the actual club workspace loads.', action: 'click', instruction: 'Click the highlighted Open club or Open roster button.' },
@@ -51,8 +52,8 @@ const TOUR_STEPS: TourStep[] = [
   { selector: '[data-tour="roster-open"], [data-tour="roster-tab"]', clickTarget: 'roster-open', intermediateTarget: 'roster-tab', title: 'Open the real roster', body: 'The roster manages tracked players, account links, emojis, names, and manager access. On mobile, open the Roster tab first, then use Manage players.', action: 'responsive', instruction: 'On mobile, tap Roster and then Manage players. On desktop, click Roster.' },
   { selector: '[data-tour="roster-modal"]', title: 'Roster and linked users', body: 'Members can link themselves to one available player. Managers also see player and manager controls. Nothing is changed unless you deliberately use one of those controls.', action: 'next' },
   { selector: '[data-tour="roster-close"]', title: 'Return to the workspace', body: 'Close the real roster to continue.', action: 'click', instruction: 'Click Close.' },
-  { selector: '[data-tour="leaderboard"], [data-tour="standings-tab"]', clickTarget: 'standings-tab', title: 'Standings update from games', body: 'Points, ELO, activity, and results are recalculated for the selected season. On mobile, open the Standings tab to reveal the same leaderboard.', action: 'responsive', instruction: 'On mobile, click Standings. On desktop, choose Next.' },
-  { selector: '[data-tour="analytics-open"]', title: 'Open real analytics', body: 'Analytics lets you compare selected players across score and ELO history.', action: 'click', instruction: 'Click Analytics.' },
+  { selector: '[data-tour="leaderboard"], [data-tour="standings-tab"]', clickTarget: 'standings-tab', title: 'Standings update from games', body: 'Points, Skill, activity, and results are recalculated for the selected season. On mobile, open the Standings tab to reveal the same leaderboard.', action: 'responsive', instruction: 'On mobile, click Standings. On desktop, choose Next.' },
+  { selector: '[data-tour="analytics-open"]', title: 'Open real analytics', body: 'Analytics lets you compare selected players across score and Skill history.', action: 'click', instruction: 'Click Analytics.' },
   { selector: '[data-tour="analytics-modal"]', title: 'Explore club trends', body: 'Use the real filters to focus on session players, clear the selection, choose specific players, and change the game range. The horizontal axis uses game dates.', action: 'next' },
   { selector: '[data-tour="analytics-close"]', title: 'Return to the workspace', body: 'Close analytics when you are finished reviewing trends.', action: 'click', instruction: 'Click Close.' },
   { selector: '[data-tour="logs-open"]', title: 'Open the real game logs', body: 'Game logs provide the detailed history behind standings and analytics.', action: 'click', instruction: 'Click Game logs.' },
@@ -91,19 +92,39 @@ function paddedRect(element: HTMLElement): SpotlightRect {
 
 export default function AppGuide() {
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
   const [mounted, setMounted] = useState(false)
+  const [welcomeOpen, setWelcomeOpen] = useState(false)
+  const [welcomeSpotlight, setWelcomeSpotlight] = useState<SpotlightRect | null>(null)
   const [guideOpen, setGuideOpen] = useState(false)
   const [tourOpen, setTourOpen] = useState(false)
   const [stepIndex, setStepIndex] = useState(0)
   const [spotlight, setSpotlight] = useState<SpotlightRect | null>(null)
   const targetRef = useRef<HTMLElement | null>(null)
+  const helpButtonRef = useRef<HTMLButtonElement | null>(null)
+  const welcomeClaimRef = useRef<string | null>(null)
   const bubbleRef = useRef<HTMLElement | null>(null)
   const lastScrolledRef = useRef<HTMLElement | null>(null)
   const allowProgrammaticTourClickRef = useRef(false)
   const step = TOUR_STEPS[stepIndex]
 
   useEffect(() => setMounted(true), [])
+
+  useEffect(() => {
+    if (!mounted || loading || !user || welcomeClaimRef.current === user.uid) return
+    welcomeClaimRef.current = user.uid
+    void claimMingWelcome(user.uid).then((firstVisit) => {
+      if (firstVisit) setWelcomeOpen(true)
+    }).catch(() => { /* A welcome failure must never block the app. */ })
+  }, [loading, mounted, user])
+
+  useEffect(() => {
+    if (!welcomeOpen) { setWelcomeSpotlight(null); return }
+    const update = () => { if (helpButtonRef.current) setWelcomeSpotlight(paddedRect(helpButtonRef.current)) }
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [welcomeOpen])
 
   useEffect(() => {
     if (!guideOpen) return
@@ -263,6 +284,11 @@ export default function AppGuide() {
     router.push('/')
   }
 
+  const openGuide = () => {
+    setWelcomeOpen(false)
+    setGuideOpen(true)
+  }
+
   const helpButtonClass = 'group flex h-11 w-11 items-center justify-center rounded-full border border-[rgb(var(--line))] bg-[rgb(var(--surface))] text-lg font-black text-[rgb(var(--ink))] shadow-[3px_3px_0_rgb(var(--shadow)/0.08)] hover:border-[rgb(var(--gold))]'
 
   if (!mounted) return <button type="button" className={helpButtonClass} aria-label="Open app guide">?</button>
@@ -271,7 +297,18 @@ export default function AppGuide() {
 
   return (
     <>
-      <button type="button" className={helpButtonClass} aria-label="Open app guide" title="App guide" onClick={() => setGuideOpen(true)}>?</button>
+      <button ref={helpButtonRef} type="button" className={helpButtonClass} aria-label="Open app guide" title="App guide" onClick={openGuide}>?</button>
+      {welcomeOpen ? createPortal(
+        <div className="real-tour-layer" aria-live="polite">
+          {welcomeSpotlight ? <div className="real-tour-spotlight" style={{ top: welcomeSpotlight.top, left: welcomeSpotlight.left, width: welcomeSpotlight.width, height: welcomeSpotlight.height }} aria-hidden="true" /> : <div className="real-tour-dimmer" aria-hidden="true" />}
+          <aside className="real-tour-bubble is-below" role="dialog" aria-label="Welcome to the score tracker">
+            <div className="real-tour-heading"><span className="app-guide-avatar" aria-hidden="true">🀄</span><div><p className="app-guide-kicker">Ming says · Welcome!</p><h2>Welcome to Ken&apos;s Mahjong Club</h2></div><button type="button" onClick={() => setWelcomeOpen(false)} aria-label="Dismiss welcome">×</button></div>
+            <p>I&apos;m Ming, your guide. Start with the highlighted <strong>?</strong> button to learn how the app works and take a guided tour of the real controls.</p>
+            <strong>Tap the highlighted ? to start learning.</strong>
+            <div className="real-tour-actions"><button type="button" onClick={() => setWelcomeOpen(false)}>Got it</button><button type="button" onClick={openGuide}>Open app guide</button></div>
+          </aside>
+        </div>, document.body
+      ) : null}
       {guideOpen ? createPortal(
         <div className="app-guide-overlay" role="dialog" aria-modal="true" aria-labelledby="app-guide-title" onMouseDown={(event) => { if (event.target === event.currentTarget) setGuideOpen(false) }}>
           <section className="app-guide-panel">

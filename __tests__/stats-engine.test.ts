@@ -10,24 +10,24 @@ describe('stats engine', () => {
   it('matches the worked ELO scenario example', () => {
     const result = calculateRoundEloDeltas(
       [
-        { playerId: 'monica', score: 768, ratingBefore: 1485 },
-        { playerId: 'brian', score: -768, ratingBefore: 1698 },
-        { playerId: 'kendall', score: 0, ratingBefore: 1524 },
-        { playerId: 'matt', score: 0, ratingBefore: 1551 }
+        { playerId: 'player-a', score: 768, ratingBefore: 1485 },
+        { playerId: 'player-b', score: -768, ratingBefore: 1698 },
+        { playerId: 'player-c', score: 0, ratingBefore: 1524 },
+        { playerId: 'player-d', score: 0, ratingBefore: 1551 }
       ],
       { eloBaseK: 16 }
     )
 
     const byPlayer = Object.fromEntries(result.map(item => [item.playerId, item]))
 
-    expect(byPlayer.monica.delta).toBeCloseTo(77, 0)
-    expect(byPlayer.monica.ratingAfter).toBe(1562)
-    expect(byPlayer.brian.delta).toBeCloseTo(-88, 0)
-    expect(byPlayer.brian.ratingAfter).toBe(1610)
-    expect(byPlayer.kendall.delta).toBeCloseTo(7, 0)
-    expect(byPlayer.kendall.ratingAfter).toBe(1531)
-    expect(byPlayer.matt.delta).toBeCloseTo(3, 0)
-    expect(byPlayer.matt.ratingAfter).toBe(1554)
+    expect(byPlayer['player-a'].delta).toBeCloseTo(77, 0)
+    expect(byPlayer['player-a'].ratingAfter).toBe(1562)
+    expect(byPlayer['player-b'].delta).toBeCloseTo(-88, 0)
+    expect(byPlayer['player-b'].ratingAfter).toBe(1610)
+    expect(byPlayer['player-c'].delta).toBeCloseTo(7, 0)
+    expect(byPlayer['player-c'].ratingAfter).toBe(1531)
+    expect(byPlayer['player-d'].delta).toBeCloseTo(3, 0)
+    expect(byPlayer['player-d'].ratingAfter).toBe(1554)
   })
 
   it('assigns the correct title band for exact boundary values', () => {

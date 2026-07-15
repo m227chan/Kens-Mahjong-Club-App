@@ -36,6 +36,7 @@ create table public.user_profiles (
   display_name text,
   photo_url text,
   sound_enabled boolean not null default true,
+  ming_welcome_seen_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -175,6 +176,14 @@ create table public.player_stats (
   last5_elo_delta double precision not null default 0,
   playoff_seed_score double precision,
   recent_elo_deltas double precision[] not null default '{}',
+  skill_mu double precision not null default 25,
+  skill_sigma double precision not null default 8.333333333333334,
+  skill_rating integer not null default 1500,
+  skill_peak integer not null default 1500,
+  skill_games_played integer not null default 0,
+  skill_rank integer not null default 0,
+  last5_skill_delta integer not null default 0,
+  recent_skill_deltas integer[] not null default '{}',
   days_attended integer not null default 0,
   last_played_at date,
   updated_at timestamptz not null default now(),
@@ -199,6 +208,14 @@ create table public.season_player_stats (
   last5_elo_delta double precision not null default 0,
   playoff_seed_score double precision,
   recent_elo_deltas double precision[] not null default '{}',
+  skill_mu double precision not null default 25,
+  skill_sigma double precision not null default 8.333333333333334,
+  skill_rating integer not null default 1500,
+  skill_peak integer not null default 1500,
+  skill_games_played integer not null default 0,
+  skill_rank integer not null default 0,
+  last5_skill_delta integer not null default 0,
+  recent_skill_deltas integer[] not null default '{}',
   days_attended integer not null default 0,
   last_played_at date,
   updated_at timestamptz not null default now(),
@@ -223,6 +240,22 @@ create table public.elo_events (
   unique (game_id, player_id)
 );
 create index elo_events_club_season_time_idx on public.elo_events(club_id, season_number, occurred_at desc);
+
+create table public.skill_events (
+  id text primary key,
+  club_id text not null references public.clubs(id) on delete cascade,
+  game_id text not null references public.games(id) on delete cascade,
+  player_id text not null references public.players(id) on delete cascade,
+  occurred_at timestamptz not null,
+  season_number integer not null,
+  rating_before integer not null,
+  rating_after integer not null,
+  delta integer not null,
+  mu double precision not null,
+  sigma double precision not null,
+  unique(game_id, player_id)
+);
+create index skill_events_club_season_time_idx on public.skill_events(club_id, season_number, occurred_at desc);
 
 create table public.sessions (
   id text primary key default encode(gen_random_bytes(10), 'hex'),
@@ -285,6 +318,7 @@ alter table public.game_entries enable row level security;
 alter table public.player_stats enable row level security;
 alter table public.season_player_stats enable row level security;
 alter table public.elo_events enable row level security;
+alter table public.skill_events enable row level security;
 alter table public.sessions enable row level security;
 alter table public.table_arrangements enable row level security;
 alter table public.pending_manager_grants enable row level security;
@@ -309,6 +343,7 @@ create policy entries_read on public.game_entries for select to authenticated us
 create policy stats_read on public.player_stats for select to authenticated using (public.is_club_member(club_id));
 create policy season_stats_read on public.season_player_stats for select to authenticated using (public.is_club_member(club_id));
 create policy elo_read on public.elo_events for select to authenticated using (public.is_club_member(club_id));
+create policy skill_events_read on public.skill_events for select to authenticated using (public.is_club_member(club_id));
 create policy sessions_read on public.sessions for select to authenticated using (public.is_club_member(club_id));
 create policy sessions_write on public.sessions for all to authenticated using (public.is_club_member(club_id)) with check (public.is_club_member(club_id));
 create policy arrangements_read on public.table_arrangements for select to authenticated using (public.is_club_member(club_id));

@@ -36,6 +36,7 @@ export const loadGamesPage = backend.loadGamesPage
 export const loadAllGames = backend.loadAllGames
 export const loadAnalyticsGames = backend.loadAnalyticsGames
 export const loadAnalyticsEloEvents = backend.loadAnalyticsEloEvents
+export const loadAnalyticsSkillEvents = backend.loadAnalyticsSkillEvents
 export const getClubGameCount = backend.getClubGameCount
 export const subscribePlayerStats = backend.subscribePlayerStats
 export const subscribeEloEvents = backend.subscribeEloEvents
@@ -47,6 +48,7 @@ export const updateSession = backend.updateSession
 export const closeSession = backend.closeSession
 export const getConfig = backend.getConfig
 export const ensureConfig = backend.ensureConfig
+export const claimMingWelcome = backend.claimMingWelcome
 
 async function postGameMutation(body: Record<string, unknown>) {
   const token = await auth.currentUser?.getIdToken()

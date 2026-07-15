@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { loadAnalyticsEloEvents, loadAnalyticsGames, subscribeActiveSession, subscribePlayerStats, subscribePlayers } from '@/lib/data'
-import type { EloEventDoc, GameDoc, PlayerDoc, PlayerStatsDoc, SessionDoc } from '@/lib/types'
+import { loadAnalyticsGames, loadAnalyticsSkillEvents, subscribeActiveSession, subscribePlayerStats, subscribePlayers } from '@/lib/data'
+import type { GameDoc, PlayerDoc, PlayerStatsDoc, SessionDoc, SkillEventDoc } from '@/lib/types'
 import AnalyticsPanel from '@/components/AnalyticsPanel'
 
 const palette = ['#18694f', '#b9392c', '#c18b30', '#28666e', '#744c24', '#8c3f65', '#4f772d', '#264653']
@@ -14,11 +14,11 @@ const gameRangeOptions = [
   { label: 'All', value: 0 }
 ]
 
-function timestampMillis(value: GameDoc['datetime'] | EloEventDoc['datetime']) {
+function timestampMillis(value: GameDoc['datetime'] | SkillEventDoc['datetime']) {
   return value?.toMillis?.() ?? 0
 }
 
-function shortDate(value: GameDoc['datetime'] | EloEventDoc['datetime']) {
+function shortDate(value: GameDoc['datetime'] | SkillEventDoc['datetime']) {
   const date = value?.toDate?.()
   return date ? new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: '2-digit' }).format(date) : ''
 }
@@ -27,7 +27,7 @@ export default function DashboardContent({ clubId, seasonNumber }: { clubId: str
   const [games, setGames] = useState<GameDoc[]>([])
   const [playerStats, setPlayerStats] = useState<PlayerStatsDoc[]>([])
   const [players, setPlayers] = useState<PlayerDoc[]>([])
-  const [eloEvents, setEloEvents] = useState<EloEventDoc[]>([])
+  const [skillEvents, setSkillEvents] = useState<SkillEventDoc[]>([])
   const [session, setSession] = useState<SessionDoc | null | undefined>(undefined)
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([])
   const [playerSearch, setPlayerSearch] = useState('')
@@ -41,11 +41,11 @@ export default function DashboardContent({ clubId, seasonNumber }: { clubId: str
     let cancelled = false
     void Promise.all([
       loadAnalyticsGames(clubId, gameRange, seasonNumber),
-      loadAnalyticsEloEvents(clubId, gameRange, seasonNumber)
+      loadAnalyticsSkillEvents(clubId, gameRange, seasonNumber)
     ]).then(([nextGames, nextEvents]) => {
-      if (!cancelled) { setGames(nextGames); setEloEvents(nextEvents) }
+      if (!cancelled) { setGames(nextGames); setSkillEvents(nextEvents) }
     }).catch(() => {
-      if (!cancelled) { setGames([]); setEloEvents([]) }
+      if (!cancelled) { setGames([]); setSkillEvents([]) }
     })
     return () => { cancelled = true }
   }, [clubId, gameRange, seasonNumber])
@@ -53,7 +53,7 @@ export default function DashboardContent({ clubId, seasonNumber }: { clubId: str
   const topPlayers = useMemo(() => {
     return playerStats
       .slice()
-      .sort((a, b) => a.eloRank - b.eloRank)
+      .sort((a, b) => a.skillRank - b.skillRank)
       .slice(0, 8)
       .map((stat) => stat.playerId)
   }, [playerStats])
@@ -106,8 +106,8 @@ export default function DashboardContent({ clubId, seasonNumber }: { clubId: str
   }, [selectedPlayerIds, visibleGames])
 
   const bumpChartData = useMemo(() => {
-    const sortedEvents = [...eloEvents].sort((a, b) => timestampMillis(a.datetime) - timestampMillis(b.datetime))
-    const eventsByGame = new Map<string, EloEventDoc[]>()
+    const sortedEvents = [...skillEvents].sort((a, b) => timestampMillis(a.datetime) - timestampMillis(b.datetime))
+    const eventsByGame = new Map<string, SkillEventDoc[]>()
     sortedEvents.forEach((event) => eventsByGame.set(event.gameId, [...(eventsByGame.get(event.gameId) ?? []), event]))
     const ratings = new Map<string, number>()
     const rows: Array<{ label: string; [key: string]: number | string | null }> = []
@@ -121,7 +121,7 @@ export default function DashboardContent({ clubId, seasonNumber }: { clubId: str
       rows.push(row)
     })
     return rows
-  }, [eloEvents, selectedPlayerIds, sortedGames, visibleGameIds])
+  }, [skillEvents, selectedPlayerIds, sortedGames, visibleGameIds])
 
   return (
     <div id="dashboard" className="space-y-5">
@@ -207,7 +207,7 @@ export default function DashboardContent({ clubId, seasonNumber }: { clubId: str
         </div>
 
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-800">ELO rank bump chart</h3>
+          <h3 className="text-sm font-bold text-slate-800">Skill rank bump chart</h3>
           <p className="mt-2 text-sm text-slate-500">Shows how selected players&apos; club rank changes over time.</p>
           {bumpChartData.length > 0 && selectedPlayers.length > 0 ? (
             <div className="mt-4 h-80">
@@ -233,7 +233,7 @@ export default function DashboardContent({ clubId, seasonNumber }: { clubId: str
             </div>
           ) : (
             <div className="mt-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-sm font-semibold text-slate-500">
-              {selectedPlayers.length ? 'Record games to draw the ELO rank chart.' : 'Select one or more players to draw this chart.'}
+              {selectedPlayers.length ? 'Record games to draw the Skill rank chart.' : 'Select one or more players to draw this chart.'}
             </div>
           )}
         </div>

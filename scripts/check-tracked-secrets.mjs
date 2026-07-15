@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 
 const rules = [
   ['Google/Firebase API key', /AIza[0-9A-Za-z_-]{20,}/],
+  ['Personal email address', /\b[0-9A-Z._%+-]+@(?:gmail|hotmail|outlook|yahoo)\.[A-Z]{2,}\b/i],
   ['Populated Firebase API key environment variable', /^NEXT_PUBLIC_FIREBASE_API_KEY[^\S\r\n]*=[^\S\r\n]*\S+/m],
   ['Private key material', /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/],
   ['Service-account private key field', /["']private_key["']\s*:\s*["'][^"']+/],
@@ -11,7 +12,7 @@ const rules = [
   ['Assigned Supabase service-role token', /(?:SUPABASE_SERVICE_ROLE_KEY|service_role)\s*[=:]\s*[^\s]+/i]
 ]
 
-const trackedFiles = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' })
+const trackedFiles = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { encoding: 'utf8' })
   .split('\0')
   .filter(Boolean)
 
@@ -39,4 +40,4 @@ if (findings.length) {
   process.exit(1)
 }
 
-console.log(`No credential patterns found in ${trackedFiles.length} tracked files.`)
+console.log(`No credential patterns found in ${trackedFiles.length} commit-eligible files.`)

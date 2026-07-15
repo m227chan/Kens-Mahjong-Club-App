@@ -54,7 +54,7 @@ function TrendLine({ values }: { values: number[] }) {
   }, [values])
 
   return (
-    <svg viewBox="0 0 180 50" className="h-12 w-full overflow-visible" role="img" aria-label="Recent combined ELO movement">
+    <svg viewBox="0 0 180 50" className="h-12 w-full overflow-visible" role="img" aria-label="Recent combined Skill movement">
       <line x1="0" y1="43" x2="180" y2="43" stroke="rgb(var(--line))" strokeWidth="1" />
       <polyline className="home-trend-line" points={points} fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
@@ -157,7 +157,7 @@ export default function HomePage() {
     const stats = clubSummaries.flatMap((summary) => summary.stats ? [summary.stats] : [])
     const games = stats.reduce((sum, entry) => sum + entry.gamesPlayed, 0)
     const wins = stats.reduce((sum, entry) => sum + entry.gamesWon, 0)
-    const trendValues = stats.flatMap((entry) => entry.recentEloDeltas ?? [])
+    const trendValues = stats.flatMap((entry) => entry.recentSkillDeltas ?? [])
     const trend = Math.round(trendValues.reduce((sum, value) => sum + value, 0))
     return { games, winRate: games ? Math.round((wins / games) * 100) : 0, trend, trendValues }
   }, [clubSummaries])
@@ -239,7 +239,7 @@ export default function HomePage() {
                 <p className={`home-number ${rollup.trend > 0 ? 'text-[rgb(var(--bamboo))]' : rollup.trend < 0 ? 'text-[rgb(var(--cinnabar))]' : ''}`}>
                   {rollup.trend > 0 ? '+' : ''}<CountUp value={rollup.trend} />
                 </p>
-                <p className="home-label">Recent ELO trend</p>
+                <p className="home-label">Recent Skill trend</p>
               </div>
               <div><p className="home-number"><CountUp value={clubs.length} /></p><p className="home-label">Clubs joined</p></div>
             </div>
@@ -270,7 +270,7 @@ export default function HomePage() {
                   <>
                     <p className="mt-5 text-sm font-bold text-slate-700">Playing as {player.displayName}</p>
                     <div className="mt-4 grid grid-cols-3 gap-3 border-y border-slate-200 py-4">
-                      <div><p className="club-stat">{stats.eloRating}</p><p className="club-label">ELO</p></div>
+                      <div><p className="club-stat">{stats.skillRating}</p><p className="club-label">Skill</p></div>
                       <div><p className="club-stat">{stats.gamesPlayed ? Math.round((stats.gamesWon / stats.gamesPlayed) * 100) : 0}%</p><p className="club-label">Win rate</p></div>
                       <div><p className="club-stat">#{stats.pointsRank || '–'}</p><p className="club-label">Standing</p></div>
                     </div>

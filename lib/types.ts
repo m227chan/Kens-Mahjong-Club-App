@@ -88,6 +88,19 @@ export interface EloEventDoc {
   }>
 }
 
+export interface SkillEventDoc {
+  id: string
+  gameId: string
+  playerId: string
+  datetime: Timestamp
+  seasonNumber?: number
+  ratingBefore: number
+  ratingAfter: number
+  delta: number
+  mu: number
+  sigma: number
+}
+
 export interface PlayerStatsDoc {
   id?: string
   playerId: string
@@ -107,6 +120,14 @@ export interface PlayerStatsDoc {
   last5EloDelta: number
   playoffSeedScore?: number
   recentEloDeltas?: number[]
+  skillMu: number
+  skillSigma: number
+  skillRating: number
+  skillPeak: number
+  skillGamesPlayed: number
+  skillRank: number
+  last5SkillDelta: number
+  recentSkillDeltas?: number[]
   daysAttended: number
   lastPlayedAt?: string | null
   updatedAt: Timestamp

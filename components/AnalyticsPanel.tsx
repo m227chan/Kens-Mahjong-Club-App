@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { subscribePlayerStats, subscribePlayers } from '@/lib/data'
 import type { PlayerDoc, PlayerStatsDoc } from '@/lib/types'
 
@@ -40,8 +41,8 @@ export default function AnalyticsPanel({ clubId, seasonNumber, selectedPlayerIds
     return [...playerStats]
       .filter((stat) => !selected || selected.has(stat.playerId))
       .sort((a, b) => {
-        const rankA = a.eloRank || Number.MAX_SAFE_INTEGER
-        const rankB = b.eloRank || Number.MAX_SAFE_INTEGER
+        const rankA = a.skillRank || Number.MAX_SAFE_INTEGER
+        const rankB = b.skillRank || Number.MAX_SAFE_INTEGER
         return rankA - rankB || b.gamesPlayed - a.gamesPlayed || b.totalPoints - a.totalPoints
       })
       .slice(0, selected ? selectedPlayerIds!.length : 8)
@@ -55,13 +56,13 @@ export default function AnalyticsPanel({ clubId, seasonNumber, selectedPlayerIds
   const cards = [
     {
       title: 'Rank Alignment',
-      value: top.map((stat) => ({ id: stat.playerId, label: playerName(stat.playerId, true), value: Math.abs(stat.eloRank - stat.pointsRank) })),
+      value: top.map((stat) => ({ id: stat.playerId, label: playerName(stat.playerId, true), value: Math.abs(stat.skillRank - stat.pointsRank) })),
       color: '#18694f',
-      description: 'Lower is better. Compares ELO rank to points rank.'
+      description: 'Lower is better. Compares experience-aware Skill rank to points rank.'
     },
     {
-      title: 'ELO Headroom',
-      value: top.map((stat) => ({ id: stat.playerId, label: playerName(stat.playerId, true), value: Math.max(0, stat.eloPeak - stat.eloRating) })),
+      title: 'Skill Headroom',
+      value: top.map((stat) => ({ id: stat.playerId, label: playerName(stat.playerId, true), value: Math.max(0, stat.skillPeak - stat.skillRating) })),
       color: '#28666e',
       description: 'Distance from each player\'s peak rating.'
     },
@@ -72,12 +73,20 @@ export default function AnalyticsPanel({ clubId, seasonNumber, selectedPlayerIds
       description: 'Average point result per recorded game.'
     },
     {
-      title: 'Last 5 ELO',
-      value: top.map((stat) => ({ id: stat.playerId, label: playerName(stat.playerId, true), value: stat.last5EloDelta })),
+      title: 'Last 5 Skill',
+      value: top.map((stat) => ({ id: stat.playerId, label: playerName(stat.playerId, true), value: stat.last5SkillDelta })),
       color: '#b9392c',
       description: 'Recent rating movement across the latest games.'
     }
   ]
+
+  const pointsDistribution = useMemo(() => {
+    return playerStats
+      .map((stat) => ({ id: stat.playerId, name: playerName(stat.playerId), points: stat.totalPoints }))
+      .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name))
+  // playerName is derived from the players subscription used by this memo.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerStats, players])
 
   return (
     <section id="analytics" className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -87,14 +96,36 @@ export default function AnalyticsPanel({ clubId, seasonNumber, selectedPlayerIds
       </header>
 
       {top.length > 0 ? (
-        <div className="grid gap-4 p-5 md:grid-cols-2">
-          {cards.map((card) => (
-            <article key={card.title} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-              <h3 className="text-sm font-bold text-slate-800">{card.title}</h3>
-              <p className="mt-1 text-xs font-medium text-slate-500">{card.description}</p>
-              <MiniBarChart data={card.value} color={card.color} />
-            </article>
-          ))}
+        <div className="grid gap-4 p-5">
+          <article className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <h3 className="text-sm font-bold text-slate-800">Player points</h3>
+            <p className="mt-1 text-xs font-medium text-slate-500">Every selected player, ordered from highest to lowest cumulative points.</p>
+            <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white px-2 pt-4">
+              <div style={{ minWidth: Math.max(680, pointsDistribution.length * 34), height: 390 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={pointsDistribution} margin={{ top: 10, right: 18, left: 8, bottom: 92 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#dbe3e8" />
+                    <XAxis dataKey="name" interval={0} angle={-60} textAnchor="end" height={95} tick={{ fontSize: 11, fill: '#475569' }} />
+                    <YAxis tick={{ fontSize: 11, fill: '#475569' }} width={58} />
+                    <ReferenceLine y={0} stroke="#64748b" />
+                    <Tooltip formatter={(value) => [Number(value).toLocaleString(), 'Points']} cursor={{ fill: 'rgba(24,105,79,.06)' }} />
+                    <Bar dataKey="points" radius={[3, 3, 0, 0]}>
+                      {pointsDistribution.map((entry) => <Cell key={entry.id} fill={entry.points >= 0 ? '#2f80ed' : '#e05a47'} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </article>
+          <div className="grid gap-4 md:grid-cols-2">
+            {cards.map((card) => (
+              <article key={card.title} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <h3 className="text-sm font-bold text-slate-800">{card.title}</h3>
+                <p className="mt-1 text-xs font-medium text-slate-500">{card.description}</p>
+                <MiniBarChart data={card.value} color={card.color} />
+              </article>
+            ))}
+          </div>
         </div>
       ) : (
         <div className="px-5 py-10 text-center text-sm font-medium text-slate-500">Record games to unlock analytics.</div>

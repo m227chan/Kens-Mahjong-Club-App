@@ -13,7 +13,7 @@ The codebase is organized around the following principles:
 1. **One identity provider, one application database.** Firebase is used for Google authentication and ID-token verification. Supabase/PostgreSQL is the only application-data store.
 2. **Reads stay responsive.** The browser uses Supabase queries, short-lived in-memory caches, and Realtime subscriptions for data that benefits from live updates.
 3. **Sensitive writes are server-authoritative.** Manager actions, game mutations, and statistics rebuilds are validated on the server after verifying a Firebase ID token.
-4. **Game history is the source of truth.** Aggregate statistics and ELO events are derived from game records and can be rebuilt after a game is created, edited, deleted, or imported.
+4. **Game history is the source of truth.** Aggregate statistics and Skill events are derived from game records and can be rebuilt after a game is created, edited, deleted, or imported.
 5. **Multi-document consistency is transactional.** Related PostgreSQL changes execute in a transaction. Game rebuilds also take a per-club advisory lock to prevent concurrent rebuild races.
 6. **Authorization is enforced below the UI.** Buttons may be role-aware for usability, but security depends on API authorization checks and database RLS—not hidden controls.
 7. **Responsive design is structural.** Mobile layouts are intentionally reorganized rather than being scaled-down desktop layouts.
@@ -47,10 +47,10 @@ flowchart LR
 | Auth clients | `lib/firebase.ts`, `lib/firebase-admin.ts` | Browser Firebase Auth and server-side Firebase token verification |
 | Server database access | `lib/postgres-admin.ts` | Server-only PostgreSQL pool and transaction helper |
 | Privileged API | `app/api/supabase-data/route.ts` | Authenticated club, roster, season, session-support, and game actions |
-| Game/stat engine | `lib/server/supabase-game-management.ts` | Game validation, transaction locking, history changes, ELO events, and full aggregate rebuilds |
+| Game/stat engine | `lib/server/supabase-game-management.ts` | Game validation, transaction locking, history changes, Skill events, legacy ELO, and full aggregate rebuilds |
 | Membership automation | `lib/server/supabase-club-management.ts`, `app/api/ensure-universal-membership/route.ts` | Default/global membership enrollment and pending manager-grant application |
 | Notifications | `app/api/send-join-request-email/route.ts` | Authenticated, escaped join-request email notifications |
-| Domain algorithms | `lib/scoring.ts`, `lib/stats-engine.ts`, `lib/players.ts`, `lib/session-layout.ts` | Score calculation, ELO, ranking, titles, emoji allocation, and session normalization |
+| Domain algorithms | `lib/scoring.ts`, `lib/skill-rating.ts`, `lib/stats-engine.ts`, `lib/players.ts`, `lib/session-layout.ts` | Score calculation, experience-aware multiplayer Skill, legacy ELO, ranking, titles, and session normalization |
 | Database definition | `supabase/migrations/*.sql` | Schema, constraints, indexes, views, RLS policies, Realtime publication, and historical baselines |
 | Operations | `scripts/*.mjs` | Ordered schema migrations and Firebase custom-claim setup |
 | Verification | `__tests__/*.test.ts` | Unit coverage for players, scoring, ELO/stat behavior, and session layout |
@@ -65,7 +65,7 @@ flowchart LR
 - **Browser data access:** `@supabase/supabase-js`, using the current Firebase ID token as the access token.
 - **Server data access:** `pg` with parameterized SQL and transactions.
 - **Realtime:** Supabase Realtime publications and filtered channels.
-- **Charts:** Recharts for cumulative-score and ELO-rank visualizations; lightweight CSS bars for summary analytics.
+- **Charts:** Recharts for cumulative-score and Skill-rank visualizations; lightweight CSS bars for summary analytics.
 - **Email:** Resend-compatible HTTP API for optional join-request notifications.
 - **Audio:** Web Audio API; cues are synthesized locally and do not require audio assets.
 - **Testing:** Vitest with jsdom and Testing Library dependencies.
@@ -246,7 +246,8 @@ The authoritative schema is the ordered SQL in `supabase/migrations`. The follow
 | `game_entries` | One score per game/player; cascade-deleted with the game |
 | `player_stats` | Rebuilt all-time aggregates and ranks |
 | `season_player_stats` | Rebuilt aggregates and ranks scoped to a season |
-| `elo_events` | Per-game/per-player ELO before/after values and pairwise calculation detail |
+| `elo_events` | Legacy per-game/per-player ELO history retained for compatibility |
+| `skill_events` | Per-game/per-player experience-aware Skill rating history |
 | `sessions` | One active session per club, participants, table count, table JSON, sideline, and close time |
 | `table_arrangements` | Timestamped table/sideline snapshots |
 | `pending_manager_grants` | Email-normalized manager grants applied when a matching account exists or signs in |
@@ -388,10 +389,10 @@ Every stored game must contain two to four distinct players, finite numeric scor
 ### Leaderboard
 
 - The leaderboard sorts primarily by derived points rank with stable fallbacks.
-- Desktop columns show rank, player, points, ELO value, games, wins, losses, and win ratio.
-- ELO rank is intentionally not displayed beside the ELO value.
-- The player subtitle contains only the derived rank title—no duplicate ELO or “last five” metric.
-- Mobile shows a focused rank/player/points/ELO table, initially limited to the top five with an explicit expansion control.
+- Desktop columns show rank, player, points, Skill value, games, wins, losses, and win ratio.
+- Experience protection is handled internally and does not add a status badge to the leaderboard.
+- The player subtitle contains only the derived rank title.
+- Mobile shows a focused rank/player/points/Skill table, initially limited to the top five with an explicit expansion control.
 - Desktop preserves the full final column with a deliberate minimum width and horizontal scrolling.
 
 #### Rank-title distribution
@@ -410,8 +411,9 @@ Rounding drift is assigned to the central band. Small clubs may have empty bands
 - Supports clearing the selection and multi-selecting specific players, which keeps large rosters usable.
 - Supports recent-history ranges and all-history mode.
 - Cumulative score chart uses short-form dates on the x-axis.
-- ELO rank bump chart derives valid ranks over time and avoids rendering invalid/`NaN` values.
-- Summary cards show rank alignment, ELO headroom, points per game, and recent ELO movement.
+- Skill rank bump chart derives valid ranks over time and avoids rendering invalid/`NaN` values.
+- Summary cards show rank alignment, Skill headroom, points per game, and recent Skill movement.
+- The analytics modal links to `/metrics`, which explains every displayed metric in plain language.
 - Empty and loading states explain when more games or player selection are needed.
 
 ### Themes, motion, and sound
@@ -424,9 +426,17 @@ Rounding drift is assigned to the central band. Small clubs may have empty bands
 - The login tile field moves continuously in normal motion mode and reacts to pointer/touch proximity.
 - Count-up, chart, entrance, celebration, and background animations respect reduced-motion preference.
 
-## 11. Statistics and ELO engine
+## 11. Statistics and rating engine
 
-### ELO calculation
+### Experience-aware Skill Rating
+
+`calculateSkillRound` uses the OpenSkill Plackett–Luce multiplayer model. Each player carries a skill estimate (`mu`) and uncertainty (`sigma`). The displayed rating is a conservative estimate scaled to start at 1500. Games are evaluated by placement only: positive score first, zero scores tied in the middle, and negative score last. Score magnitude and fan do not amplify rating movement.
+
+During a player’s first 20 games, their own estimate learns normally while their evidence is discounted when updating established players. This prevents experienced players from farming newcomers without adding a visible status label. Skill replay uses every historical game after both legacy and current log formats have been normalized to player-and-score entries.
+
+The rebuild reads all comparable game logs, including historical rows, and recreates `skill_events`, all-time Skill fields, and season Skill fields. Raw Points and legacy baselines are not changed.
+
+### Legacy ELO calculation
 
 `calculateRoundEloDeltas` treats each game as all pairwise comparisons among its participants:
 

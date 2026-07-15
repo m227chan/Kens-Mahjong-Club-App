@@ -5,7 +5,7 @@ import { auth } from '@/lib/firebase'
 import { getSupabaseBrowserClient } from '@/lib/supabase'
 import { createInitialSessionLayout, normalizeSessionLayout } from '@/lib/session-layout'
 import { computeGlobalRanks } from '@/lib/stats-engine'
-import type { AppConfigDoc, ClubDoc, ClubMembershipDoc, EloEventDoc, GameDoc, JoinRequestDoc, PlayerDoc, PlayerStatsDoc, SeasonDoc, SessionDoc, TableArrangementDoc } from '@/lib/types'
+import type { AppConfigDoc, ClubDoc, ClubMembershipDoc, EloEventDoc, GameDoc, JoinRequestDoc, PlayerDoc, PlayerStatsDoc, SeasonDoc, SessionDoc, SkillEventDoc, TableArrangementDoc } from '@/lib/types'
 
 type UserLike = { uid: string; email: string | null; displayName: string | null; photoURL?: string | null; getIdToken?: () => Promise<string> }
 type Row = Record<string, unknown>
@@ -47,6 +47,7 @@ function mapStats(row: Row): PlayerStatsDoc & { id: string } {
     worstSingleGame: row.worst_single_game == null ? Number.POSITIVE_INFINITY : Number(row.worst_single_game), eloRating: Number(row.elo_rating),
     eloPeak: Number(row.elo_peak), eloGamesPlayed: Number(row.elo_games_played ?? row.games_played), eloRank: Number(row.elo_rank), pointsRank: Number(row.points_rank), last5EloDelta: Number(row.last5_elo_delta),
     playoffSeedScore: row.playoff_seed_score == null ? undefined : Number(row.playoff_seed_score), recentEloDeltas: (row.recent_elo_deltas as number[] | null) ?? [],
+    skillMu: Number(row.skill_mu ?? 25), skillSigma: Number(row.skill_sigma ?? 25 / 3), skillRating: Number(row.skill_rating ?? 1500), skillPeak: Number(row.skill_peak ?? 1500), skillGamesPlayed: Number(row.skill_games_played ?? 0), skillRank: Number(row.skill_rank ?? 0), last5SkillDelta: Number(row.last5_skill_delta ?? 0), recentSkillDeltas: (row.recent_skill_deltas as number[] | null) ?? [],
     daysAttended: Number(row.days_attended), lastPlayedAt: row.last_played_at as string | null, updatedAt: ts(row.updated_at) }
 }
 function mapSession(row: Row): SessionDoc {
@@ -68,6 +69,9 @@ function mapElo(row: Row): EloEventDoc {
   return { id: String(row.id), gameId: String(row.game_id), playerId: String(row.player_id), datetime: ts(row.occurred_at), seasonNumber: Number(row.season_number),
     ratingBefore: Number(row.rating_before), ratingAfter: Number(row.rating_after), delta: Number(row.delta), kFactor: Number(row.k_factor),
     marginMultiplier: Number(row.margin_multiplier), opponents: (row.opponents as EloEventDoc['opponents']) ?? [] }
+}
+function mapSkill(row: Row): SkillEventDoc {
+  return { id: String(row.id), gameId: String(row.game_id), playerId: String(row.player_id), datetime: ts(row.occurred_at), seasonNumber: Number(row.season_number), ratingBefore: Number(row.rating_before), ratingAfter: Number(row.rating_after), delta: Number(row.delta), mu: Number(row.mu), sigma: Number(row.sigma) }
 }
 
 function realtime<T>(name: string, table: string, filter: string, load: () => Promise<T>, callback: (value: T) => void, onError?: (error: Error) => void) {
@@ -135,10 +139,16 @@ export async function loadAnalyticsEloEvents(clubId: string, gameCount: number, 
   if (gameCount) query = query.limit(Math.max(gameCount * 8, 200))
   const { data, error } = await query; if (error) throw error; const values = (data ?? []).map(mapElo).filter((event) => clubId !== 'KEN' || event.datetime.toMillis() >= Date.parse('2026-04-25T04:00:00.000Z')); return gameCount ? values.reverse() : values
 }
+export async function loadAnalyticsSkillEvents(clubId: string, gameCount: number, seasonNumber?: number) {
+  let query = client().from('skill_events').select('*').eq('club_id', clubId).order('occurred_at', { ascending: gameCount === 0 })
+  if (seasonNumber) query = query.eq('season_number', seasonNumber)
+  if (gameCount) query = query.limit(Math.max(gameCount * 8, 200))
+  const { data, error } = await query; if (error) throw error; const values = (data ?? []).map(mapSkill); return gameCount ? values.reverse() : values
+}
 export async function getClubGameCount(clubId: string) { const { count, error } = await client().from('games').select('*', { count: 'exact', head: true }).eq('club_id', clubId); if (error) throw error; return count ?? 0 }
 export function subscribePlayerStats(clubId: string, callback: (stats: Array<PlayerStatsDoc & { id: string }>) => void, seasonNumber?: number) {
   const table = seasonNumber ? 'season_player_stats' : 'player_stats'
-  const load = async () => { let query = client().from(table).select('*').eq('club_id', clubId); if (seasonNumber) query = query.eq('season_number', seasonNumber); const { data, error } = await query; if (error) throw error; let stats = (data ?? []).map(mapStats); const ranks = computeGlobalRanks(stats); stats = stats.map((stat) => ({ ...stat, eloRank: ranks.eloRanks[stat.playerId] ?? 0, pointsRank: ranks.pointsRanks[stat.playerId] ?? 0 })); return stats.sort((a, b) => a.eloRank - b.eloRank) }
+  const load = async () => { let query = client().from(table).select('*').eq('club_id', clubId); if (seasonNumber) query = query.eq('season_number', seasonNumber); const { data, error } = await query; if (error) throw error; let stats = (data ?? []).map(mapStats); const ranks = computeGlobalRanks(stats); const skillOrder = [...stats].sort((a,b) => b.skillRating-a.skillRating); stats = stats.map((stat) => ({ ...stat, eloRank: ranks.eloRanks[stat.playerId] ?? 0, pointsRank: ranks.pointsRanks[stat.playerId] ?? 0, skillRank: skillOrder.findIndex((item) => item.playerId === stat.playerId)+1 })); return stats.sort((a, b) => a.skillRank - b.skillRank) }
   return realtime(`stats:${clubId}:${seasonNumber ?? 'all'}`, table, `club_id=eq.${clubId}`, load, callback)
 }
 export function subscribeGames(clubId: string, callback: (games: GameDoc[]) => void, seasonNumber?: number) { return realtime(`games:${clubId}`, 'games', `club_id=eq.${clubId}`, async () => (await loadAllGames(clubId)).filter((game) => !seasonNumber || game.seasonNumber === seasonNumber), callback) }
@@ -172,3 +182,8 @@ export async function getConfig(clubId: string) { const { data, error } = await 
 export const ensureConfig = (clubId: string) => serverAction<void>('ensureConfig', { clubId })
 export async function getSoundPreference(uid: string) { const { data, error } = await client().from('user_profiles').select('sound_enabled').eq('firebase_uid', uid).maybeSingle(); if (error) throw error; return data?.sound_enabled as boolean | undefined }
 export async function setSoundPreference(uid: string, enabled: boolean) { const user = auth.currentUser; const { error } = await client().from('user_profiles').upsert({ firebase_uid: uid, email: user?.email ?? null, display_name: user?.displayName ?? null, photo_url: user?.photoURL ?? null, sound_enabled: enabled, updated_at: new Date().toISOString() }); if (error) throw error }
+export async function claimMingWelcome(uid: string) {
+  const { data, error } = await client().from('user_profiles').update({ ming_welcome_seen_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('firebase_uid', uid).is('ming_welcome_seen_at', null).select('firebase_uid')
+  if (error) throw error
+  return Boolean(data?.length)
+}

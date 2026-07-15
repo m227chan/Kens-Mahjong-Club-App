@@ -130,7 +130,7 @@ export default function LoginPage(){
         <p className="login-lede">A shared scorebook for the people you play with. Run sessions, record results, and see the standings take shape over time.</p>
         <ul className="login-feature-list" aria-label="Score tracker features">
           <li><span>01</span><div><strong>Run the table</strong><p>Organize players and record each result while the session is live.</p></div></li>
-          <li><span>02</span><div><strong>Follow every rivalry</strong><p>Keep game history, points, and ELO standings together.</p></div></li>
+          <li><span>02</span><div><strong>Follow every rivalry</strong><p>Keep game history, points, and experience-aware Skill standings together.</p></div></li>
           <li><span>03</span><div><strong>Bring every club</strong><p>Switch between your Mahjong groups from one personal dashboard.</p></div></li>
         </ul>
       </section>

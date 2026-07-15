@@ -711,7 +711,10 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">Analytics</p>
                 <h3 className="mt-2 text-xl font-black text-slate-950">{club?.name ?? membership.clubName} insights</h3>
-                <p className="mt-1 text-sm text-slate-500">Dashboard charts, ELO movement, and club analytics.</p>
+                <p className="mt-1 text-sm text-slate-500">Dashboard charts, Skill movement, and club analytics.</p>
+                <Link href="/metrics" className="mt-3 inline-flex items-center gap-3 rounded-full border border-[rgb(var(--bamboo)/.45)] bg-[rgb(var(--bamboo)/.08)] px-4 py-2 text-xs font-black text-[rgb(var(--bamboo))] transition hover:translate-x-1 hover:bg-[rgb(var(--bamboo)/.14)]">
+                  <span>How are these metrics calculated?</span><span aria-hidden="true">→</span>
+                </Link>
               </div>
               <button data-tour="analytics-close" type="button" onClick={() => setAnalyticsOpen(false)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">
                 Close

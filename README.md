@@ -9,7 +9,7 @@ A responsive web application for organizing Mahjong clubs, running live sessions
 - Arrange tables and manage players during live sessions with viewport-centered, mobile-friendly dialogs
 - Record self-draws, discard wins, draws, and point totals
 - Review and correct individual game records with session-player filtering and responsive card/table layouts
-- Track standings, win rates, cumulative scores, and ELO ratings
+- Track standings, win rates, cumulative scores, and experience-aware Skill ratings
 - Explore player and club analytics
 - Import and export game data as CSV
 - Use light and dark themes across desktop and mobile layouts

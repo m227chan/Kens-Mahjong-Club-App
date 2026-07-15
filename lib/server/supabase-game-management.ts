@@ -3,12 +3,13 @@ import { randomBytes } from 'node:crypto'
 import type { PoolClient } from 'pg'
 import { toDateOnly } from '@/lib/date-only'
 import { calculateRoundEloDeltas, computeGlobalRanks, type AppConfigLike } from '@/lib/stats-engine'
+import { calculateSkillRound, initialSkillState } from '@/lib/skill-rating'
 import { withTransaction } from '@/lib/postgres-admin'
 
 type Entry = { playerId: string; score: number }
 type GameInput = { datetime?: unknown; seasonNumber?: number; entries: Entry[]; createdBy?: string; tableId?: string | null; notes?: string | null; winType?: 'self_draw' | 'discard' | 'draw'; loserPlayerId?: string | null; fan?: number | null }
 type Game = GameInput & { id: string; datetime: Date; createdBy: string; seasonNumber: number; entries: Entry[]; winnerPlayerId: string | null; isHistorical: boolean }
-type Stats = { playerId: string; seasonNumber?: number; totalPoints: number; gamesPlayed: number; gamesWon: number; gamesLost: number; winLossRatio: number; bestSingleGame: number; worstSingleGame: number; eloRating: number; eloPeak: number; eloGamesPlayed: number; eloRank: number; pointsRank: number; last5EloDelta: number; playoffSeedScore: number | null; recentEloDeltas: number[]; daysAttended: number; lastPlayedAt: string | null }
+type Stats = { playerId: string; seasonNumber?: number; totalPoints: number; gamesPlayed: number; gamesWon: number; gamesLost: number; winLossRatio: number; bestSingleGame: number; worstSingleGame: number; eloRating: number; eloPeak: number; eloGamesPlayed: number; eloRank: number; pointsRank: number; last5EloDelta: number; playoffSeedScore: number | null; recentEloDeltas: number[]; skillMu: number; skillSigma: number; skillRating: number; skillPeak: number; skillGamesPlayed: number; skillRank: number; last5SkillDelta: number; recentSkillDeltas: number[]; daysAttended: number; lastPlayedAt: string | null }
 
 const KEN_STATS_CUTOFF = Date.parse('2026-04-25T04:00:00.000Z')
 const id = () => randomBytes(10).toString('hex')
@@ -93,25 +94,31 @@ function baselineStats(row: Record<string, unknown>): Stats {
     gamesWon: Number(row.games_won), gamesLost: Number(row.games_lost), winLossRatio: Number(row.win_loss_ratio), bestSingleGame: row.best_single_game == null ? Number.NEGATIVE_INFINITY : Number(row.best_single_game),
     worstSingleGame: row.worst_single_game == null ? Number.POSITIVE_INFINITY : Number(row.worst_single_game), eloRating: Number(row.elo_rating), eloPeak: Number(row.elo_peak), eloGamesPlayed: Number(row.elo_games_played),
     eloRank: 0, pointsRank: 0, last5EloDelta: Number(row.last5_elo_delta), playoffSeedScore: row.playoff_seed_score == null ? null : Number(row.playoff_seed_score), recentEloDeltas: (row.recent_elo_deltas as number[]) ?? [],
+    skillMu: 25, skillSigma: 25 / 3, skillRating: 1500, skillPeak: 1500, skillGamesPlayed: 0, skillRank: 0, last5SkillDelta: 0, recentSkillDeltas: [],
     daysAttended: Number(row.days_attended), lastPlayedAt: toDateOnly(row.last_played_at) }
 }
 
 async function rebuild(client: PoolClient, clubId: string) {
-  const [gameRows, configRows, baselineRows] = await Promise.all([
+  const [gameRows, skillGameRows, configRows, baselineRows] = await Promise.all([
     client.query(`select g.*, coalesce(json_agg(json_build_object('playerId',e.player_id,'score',e.score)) filter(where e.player_id is not null),'[]') entries
       from games g left join game_entries e on e.game_id=g.id where g.club_id=$1 and g.is_historical=false group by g.id order by g.played_at,g.id`, [clubId]),
+    client.query(`select g.*, coalesce(json_agg(json_build_object('playerId',e.player_id,'score',e.score)) filter(where e.player_id is not null),'[]') entries
+      from games g left join game_entries e on e.game_id=g.id where g.club_id=$1 group by g.id order by g.played_at,g.id`, [clubId]),
     client.query('select * from app_configs where club_id=$1', [clubId]),
     client.query('select * from stat_baselines where club_id=$1', [clubId])
   ])
   const games: Game[] = gameRows.rows.map((row) => ({ id: row.id, datetime: new Date(row.played_at), createdBy: row.created_by, seasonNumber: row.season_number,
     entries: row.entries, tableId: row.table_id, notes: row.notes, winType: row.win_type, loserPlayerId: row.loser_player_id, fan: row.fan, winnerPlayerId: row.winner_player_id, isHistorical: false }))
+  const skillGames: Game[] = skillGameRows.rows.map((row) => ({ id: row.id, datetime: new Date(row.played_at), createdBy: row.created_by, seasonNumber: row.season_number,
+    entries: row.entries, tableId: row.table_id, notes: row.notes, winType: row.win_type, loserPlayerId: row.loser_player_id, fan: row.fan, winnerPlayerId: row.winner_player_id, isHistorical: Boolean(row.is_historical) }))
   const raw = configRows.rows[0] ?? {}
   const config: AppConfigLike = { eloBaseK: raw.elo_base_k, eloVeteranGamesThreshold: raw.elo_veteran_games_threshold, eloStartingRating: raw.elo_starting_rating,
     eloNewPlayerK: raw.elo_new_player_k, eloIntermediateK: raw.elo_intermediate_k, eloNewPlayerGamesThreshold: raw.elo_new_player_games_threshold }
   const start = config.eloStartingRating ?? 1500
+  const initialSkill = initialSkillState()
   const make = (playerId: string, seasonNumber?: number): Stats => ({ playerId, ...(seasonNumber == null ? {} : { seasonNumber }), totalPoints: 0, gamesPlayed: 0, gamesWon: 0, gamesLost: 0, winLossRatio: 0,
     bestSingleGame: Number.NEGATIVE_INFINITY, worstSingleGame: Number.POSITIVE_INFINITY, eloRating: start, eloPeak: start, eloGamesPlayed: 0, eloRank: 0, pointsRank: 0, last5EloDelta: 0, playoffSeedScore: null,
-    recentEloDeltas: [], daysAttended: 0, lastPlayedAt: null })
+    recentEloDeltas: [], skillMu: initialSkill.mu, skillSigma: initialSkill.sigma, skillRating: 1500, skillPeak: 1500, skillGamesPlayed: 0, skillRank: 0, last5SkillDelta: 0, recentSkillDeltas: [], daysAttended: 0, lastPlayedAt: null })
   const all = new Map<string, Stats>(), seasonal = new Map<string, Stats>(), events: Array<Record<string, unknown>> = []
   for (const row of baselineRows.rows) {
     const value = baselineStats(row)
@@ -138,22 +145,60 @@ async function rebuild(client: PoolClient, clubId: string) {
     for (const result of results) events.push({ id: `${game.id}_${result.playerId}`, clubId, gameId: game.id, playerId: result.playerId, occurredAt: game.datetime,
       seasonNumber: game.seasonNumber, ratingBefore: result.ratingBefore, ratingAfter: result.ratingAfter, delta: result.delta, kFactor: result.kFactor, marginMultiplier: result.marginMultiplier, opponents: result.opponents })
   }
-  const rank = (values: Stats[]) => { const ranks = computeGlobalRanks(values); for (const value of values) { value.eloRank = ranks.eloRanks[value.playerId] ?? 0; value.pointsRank = ranks.pointsRanks[value.playerId] ?? 0 } }
+  const skillAll = new Map<string, Stats>(), skillSeasonal = new Map<string, Stats>(), skillEvents: Array<Record<string, unknown>> = []
+  const applySkill = (map: Map<string, Stats>, keyFor: (playerId: string) => string, game: Game, seasonNumber?: number) => {
+    const round = game.entries.map((entry) => { const current = map.get(keyFor(entry.playerId)) ?? make(entry.playerId, seasonNumber); return { ...entry, mu: current.skillMu, sigma: current.skillSigma, gamesPlayed: current.skillGamesPlayed } })
+    const results = calculateSkillRound(round)
+    for (const result of results) {
+      const key = keyFor(result.playerId), current = map.get(key) ?? make(result.playerId, seasonNumber), recent = [...current.recentSkillDeltas, result.delta].slice(-5)
+      map.set(key, { ...current, skillMu: result.mu, skillSigma: result.sigma, skillRating: result.ratingAfter, skillPeak: Math.max(current.skillPeak, result.ratingAfter), skillGamesPlayed: result.gamesPlayed,
+        last5SkillDelta: recent.reduce((sum, value) => sum + value, 0), recentSkillDeltas: recent })
+    }
+    return results
+  }
+  for (const game of skillGames) {
+    applySkill(skillAll, (playerId) => playerId, game)
+    const results = applySkill(skillSeasonal, (playerId) => `${game.seasonNumber}_${playerId}`, game, game.seasonNumber)
+    for (const result of results) skillEvents.push({ ...result, id: `${game.id}_${result.playerId}`, clubId, gameId: game.id, occurredAt: game.datetime, seasonNumber: game.seasonNumber })
+  }
+  const mergeSkill = (target: Stats, source?: Stats): Stats => source ? {
+    ...target,
+    skillMu: source.skillMu,
+    skillSigma: source.skillSigma,
+    skillRating: source.skillRating,
+    skillPeak: source.skillPeak,
+    skillGamesPlayed: source.skillGamesPlayed,
+    skillRank: source.skillRank,
+    last5SkillDelta: source.last5SkillDelta,
+    recentSkillDeltas: source.recentSkillDeltas
+  } : target
+  for (const [key, value] of all) all.set(key, mergeSkill(value, skillAll.get(key)))
+  for (const [key, value] of seasonal) seasonal.set(key, mergeSkill(value, skillSeasonal.get(key)))
+  for (const [key, value] of skillAll) if (!all.has(key)) all.set(key, mergeSkill(make(value.playerId), value))
+  for (const [key, value] of skillSeasonal) if (!seasonal.has(key)) seasonal.set(key, mergeSkill(make(value.playerId, value.seasonNumber), value))
+  const rank = (values: Stats[]) => { const ranks = computeGlobalRanks(values); const skillOrder = [...values].sort((a,b) => b.skillRating-a.skillRating); for (const value of values) { value.eloRank = ranks.eloRanks[value.playerId] ?? 0; value.pointsRank = ranks.pointsRanks[value.playerId] ?? 0; value.skillRank = skillOrder.findIndex((item) => item.playerId === value.playerId) + 1 } }
   rank([...all.values()]); for (const season of new Set([...seasonal.values()].map((value) => value.seasonNumber!))) rank([...seasonal.values()].filter((value) => value.seasonNumber === season))
   await client.query('delete from elo_events where club_id=$1 and is_historical=false', [clubId])
+  await client.query('delete from skill_events where club_id=$1', [clubId])
   await client.query('delete from season_player_stats where club_id=$1', [clubId]); await client.query('delete from player_stats where club_id=$1', [clubId])
-  const insertStats = async (table: string, value: Stats) => {
-    const seasonColumn = value.seasonNumber == null ? '' : 'season_number,'
-    const columns = `club_id,${seasonColumn}player_id,total_points,games_played,games_won,games_lost,win_loss_ratio,best_single_game,worst_single_game,elo_rating,elo_peak,elo_games_played,elo_rank,points_rank,last5_elo_delta,playoff_seed_score,recent_elo_deltas,days_attended,last_played_at`
-    const values = value.seasonNumber == null
-      ? [clubId,value.playerId,value.totalPoints,value.gamesPlayed,value.gamesWon,value.gamesLost,value.winLossRatio,Number.isFinite(value.bestSingleGame)?value.bestSingleGame:null,Number.isFinite(value.worstSingleGame)?value.worstSingleGame:null,value.eloRating,value.eloPeak,value.eloGamesPlayed,value.eloRank,value.pointsRank,value.last5EloDelta,value.playoffSeedScore,value.recentEloDeltas,value.daysAttended,value.lastPlayedAt]
-      : [clubId,value.seasonNumber,value.playerId,value.totalPoints,value.gamesPlayed,value.gamesWon,value.gamesLost,value.winLossRatio,Number.isFinite(value.bestSingleGame)?value.bestSingleGame:null,Number.isFinite(value.worstSingleGame)?value.worstSingleGame:null,value.eloRating,value.eloPeak,value.eloGamesPlayed,value.eloRank,value.pointsRank,value.last5EloDelta,value.playoffSeedScore,value.recentEloDeltas,value.daysAttended,value.lastPlayedAt]
-    await client.query(`insert into ${table}(${columns}) values(${values.map((_, index) => `$${index + 1}`).join(',')})`, values)
+  const insertRows = async (table: string, columns: string[], rows: unknown[][]) => {
+    const batchSize = Math.max(1, Math.floor(30_000 / columns.length))
+    for (let offset = 0; offset < rows.length; offset += batchSize) {
+      const batch = rows.slice(offset, offset + batchSize), parameters: unknown[] = []
+      const placeholders = batch.map((row) => {
+        const start = parameters.length
+        parameters.push(...row)
+        return `(${row.map((_, index) => `$${start + index + 1}`).join(',')})`
+      })
+      await client.query(`insert into ${table}(${columns.join(',')}) values ${placeholders.join(',')}`, parameters)
+    }
   }
-  for (const value of all.values()) await insertStats('player_stats', value)
-  for (const value of seasonal.values()) await insertStats('season_player_stats', value)
-  for (const event of events) await client.query(`insert into elo_events(id,club_id,game_id,player_id,occurred_at,season_number,rating_before,rating_after,delta,k_factor,margin_multiplier,opponents,is_historical)
-    values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,false)`, [event.id,event.clubId,event.gameId,event.playerId,event.occurredAt,event.seasonNumber,event.ratingBefore,event.ratingAfter,event.delta,event.kFactor,event.marginMultiplier,JSON.stringify(event.opponents)])
+  const statsColumns = ['club_id','player_id','total_points','games_played','games_won','games_lost','win_loss_ratio','best_single_game','worst_single_game','elo_rating','elo_peak','elo_games_played','elo_rank','points_rank','last5_elo_delta','playoff_seed_score','recent_elo_deltas','skill_mu','skill_sigma','skill_rating','skill_peak','skill_games_played','skill_rank','last5_skill_delta','recent_skill_deltas','days_attended','last_played_at']
+  const statsRow = (value: Stats) => [clubId,value.playerId,value.totalPoints,value.gamesPlayed,value.gamesWon,value.gamesLost,value.winLossRatio,Number.isFinite(value.bestSingleGame)?value.bestSingleGame:null,Number.isFinite(value.worstSingleGame)?value.worstSingleGame:null,value.eloRating,value.eloPeak,value.eloGamesPlayed,value.eloRank,value.pointsRank,value.last5EloDelta,value.playoffSeedScore,value.recentEloDeltas,value.skillMu,value.skillSigma,value.skillRating,value.skillPeak,value.skillGamesPlayed,value.skillRank,value.last5SkillDelta,value.recentSkillDeltas,value.daysAttended,value.lastPlayedAt]
+  await insertRows('player_stats', statsColumns, [...all.values()].map(statsRow))
+  await insertRows('season_player_stats', [statsColumns[0],'season_number',...statsColumns.slice(1)], [...seasonal.values()].map((value) => [clubId,value.seasonNumber,...statsRow(value).slice(1)]))
+  await insertRows('elo_events', ['id','club_id','game_id','player_id','occurred_at','season_number','rating_before','rating_after','delta','k_factor','margin_multiplier','opponents','is_historical'], events.map((event) => [event.id,event.clubId,event.gameId,event.playerId,event.occurredAt,event.seasonNumber,event.ratingBefore,event.ratingAfter,event.delta,event.kFactor,event.marginMultiplier,JSON.stringify(event.opponents),false]))
+  await insertRows('skill_events', ['id','club_id','game_id','player_id','occurred_at','season_number','rating_before','rating_after','delta','mu','sigma'], skillEvents.map((event) => [event.id,event.clubId,event.gameId,event.playerId,event.occurredAt,event.seasonNumber,event.ratingBefore,event.ratingAfter,event.delta,event.mu,event.sigma]))
 }
 
 export async function mutateSupabaseGames(input: { callerUid: string; clubId: string; action: 'create' | 'update' | 'delete' | 'import' | 'rebuild'; gameId?: string; game?: GameInput; games?: GameInput[] }) {

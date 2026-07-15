@@ -13,7 +13,7 @@ const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mon
 
 export const metadata: Metadata = {
   title: 'Ken\'s Mahjong Club Score Tracker',
-  description: 'A modern Firebase-backed Mahjong club scorekeeper with ELO and analytics.',
+  description: 'A modern Mahjong club scorekeeper with experience-aware Skill ratings and analytics.',
   icons: { icon: '/icon.svg', shortcut: '/icon.svg', apple: '/icon.svg' }
 }
 

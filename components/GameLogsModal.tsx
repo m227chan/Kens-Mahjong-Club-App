@@ -128,6 +128,13 @@ export default function GameLogsModal({
   const [viewMode, setViewMode] = useState<GameLogAudience>(DEFAULT_GAME_LOG_AUDIENCE)
   const [layoutMode, setLayoutMode] = useState<GameLogLayout>(DEFAULT_GAME_LOG_LAYOUT)
   const [selectedPlayerId, setSelectedPlayerId] = useState('')
+  const [tableSearch, setTableSearch] = useState('')
+  const [scoreFilterPlayerId, setScoreFilterPlayerId] = useState('')
+  const [minimumScore, setMinimumScore] = useState('')
+  const [maximumScore, setMaximumScore] = useState('')
+  const [tableSort, setTableSort] = useState<'datetime' | 'season' | string>('datetime')
+  const [tableSortDirection, setTableSortDirection] = useState<'asc' | 'desc'>('desc')
+  const [advancedTableFiltersOpen, setAdvancedTableFiltersOpen] = useState(false)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const [importMessage, setImportMessage] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
@@ -179,7 +186,7 @@ export default function GameLogsModal({
       .sort((a, b) => (b.datetime?.toMillis?.() ?? 0) - (a.datetime?.toMillis?.() ?? 0))
   }, [games, seasonFilter])
 
-  const displayedGames = useMemo(() => {
+  const audienceGames = useMemo(() => {
     return filterGamesByAudience(filteredGames, viewMode, session?.participants ?? [], selectedPlayerId)
   }, [filteredGames, selectedPlayerId, session?.participants, viewMode])
 
@@ -190,7 +197,7 @@ export default function GameLogsModal({
 
     if (viewMode === 'player' && selectedPlayerId) {
       const ids = new Set<string>([selectedPlayerId])
-      displayedGames.forEach((game) => {
+      audienceGames.forEach((game) => {
         if (game.entries.some((entry) => entry.playerId === selectedPlayerId)) {
           game.entries.forEach((entry) => ids.add(entry.playerId))
         }
@@ -198,9 +205,41 @@ export default function GameLogsModal({
       return players.filter((player) => ids.has(player.id))
     }
 
-    const ids = new Set(displayedGames.flatMap((game) => game.entries.map((entry) => entry.playerId)))
+    const ids = new Set(audienceGames.flatMap((game) => game.entries.map((entry) => entry.playerId)))
     return players.filter((player) => ids.has(player.id))
-  }, [displayedGames, players, selectedPlayerId, session?.participants, viewMode])
+  }, [audienceGames, players, selectedPlayerId, session?.participants, viewMode])
+
+  const displayedGames = useMemo(() => {
+    const query = tableSearch.trim().toLocaleLowerCase()
+    const selectedScore = (game: GameDoc) => game.entries.find((entry) => entry.playerId === scoreFilterPlayerId)?.score
+    const sorted = audienceGames.filter((game) => {
+      if (query) {
+        const haystack = [formatDate(game), `season ${game.seasonNumber ?? 1}`, game.notes ?? '', ...game.entries.map((entry) => playerById.get(entry.playerId)?.displayName ?? '')].join(' ').toLocaleLowerCase()
+        if (!haystack.includes(query)) return false
+      }
+      if (scoreFilterPlayerId) {
+        const score = selectedScore(game)
+        if (score === undefined || (minimumScore && score < Number(minimumScore)) || (maximumScore && score > Number(maximumScore))) return false
+      }
+      return true
+    })
+    const direction = tableSortDirection === 'asc' ? 1 : -1
+    return sorted.sort((left, right) => {
+      let leftValue: number, rightValue: number
+      if (tableSort === 'datetime') { leftValue = left.datetime?.toMillis?.() ?? 0; rightValue = right.datetime?.toMillis?.() ?? 0 }
+      else if (tableSort === 'season') { leftValue = left.seasonNumber ?? 1; rightValue = right.seasonNumber ?? 1 }
+      else { leftValue = left.entries.find((entry) => entry.playerId === tableSort)?.score ?? Number.NEGATIVE_INFINITY; rightValue = right.entries.find((entry) => entry.playerId === tableSort)?.score ?? Number.NEGATIVE_INFINITY }
+      return (leftValue - rightValue) * direction || ((right.datetime?.toMillis?.() ?? 0) - (left.datetime?.toMillis?.() ?? 0))
+    })
+  }, [audienceGames, maximumScore, minimumScore, playerById, scoreFilterPlayerId, tableSearch, tableSort, tableSortDirection])
+
+  const toggleTableSort = (column: string) => {
+    if (tableSort === column) setTableSortDirection((current) => current === 'asc' ? 'desc' : 'asc')
+    else { setTableSort(column); setTableSortDirection(column === 'datetime' ? 'desc' : 'asc') }
+  }
+
+  const sortMark = (column: string) => tableSort === column ? (tableSortDirection === 'asc' ? '▲' : '▼') : '↕'
+  const tableFilterCount = [Boolean(tableSearch.trim()), Boolean(scoreFilterPlayerId), Boolean(minimumScore), Boolean(maximumScore)].filter(Boolean).length
 
   const buildCsvRows = (sourceGames: GameDoc[], sourcePlayers: PlayerDoc[]) => {
     const headers = ['datetime', 'season', 'tableId', 'winType', 'winner', 'loser', 'fan', 'notes', ...sourcePlayers.map((player) => player.displayName)]
@@ -250,7 +289,7 @@ export default function GameLogsModal({
 
   const mutateGame = async (action: 'update' | 'delete') => {
     if (!selectedGame || !canDeleteGames) return
-    if (action === 'delete' && !window.confirm(`Permanently delete the game from ${formatDate(selectedGame)}? All club statistics and ELO history will be rebuilt.`)) return
+    if (action === 'delete' && !window.confirm(`Permanently delete the game from ${formatDate(selectedGame)}? All club statistics and Skill history will be rebuilt.`)) return
     const entries = selectedGame.entries.map((entry) => ({ playerId: entry.playerId, score: Number(draftScores[entry.playerId]) }))
     if (action === 'update' && (entries.some((entry) => !Number.isFinite(entry.score)) || entries.reduce((sum, entry) => sum + entry.score, 0) !== 0)) {
       setImportMessage('Enter four valid scores that add up to zero.')
@@ -500,7 +539,15 @@ export default function GameLogsModal({
           <div className="mt-3 flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-500">
             <span>{loadingGames ? 'Loading recent games…' : `${displayedGames.length.toLocaleString()} shown · ${games.length.toLocaleString()} loaded`}</span>
             {hasOlderGames && !loadingGames ? <button type="button" onClick={loadOlderGames} disabled={loadingOlderGames} className="rounded border border-slate-300 bg-white px-3 py-1.5 font-bold text-slate-700 disabled:opacity-50">{loadingOlderGames ? 'Loading…' : 'Load 100 older games'}</button> : null}
+            <button type="button" aria-expanded={advancedTableFiltersOpen} onClick={() => setAdvancedTableFiltersOpen((current) => !current)} className={`rounded border px-3 py-1.5 font-bold ${tableFilterCount ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-300 bg-white text-slate-700'}`}>Table filters{tableFilterCount ? ` (${tableFilterCount})` : ''}</button>
           </div>
+          {advancedTableFiltersOpen ? <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+            <label className="text-xs font-bold text-slate-600 lg:col-span-2">Search table<input type="search" value={tableSearch} onChange={(event) => setTableSearch(event.target.value)} placeholder="Date, player, season, or notes…" className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm font-medium text-slate-800" /></label>
+            <label className="text-xs font-bold text-slate-600">Score player<select value={scoreFilterPlayerId} onChange={(event) => setScoreFilterPlayerId(event.target.value)} className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-2 text-sm font-medium text-slate-800"><option value="">Any player</option>{players.map((player) => <option key={player.id} value={player.id}>{player.displayName}</option>)}</select></label>
+            <label className="text-xs font-bold text-slate-600">Minimum score<input type="number" value={minimumScore} onChange={(event) => setMinimumScore(event.target.value)} disabled={!scoreFilterPlayerId} placeholder="Any" className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm font-medium text-slate-800 disabled:bg-slate-100" /></label>
+            <label className="text-xs font-bold text-slate-600">Maximum score<input type="number" value={maximumScore} onChange={(event) => setMaximumScore(event.target.value)} disabled={!scoreFilterPlayerId} placeholder="Any" className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm font-medium text-slate-800 disabled:bg-slate-100" /></label>
+            <button type="button" onClick={() => { setTableSearch(''); setScoreFilterPlayerId(''); setMinimumScore(''); setMaximumScore(''); setTableSort('datetime'); setTableSortDirection('desc') }} className="min-h-10 self-end rounded border border-slate-300 bg-white px-3 text-sm font-bold text-slate-700">Reset table</button>
+          </div> : null}
           {importMessage ? <p className="mt-3 text-sm font-semibold text-slate-600">{importMessage}</p> : null}
         </div>
 
@@ -536,10 +583,10 @@ export default function GameLogsModal({
           <table className={`game-log-table hidden min-w-full border-separate border-spacing-0 text-sm ${layoutMode === 'table' ? 'md:table' : 'md:hidden'}`}>
             <thead>
               <tr>
-                <th className="sticky left-0 top-0 z-20 border-b border-slate-200 bg-slate-100 px-3 py-2 text-left font-black text-slate-700">Datetime</th>
-                <th className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100 px-3 py-2 text-left font-black text-slate-700">Season</th>
+                <th className="sticky left-0 top-0 z-20 border-b border-slate-200 bg-slate-100 px-3 py-2 text-left font-black text-slate-700"><button type="button" onClick={() => toggleTableSort('datetime')} className="group flex w-full items-center gap-1">Datetime <span aria-hidden="true" className={`transition-opacity ${tableSort === 'datetime' ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>{sortMark('datetime')}</span></button></th>
+                <th className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100 px-3 py-2 text-left font-black text-slate-700"><button type="button" onClick={() => toggleTableSort('season')} className="group flex w-full items-center gap-1">Season <span aria-hidden="true" className={`transition-opacity ${tableSort === 'season' ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>{sortMark('season')}</span></button></th>
                 {displayedPlayers.map((player) => (
-                  <th key={player.id} className="sticky top-0 z-10 min-w-[120px] border-b border-slate-200 bg-slate-100 px-3 py-2 text-left font-black text-slate-700">{player.displayName}</th>
+                  <th key={player.id} className="sticky top-0 z-10 min-w-[120px] border-b border-slate-200 bg-slate-100 px-3 py-2 text-left font-black text-slate-700"><button type="button" onClick={() => toggleTableSort(player.id)} className="group flex w-full items-center gap-1">{player.displayName} <span aria-hidden="true" className={`transition-opacity ${tableSort === player.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>{sortMark(player.id)}</span></button></th>
                 ))}
               </tr>
             </thead>
@@ -594,7 +641,7 @@ export default function GameLogsModal({
               </div>
             </div>
             <label className="mt-5 block text-sm font-bold text-slate-700">Notes<textarea value={draftNotes} onChange={(event) => setDraftNotes(event.target.value)} rows={3} className="mt-2 w-full resize-y rounded border border-slate-300 bg-white p-3 text-slate-900" /></label>
-            <p className="mt-3 text-xs leading-5 text-slate-500">Saving or deleting rebuilds points, ELO ratings, rankings, win rates, titles, and analytics from the complete game history.</p>
+            <p className="mt-3 text-xs leading-5 text-slate-500">Saving or deleting rebuilds points, Skill ratings, rankings, win rates, titles, and analytics from the complete game history.</p>
             {importMessage ? <p className="mt-3 rounded border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{importMessage}</p> : null}
             <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
               <button type="button" onClick={() => mutateGame('delete')} disabled={savingGame} className="min-h-11 rounded border border-rose-300 px-4 py-2 text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50">Delete game</button>

@@ -4,18 +4,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AppGuide, { TOUR_STEP_COUNT } from '@/components/AppGuide'
 
 const push = vi.fn()
+const { claimMingWelcome } = vi.hoisted(() => ({ claimMingWelcome: vi.fn() }))
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push })
 }))
 
 vi.mock('@/contexts/AuthContext', () => ({
-  useAuth: () => ({ user: { uid: 'tour-user' } })
+  useAuth: () => ({ user: { uid: 'tour-user' }, loading: false })
 }))
+
+vi.mock('@/lib/data', () => ({ claimMingWelcome }))
 
 describe('AppGuide', () => {
   beforeEach(() => {
     push.mockClear()
+    claimMingWelcome.mockReset().mockResolvedValue(false)
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
       x: 20, y: 20, top: 20, left: 20, right: 320, bottom: 100,
       width: 300, height: 80, toJSON: () => ({})
@@ -23,6 +27,19 @@ describe('AppGuide', () => {
     HTMLElement.prototype.scrollIntoView = vi.fn()
   })
   afterEach(() => cleanup())
+
+  it('welcomes a first-time user and spotlights the app guide button', async () => {
+    claimMingWelcome.mockResolvedValueOnce(true)
+    render(<AppGuide />)
+
+    expect(await screen.findByRole('heading', { name: "Welcome to Ken's Mahjong Club" })).toBeInTheDocument()
+    expect(document.querySelector('.real-tour-spotlight')).toBeInTheDocument()
+    expect(claimMingWelcome).toHaveBeenCalledOnce()
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open app guide' })[0])
+    expect(screen.getByRole('heading', { name: 'How the score tracker works' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: "Welcome to Ken's Mahjong Club" })).not.toBeInTheDocument()
+  })
 
   it('presents the signed-in workflow in order', () => {
     render(<AppGuide />)
