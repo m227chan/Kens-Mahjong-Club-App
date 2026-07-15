@@ -122,9 +122,19 @@ export const setPlayerAuthLink = (clubId: string, playerId: string, uid: string,
 export const updatePlayerIcon = (clubId: string, playerId: string, nextIcon: string) => serverAction<void>('updatePlayerIcon', { clubId, playerId, nextIcon })
 export const updatePlayerName = (clubId: string, playerId: string, nextName: string) => serverAction<void>('updatePlayerName', { clubId, playerId, nextName })
 export const deleteClub = (clubId: string, managerUid: string) => serverAction<void>('deleteClub', { clubId, managerUid })
-export const createGame = (clubId: string, input: Row) => serverAction<string>('createGame', { clubId, input })
-export const deleteGameAndRebuild = (clubId: string, gameId: string) => serverAction<void>('deleteGameAndRebuild', { clubId, gameId })
-export const importGames = (clubId: string, input: Row) => serverAction<void>('importGames', { clubId, input })
+export async function createGame(clubId: string, input: Row) {
+  const gameId = await serverAction<string>('createGame', { clubId, input })
+  invalidateClubHistoryCache(clubId)
+  return gameId
+}
+export async function deleteGameAndRebuild(clubId: string, gameId: string) {
+  await serverAction<void>('deleteGameAndRebuild', { clubId, gameId })
+  invalidateClubHistoryCache(clubId)
+}
+export async function importGames(clubId: string, input: Row) {
+  await serverAction<void>('importGames', { clubId, input })
+  invalidateClubHistoryCache(clubId)
+}
 
 export function subscribePlayers(clubId: string, callback: (players: PlayerDoc[]) => void) {
   const load = async () => { const { data, error } = await client().from('players').select('*').eq('club_id', clubId).eq('active', true).order('display_name'); if (error) throw error; return (data ?? []).map(mapPlayer) }
