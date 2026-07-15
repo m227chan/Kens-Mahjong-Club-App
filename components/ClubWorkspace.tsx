@@ -527,7 +527,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         </div>
 
         <aside className={mobileView === 'session' ? 'order-first block md:block xl:order-none xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto' : 'order-first hidden md:block xl:order-none xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto'}>
-          <SessionManager clubId={clubId} seasonNumber={activeSeasonNumber} players={players} />
+          <SessionManager clubId={clubId} seasonNumber={activeSeasonNumber} players={players} isManager={isManager} />
         </aside>
       </div>
 
