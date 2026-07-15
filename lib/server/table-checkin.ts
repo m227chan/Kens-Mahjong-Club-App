@@ -141,7 +141,7 @@ export async function createSelfPlayer(db: PoolClient, caller: Caller, clubId: s
   const chosenIcon = icon.trim().slice(0, 12) || '🀄'
   if (!name) throw new Error('Enter your player name.')
   const created = await db.query(`insert into players(id,club_id,display_name,title,icon,icon_key,auth_uid)
-    values($1,$2,$3,'Monk',$4,$5,$6) returning id,display_name,icon`, [rowId(), clubId, name, encodeURIComponent(chosenIcon.toLocaleLowerCase()), caller.uid])
+    values($1,$2,$3,'Monk',$4,$5,$6) returning id,display_name,icon`, [rowId(), clubId, name, chosenIcon, encodeURIComponent(chosenIcon.toLocaleLowerCase()), caller.uid])
   return { id: String(created.rows[0].id), displayName: String(created.rows[0].display_name), icon: String(created.rows[0].icon), authUid: caller.uid }
 }
 
