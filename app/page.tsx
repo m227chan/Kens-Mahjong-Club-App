@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import {
@@ -88,6 +88,146 @@ export default function HomePage() {
   const [dataError, setDataError] = useState(false)
   const [hour, setHour] = useState(12)
 
+  const [clubOrder, setClubOrder] = useState<string[]>([])
+  const [pressingClubId, setPressingClubId] = useState<string | null>(null)
+  const [pickedUpClubId, setPickedUpClubId] = useState<string | null>(null)
+
+  // Refs that persist drag state without triggering re-renders on every move
+  const draggedClubIdRef = useRef<string | null>(null)
+  const pointerIdRef = useRef<number | null>(null)
+  const pressTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const startPosRef = useRef<{ x: number; y: number } | null>(null)
+  const isDraggingRef = useRef<boolean>(false)
+  // Keep a live reference to orderedClubs so pointermove closure can access it
+  const orderedClubsRef = useRef<ClubMembershipDoc[]>([])
+  const userRef = useRef(user)
+
+  // Load custom order from localStorage on mount/user change
+  useEffect(() => {
+    if (!user) return
+    const stored = localStorage.getItem(`club-order-${user.uid}`)
+    if (stored) {
+      try {
+        setClubOrder(JSON.parse(stored))
+      } catch (e) {
+        console.error(e)
+      }
+    }
+  }, [user])
+
+  const orderedClubs = useMemo(() => {
+    const sorted = [...clubs]
+    sorted.sort((a, b) => {
+      const indexA = clubOrder.indexOf(a.clubId)
+      const indexB = clubOrder.indexOf(b.clubId)
+      if (indexA !== -1 && indexB !== -1) return indexA - indexB
+      if (indexA !== -1) return -1
+      if (indexB !== -1) return 1
+      return 0
+    })
+    return sorted
+  }, [clubs, clubOrder])
+
+  // Keep ref in sync so document-level listeners can read latest order
+  useEffect(() => { orderedClubsRef.current = orderedClubs }, [orderedClubs])
+  useEffect(() => { userRef.current = user }, [user])
+
+  const moveClubCard = (fromId: string, toId: string) => {
+    const current = orderedClubsRef.current
+    const fromIndex = current.findIndex(c => c.clubId === fromId)
+    const toIndex = current.findIndex(c => c.clubId === toId)
+    if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return
+    const nextOrder = current.map(c => c.clubId)
+    const [moved] = nextOrder.splice(fromIndex, 1)
+    nextOrder.splice(toIndex, 0, moved)
+    setClubOrder(nextOrder)
+    const u = userRef.current
+    if (u) localStorage.setItem(`club-order-${u.uid}`, JSON.stringify(nextOrder))
+  }
+
+  const cleanDragState = () => {
+    if (pressTimeoutRef.current) { clearTimeout(pressTimeoutRef.current); pressTimeoutRef.current = null }
+    setPressingClubId(null)
+    setPickedUpClubId(null)
+    draggedClubIdRef.current = null
+    pointerIdRef.current = null
+    startPosRef.current = null
+    isDraggingRef.current = false
+  }
+
+  const handleHandlePointerDown = (e: React.PointerEvent<HTMLDivElement>, clubId: string) => {
+    // Only primary pointer (left mouse, first touch)
+    if (e.button !== 0 && e.pointerType === 'mouse') return
+    // Already tracking a drag
+    if (pointerIdRef.current !== null) return
+
+    e.preventDefault()
+    e.stopPropagation()
+
+    pointerIdRef.current = e.pointerId
+    draggedClubIdRef.current = clubId
+    startPosRef.current = { x: e.clientX, y: e.clientY }
+    isDraggingRef.current = false
+    setPressingClubId(clubId)
+
+    // Press-and-hold to "pick up"
+    pressTimeoutRef.current = setTimeout(() => {
+      isDraggingRef.current = true
+      setPickedUpClubId(clubId)
+      setPressingClubId(null)
+      if (navigator.vibrate) navigator.vibrate(50)
+    }, 420)
+
+    // Attach document-level listeners so dragging off the handle still works
+    const onMove = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerIdRef.current) return
+
+      if (!isDraggingRef.current) {
+        // Cancel hold timer if the pointer moved significantly
+        const dx = ev.clientX - (startPosRef.current?.x ?? ev.clientX)
+        const dy = ev.clientY - (startPosRef.current?.y ?? ev.clientY)
+        if (Math.sqrt(dx * dx + dy * dy) > 6) {
+          if (pressTimeoutRef.current) { clearTimeout(pressTimeoutRef.current); pressTimeoutRef.current = null }
+          setPressingClubId(null)
+        }
+        return
+      }
+
+      // Prevent scroll while dragging
+      ev.preventDefault()
+
+      // Hit-test all cards using their bounding rects (works even with pointer capture off)
+      const heldId = draggedClubIdRef.current
+      if (!heldId) return
+      const cards = document.querySelectorAll<HTMLElement>('.home-club-card')
+      for (const card of cards) {
+        const rect = card.getBoundingClientRect()
+        if (
+          ev.clientX >= rect.left && ev.clientX <= rect.right &&
+          ev.clientY >= rect.top  && ev.clientY <= rect.bottom
+        ) {
+          const targetId = card.getAttribute('data-club-id')
+          if (targetId && targetId !== heldId) {
+            moveClubCard(heldId, targetId)
+          }
+          break
+        }
+      }
+    }
+
+    const onUp = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerIdRef.current) return
+      cleanDragState()
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+      document.removeEventListener('pointercancel', onUp)
+    }
+
+    document.addEventListener('pointermove', onMove, { passive: false })
+    document.addEventListener('pointerup', onUp)
+    document.addEventListener('pointercancel', onUp)
+  }
+
   useEffect(() => setHour(new Date().getHours()), [])
   useEffect(() => {
     if (!loading && !user) router.replace('/login')
@@ -147,20 +287,28 @@ export default function HomePage() {
     return () => { cancelled = true }
   }, [clubs, user])
 
-  const clubSummaries = useMemo(() => clubs.map((club) => {
+  const clubSummaries = useMemo(() => orderedClubs.map((club) => {
     const player = (clubPlayers[club.clubId] ?? []).find((entry) => entry.authUid === user?.uid) ?? null
     const stats = player ? (clubStats[club.clubId] ?? []).find((entry) => entry.playerId === player.id) ?? null : null
     return { club, player, stats }
-  }), [clubPlayers, clubStats, clubs, user?.uid])
+  }), [clubPlayers, clubStats, orderedClubs, user?.uid])
 
   const rollup = useMemo(() => {
-    const stats = clubSummaries.flatMap((summary) => summary.stats ? [summary.stats] : [])
+    // Sort by clubId (stable key) so display-order reordering never affects the graph
+    const stableClubs = [...clubs].sort((a, b) => a.clubId.localeCompare(b.clubId))
+    const stats = stableClubs.flatMap((club) => {
+      const player = (clubPlayers[club.clubId] ?? []).find((entry) => entry.authUid === user?.uid) ?? null
+      const playerStats = player
+        ? (clubStats[club.clubId] ?? []).find((entry) => entry.playerId === player.id) ?? null
+        : null
+      return playerStats ? [playerStats] : []
+    })
     const games = stats.reduce((sum, entry) => sum + entry.gamesPlayed, 0)
     const wins = stats.reduce((sum, entry) => sum + entry.gamesWon, 0)
     const trendValues = stats.flatMap((entry) => entry.recentSkillDeltas ?? [])
     const trend = Math.round(trendValues.reduce((sum, value) => sum + value, 0))
     return { games, winRate: games ? Math.round((wins / games) * 100) : 0, trend, trendValues }
-  }, [clubSummaries])
+  }, [clubs, clubPlayers, clubStats, user?.uid])
 
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
   const firstName = user?.displayName?.trim().split(/\s+/)[0] ?? 'Player'
@@ -260,9 +408,31 @@ export default function HomePage() {
         {clubSummaries.length ? (
           <div className="home-club-wave mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {clubSummaries.map(({ club, player, stats }, index) => (
-              <article key={club.clubId} className="home-club-card rounded-lg border border-slate-200 bg-white p-5" style={{ '--club-delay': `${index * 65}ms` } as React.CSSProperties}>
+              <article
+                key={club.clubId}
+                data-club-id={club.clubId}
+                className={`home-club-card rounded-lg border border-slate-200 bg-white transition-all duration-200 ${
+                  pressingClubId === club.clubId ? 'pressing' : ''
+                } ${
+                  pickedUpClubId === club.clubId ? 'picked-up' : ''
+                }`}
+                style={{ '--club-delay': `${index * 65}ms` } as React.CSSProperties}
+              >
+                {/* Drag handle — press-and-hold here to reorder */}
+                <div
+                  className="club-drag-handle"
+                  title="Hold to reorder"
+                  onPointerDown={(e) => handleHandlePointerDown(e, club.clubId)}
+                >
+                  <span className="club-drag-dots" aria-hidden="true" />
+                </div>
+
+                <div className="p-5">
                 <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0"><h3 className="truncate text-xl font-extrabold text-slate-950">{club.clubName}</h3><p className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{club.role} · {club.clubId}</p></div>
+                  <div className="min-w-0">
+                    <h3 className="truncate text-xl font-extrabold text-slate-950">{club.clubName}</h3>
+                    <p className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{club.role} · {club.clubId}</p>
+                  </div>
                   <span className="flex h-11 w-9 shrink-0 items-center justify-center rounded border border-slate-200 bg-slate-50 text-xl">{player?.icon ?? '🀄'}</span>
                 </div>
 
@@ -291,6 +461,7 @@ export default function HomePage() {
                   <Link data-tour="open-club" href={`/club/${encodeURIComponent(club.clubId)}`} className="flex-1 rounded bg-[rgb(var(--ink))] px-4 py-2.5 text-center text-sm font-bold text-[rgb(var(--surface))] hover:opacity-90">{player ? 'Open club' : 'Open roster'}</Link>
                   {club.role !== 'manager' && !club.universal ? <button type="button" onClick={() => handleLeaveClub(club.clubId)} className="rounded border border-rose-200 px-3 py-2.5 text-sm font-bold text-rose-700 hover:bg-rose-50">Leave</button> : null}
                 </div>
+                </div>{/* end p-5 */}
               </article>
             ))}
           </div>

@@ -610,3 +610,75 @@ body.table-focus-mode>div,body.table-focus-mode main{max-width:none!important}
   body:has(.qr-single-overlay) .qr-single-card{max-width:7.5in!important;box-shadow:none!important}
   body:has(.qr-single-overlay) .qr-single-card button{display:none!important}
 }
+
+/* Drag handle for club card reordering */
+.club-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  width: 100%;
+  cursor: grab;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  transition: background 0.15s ease;
+  user-select: none;
+  touch-action: none;
+  -webkit-user-select: none;
+}
+
+.club-drag-handle:hover {
+  background: rgb(var(--line) / 0.35);
+}
+
+.club-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Six-dot grip indicator */
+.club-drag-dots {
+  display: block;
+  width: 22px;
+  height: 8px;
+  background-image:
+    radial-gradient(circle, rgb(var(--ink) / 0.3) 1.5px, transparent 1.5px),
+    radial-gradient(circle, rgb(var(--ink) / 0.3) 1.5px, transparent 1.5px),
+    radial-gradient(circle, rgb(var(--ink) / 0.3) 1.5px, transparent 1.5px),
+    radial-gradient(circle, rgb(var(--ink) / 0.3) 1.5px, transparent 1.5px),
+    radial-gradient(circle, rgb(var(--ink) / 0.3) 1.5px, transparent 1.5px),
+    radial-gradient(circle, rgb(var(--ink) / 0.3) 1.5px, transparent 1.5px);
+  background-size: 7px 4px;
+  background-position:
+    0 0, 7px 0, 14px 0,
+    0 4px, 7px 4px, 14px 4px;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.club-drag-handle:hover .club-drag-dots {
+  opacity: 1;
+}
+
+/* Wobble animation for dragging club cards */
+@keyframes wobble {
+  0%   { transform: rotate(-1.5deg) scale(1.03); }
+  100% { transform: rotate(1.5deg)  scale(1.03); }
+}
+
+.home-club-card.pressing {
+  transform: scale(0.95) !important;
+  box-shadow: 0 2px 8px rgb(var(--shadow) / 0.08) !important;
+  opacity: 0.85;
+  transition: transform 0.18s ease-out, box-shadow 0.18s ease-out, opacity 0.18s ease-out;
+}
+
+.home-club-card.picked-up {
+  animation: wobble 0.14s ease-in-out infinite alternate !important;
+  box-shadow: 0 18px 36px rgb(var(--shadow) / 0.22) !important;
+  z-index: 50 !important;
+  opacity: 0.96 !important;
+  cursor: grabbing !important;
+  position: relative;
+}
+
