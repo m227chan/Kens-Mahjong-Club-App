@@ -88,18 +88,7 @@ export default function DashboardContent({ clubId, seasonNumber }: { clubId: str
   const visibleGameIds = useMemo(() => new Set(visibleGames.map((game) => game.id)), [visibleGames])
 
   const cumulativeData = useMemo(() => {
-    const visibleScoreTotals = new Map<string, number>()
-    visibleGames.forEach((game) => game.entries.forEach((entry) => {
-      visibleScoreTotals.set(entry.playerId, (visibleScoreTotals.get(entry.playerId) ?? 0) + entry.score)
-    }))
-
-    // Start each visible range at the player's balance immediately before it.
-    // This also preserves authoritative imported baselines that cannot be
-    // reconstructed exactly from legacy game rows.
-    const runningTotals: Record<string, number> = Object.fromEntries(selectedPlayerIds.map((playerId) => {
-      const currentPoints = playerStats.find((stat) => stat.playerId === playerId)?.totalPoints ?? 0
-      return [playerId, currentPoints - (visibleScoreTotals.get(playerId) ?? 0)]
-    }))
+    const runningTotals: Record<string, number> = {}
 
     return visibleGames.map((game) => {
       const row: { label: string; [key: string]: number | string } = { label: shortDate(game.datetime) }
@@ -114,7 +103,7 @@ export default function DashboardContent({ clubId, seasonNumber }: { clubId: str
       })
       return row
     })
-  }, [playerStats, selectedPlayerIds, visibleGames])
+  }, [selectedPlayerIds, visibleGames])
 
   const bumpChartData = useMemo(() => {
     const sortedEvents = [...skillEvents].sort((a, b) => timestampMillis(a.datetime) - timestampMillis(b.datetime))

@@ -141,28 +141,75 @@ export function subscribePlayers(clubId: string, callback: (players: PlayerDoc[]
   return realtime(`players:${clubId}`, 'players', `club_id=eq.${clubId}`, load, callback)
 }
 const historyCache = new Map<string, { expires: number; value: unknown[] }>()
+const DATABASE_PAGE_SIZE = 1000
 async function cached<T>(key: string, load: () => Promise<T[]>) { const hit = historyCache.get(key); if (hit && hit.expires > Date.now()) return hit.value as T[]; const value = await load(); historyCache.set(key, { expires: Date.now() + 300_000, value }); return value }
 export function invalidateClubHistoryCache(clubId: string) { for (const key of historyCache.keys()) if (key.startsWith(`${clubId}:`)) historyCache.delete(key) }
 async function fetchGames(clubId: string, ascending = true, limit?: number, beforeMillis?: number) {
-  let query = client().from('games').select('*, game_entries(player_id,score)').eq('club_id', clubId).order('played_at', { ascending })
-  if (beforeMillis) query = query.lt('played_at', new Date(beforeMillis).toISOString())
-  if (limit) query = query.limit(limit)
-  const { data, error } = await query; if (error) throw error; return (data ?? []).map(mapGame)
+  const makeQuery = () => {
+    let query = client().from('games').select('*, game_entries(player_id,score)').eq('club_id', clubId).order('played_at', { ascending }).order('id', { ascending })
+    if (beforeMillis) query = query.lt('played_at', new Date(beforeMillis).toISOString())
+    return query
+  }
+  if (limit) {
+    const { data, error } = await makeQuery().limit(limit)
+    if (error) throw error
+    return (data ?? []).map(mapGame)
+  }
+  const rows: Row[] = []
+  for (let from = 0; ; from += DATABASE_PAGE_SIZE) {
+    const { data, error } = await makeQuery().range(from, from + DATABASE_PAGE_SIZE - 1)
+    if (error) throw error
+    rows.push(...((data ?? []) as Row[]))
+    if ((data?.length ?? 0) < DATABASE_PAGE_SIZE) break
+  }
+  return rows.map(mapGame)
 }
 export function loadGamesPage(clubId: string, pageSize = 100, beforeMillis?: number) { return cached(`${clubId}:page:${pageSize}:${beforeMillis ?? ''}`, async () => (await fetchGames(clubId, false, pageSize, beforeMillis)).reverse()) }
 export function loadAllGames(clubId: string) { return cached(`${clubId}:all`, () => fetchGames(clubId)) }
 export async function loadAnalyticsGames(clubId: string, gameCount: number, seasonNumber?: number) { const games = gameCount ? await loadGamesPage(clubId, Math.max(gameCount * 2, gameCount + 25)) : await loadAllGames(clubId); return games.filter((game) => !seasonNumber || game.seasonNumber === seasonNumber).slice(gameCount ? -gameCount : 0) }
 export async function loadAnalyticsEloEvents(clubId: string, gameCount: number, seasonNumber?: number) {
-  let query = client().from('elo_events').select('*').eq('club_id', clubId).order('occurred_at', { ascending: gameCount === 0 })
-  if (seasonNumber) query = query.eq('season_number', seasonNumber)
-  if (gameCount) query = query.limit(Math.max(gameCount * 8, 200))
-  const { data, error } = await query; if (error) throw error; const values = (data ?? []).map(mapElo).filter((event) => clubId !== 'KEN' || event.datetime.toMillis() >= Date.parse('2026-04-25T04:00:00.000Z')); return gameCount ? values.reverse() : values
+  const makeQuery = (ascending: boolean) => {
+    let query = client().from('elo_events').select('*').eq('club_id', clubId).order('occurred_at', { ascending }).order('id', { ascending })
+    if (seasonNumber) query = query.eq('season_number', seasonNumber)
+    return query
+  }
+  let rows: Row[] = []
+  if (gameCount) {
+    const { data, error } = await makeQuery(false).limit(Math.max(gameCount * 8, 200))
+    if (error) throw error
+    rows = (data ?? []) as Row[]
+  } else {
+    for (let from = 0; ; from += DATABASE_PAGE_SIZE) {
+      const { data, error } = await makeQuery(true).range(from, from + DATABASE_PAGE_SIZE - 1)
+      if (error) throw error
+      rows.push(...((data ?? []) as Row[]))
+      if ((data?.length ?? 0) < DATABASE_PAGE_SIZE) break
+    }
+  }
+  const values = rows.map(mapElo).filter((event) => clubId !== 'KEN' || event.datetime.toMillis() >= Date.parse('2026-04-25T04:00:00.000Z'))
+  return gameCount ? values.reverse() : values
 }
 export async function loadAnalyticsSkillEvents(clubId: string, gameCount: number, seasonNumber?: number) {
-  let query = client().from('skill_events').select('*').eq('club_id', clubId).order('occurred_at', { ascending: gameCount === 0 })
-  if (seasonNumber) query = query.eq('season_number', seasonNumber)
-  if (gameCount) query = query.limit(Math.max(gameCount * 8, 200))
-  const { data, error } = await query; if (error) throw error; const values = (data ?? []).map(mapSkill); return gameCount ? values.reverse() : values
+  const makeQuery = (ascending: boolean) => {
+    let query = client().from('skill_events').select('*').eq('club_id', clubId).order('occurred_at', { ascending }).order('id', { ascending })
+    if (seasonNumber) query = query.eq('season_number', seasonNumber)
+    return query
+  }
+  let rows: Row[] = []
+  if (gameCount) {
+    const { data, error } = await makeQuery(false).limit(Math.max(gameCount * 8, 200))
+    if (error) throw error
+    rows = (data ?? []) as Row[]
+  } else {
+    for (let from = 0; ; from += DATABASE_PAGE_SIZE) {
+      const { data, error } = await makeQuery(true).range(from, from + DATABASE_PAGE_SIZE - 1)
+      if (error) throw error
+      rows.push(...((data ?? []) as Row[]))
+      if ((data?.length ?? 0) < DATABASE_PAGE_SIZE) break
+    }
+  }
+  const values = rows.map(mapSkill)
+  return gameCount ? values.reverse() : values
 }
 export async function getClubGameCount(clubId: string) { const { count, error } = await client().from('games').select('*', { count: 'exact', head: true }).eq('club_id', clubId); if (error) throw error; return count ?? 0 }
 export function subscribePlayerStats(clubId: string, callback: (stats: Array<PlayerStatsDoc & { id: string }>) => void, seasonNumber?: number) {
