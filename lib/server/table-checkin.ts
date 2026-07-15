@@ -70,7 +70,7 @@ export async function exchangeTableQr(db: PoolClient, caller: Caller, publicId: 
   await db.query(`insert into club_members(club_id,firebase_uid,email,display_name,photo_url,role,active,universal)
     values($1,$2,$3,$4,$5,'member',true,$6)
     on conflict(club_id,firebase_uid) do update set email=excluded.email,display_name=excluded.display_name,photo_url=excluded.photo_url,active=true,
-      role=case when club_members.role='manager' then 'manager' else 'member' end`, [qr.club_id, caller.uid, caller.email ?? null, caller.name ?? null, caller.picture ?? null, Boolean(qr.universal)])
+      role=club_members.role`, [qr.club_id, caller.uid, caller.email ?? null, caller.name ?? null, caller.picture ?? null, Boolean(qr.universal)])
   if (!existingMember.rowCount) {
     await db.query(`update join_requests set status='approved',resolved_at=now(),resolved_by='qr-auto-enrollment'
       where club_id=$1 and firebase_uid=$2 and status='pending'`, [qr.club_id, caller.uid])

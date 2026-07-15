@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { tableAction, type TablePlayer, type TableSession } from '@/lib/table-checkin-client'
@@ -20,6 +20,7 @@ export default function TableCheckInPage() {
   const [newName, setNewName] = useState('')
   const [newIcon, setNewIcon] = useState('🀄')
   const [fullTable, setFullTable] = useState<string[] | null>(null)
+  const exchangeAttemptKey = useRef('')
 
   useEffect(() => {
     const key = `mahjong:table-qr:${publicId}`
@@ -39,6 +40,9 @@ export default function TableCheckInPage() {
 
   useEffect(() => {
     if (loading || !user || !signature || exchange || busy) return
+    const attemptKey = `${user.uid}:${publicId}:${signature}`
+    if (exchangeAttemptKey.current === attemptKey) return
+    exchangeAttemptKey.current = attemptKey
     setBusy(true); setError(null)
     void tableAction<Exchange>({ action: 'exchange', publicId, signature }).then(async (result) => {
       setExchange(result)
@@ -67,6 +71,7 @@ export default function TableCheckInPage() {
     try {
       const result = await tableAction<{ enrollmentStatus: 'pending' | 'member' | 'retry' }>({ action: 'requestEnrollment', publicId, signature })
       if (result.enrollmentStatus === 'member' || result.enrollmentStatus === 'retry') {
+        exchangeAttemptKey.current = ''
         setExchange(null)
         return
       }
@@ -95,7 +100,7 @@ export default function TableCheckInPage() {
       {(loading || busy) ? <div className="mt-6 rounded-lg bg-slate-50 p-5 text-center text-sm font-bold text-slate-600">Preparing your table…</div> : null}
       {error || authError ? <p role="alert" className="mt-4 rounded border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-800">{error ?? authError}</p> : null}
 
-      {exchange?.enrollmentStatus && !busy ? <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-slate-900"><h2 className="text-lg font-black">{exchange.enrollmentStatus === 'pending' ? 'Waiting for manager approval' : `Request to join ${exchange.clubName}`}</h2><p className="mt-2 text-sm text-slate-700">{exchange.enrollmentStatus === 'pending' ? 'Your request has been sent. Once a manager approves it, come back here to continue linking your roster player and join the table.' : 'This club requires a manager to approve new members before a table QR can check them in.'}</p>{exchange.enrollmentStatus === 'required' ? <button type="button" onClick={() => void requestEnrollment()} className="mt-4 min-h-12 w-full rounded-lg bg-[rgb(var(--bamboo))] px-4 font-black text-white">Request to join club</button> : <button type="button" onClick={() => setExchange(null)} className="mt-4 min-h-12 w-full rounded-lg border border-amber-300 bg-white px-4 font-black text-slate-900">Check approval again</button>}</div> : null}
+      {exchange?.enrollmentStatus && !busy ? <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-slate-900"><h2 className="text-lg font-black">{exchange.enrollmentStatus === 'pending' ? 'Waiting for manager approval' : `Request to join ${exchange.clubName}`}</h2><p className="mt-2 text-sm text-slate-700">{exchange.enrollmentStatus === 'pending' ? 'Your request has been sent. Once a manager approves it, come back here to continue linking your roster player and join the table.' : 'This club requires a manager to approve new members before a table QR can check them in.'}</p>{exchange.enrollmentStatus === 'required' ? <button type="button" onClick={() => void requestEnrollment()} className="mt-4 min-h-12 w-full rounded-lg bg-[rgb(var(--bamboo))] px-4 font-black text-white">Request to join club</button> : <button type="button" onClick={() => { exchangeAttemptKey.current = ''; setExchange(null) }} className="mt-4 min-h-12 w-full rounded-lg border border-amber-300 bg-white px-4 font-black text-slate-900">Check approval again</button>}</div> : null}
 
       {exchange && !exchange.enrollmentStatus && !exchange.linkedPlayer && !fullTable && !busy ? <div className="mt-5 space-y-5">
         <div><h2 className="text-lg font-black text-slate-900">Who are you?</h2><p className="mt-1 text-sm text-slate-600">Link your account to an existing roster player, or create yourself once.</p></div>
