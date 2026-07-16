@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ result: action === 'createGame' ? result.gameId : undefined })
     }
     const result = await withTransaction(async (db) => {
+      await db.query("select set_config('app.actor_uid', $1, true)", [caller.uid])
       const requireManager = async (club: string) => {
         const member = await db.query("select 1 from club_members where club_id=$1 and firebase_uid=$2 and active and role='manager'", [club, caller.uid])
         if (!member.rowCount) throw new Error('Only an active club manager can do that.')

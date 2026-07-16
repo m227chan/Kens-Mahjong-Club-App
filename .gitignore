@@ -82,6 +82,13 @@ firebase-debug.log
 cover/
 service-account*.json
 
+# Database backup output and local age identities
+backups/
+*.dump
+*.dump.age
+*.agekey
+mahjong-backup-key.txt
+
 # Translations
 *.mo
 *.pot
@@ -236,3 +243,5 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+.vercel
+.env*

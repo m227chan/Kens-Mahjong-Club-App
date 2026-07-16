@@ -286,6 +286,7 @@ export async function rebuild(client: PoolClient, clubId: string) {
 export async function mutateSupabaseGames(input: { callerUid: string; clubId: string; action: 'create' | 'update' | 'delete' | 'import' | 'rebuild'; gameId?: string; game?: GameInput; games?: GameInput[] }) {
   const clubId = input.clubId.trim().toUpperCase()
   return withTransaction(async (client) => {
+    await client.query("select set_config('app.actor_uid', $1, true)", [input.callerUid])
     await requireAccess(client, clubId, input.callerUid, input.action !== 'create')
     const incrementalCreate = input.action === 'create' && input.game != null && input.game.datetime == null
     if (incrementalCreate) {

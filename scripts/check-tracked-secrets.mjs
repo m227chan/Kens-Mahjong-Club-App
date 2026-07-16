@@ -6,6 +6,7 @@ const rules = [
   ['Personal email address', /\b[0-9A-Z._%+-]+@(?:gmail|hotmail|outlook|yahoo)\.[A-Z]{2,}\b/i],
   ['Populated Firebase API key environment variable', /^NEXT_PUBLIC_FIREBASE_API_KEY[^\S\r\n]*=[^\S\r\n]*\S+/m],
   ['Private key material', /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/],
+  ['age private identity', /AGE-SECRET-KEY-1[0-9A-Z]+/],
   ['Service-account private key field', /["']private_key["']\s*:\s*["'][^"']+/],
   ['Credential-bearing PostgreSQL URL', /postgres(?:ql)?:\/\/[^\s:/]+:[^\s@]+@/i],
   ['Supabase secret key', /\bsb_secret_[0-9A-Za-z_-]+\b/],

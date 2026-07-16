@@ -1,29 +1,79 @@
-name: Deploy
+name: CI and production deploy
 
 on:
+  pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-and-deploy:
+  quality:
+    name: Quality gates
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: true
+      NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 20
+          node-version: 20.19.0
           cache: npm
       - run: npm ci
+      - run: npm run security:scan
+      - run: npm run lint
       - run: npm test -- --run
       - run: npm run build
-      - name: Deploy Firebase
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+  deploy-production:
+    name: Deploy production
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production-deploy
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20.19.0
+          cache: npm
+      - run: npm ci
+      - name: Validate deployment credentials
+        shell: bash
         run: |
-          if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
-            echo "$FIREBASE_SERVICE_ACCOUNT" > "$HOME/firebase-service-account.json"
-            export GOOGLE_APPLICATION_CREDENTIALS="$HOME/firebase-service-account.json"
-            npx firebase-tools deploy --only hosting,firestore:rules,firestore:indexes --project "$GITHUB_REPOSITORY_OWNER"
-          else
-            echo "Missing Firebase credentials; skipping deployment."
-          fi
+          test -n "$VERCEL_TOKEN" || { echo 'Missing VERCEL_TOKEN'; exit 1; }
+          test -n "$VERCEL_ORG_ID" || { echo 'Missing VERCEL_ORG_ID'; exit 1; }
+          test -n "$VERCEL_PROJECT_ID" || { echo 'Missing VERCEL_PROJECT_ID'; exit 1; }
+      - name: Pull production configuration
+        run: npx --yes vercel@56.2.1 pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - name: Build production artifact
+        run: npx --yes vercel@56.2.1 build --prod --token="$VERCEL_TOKEN"
+      - name: Deploy production artifact
+        id: deploy
+        shell: bash
+        run: |
+          deployment_url="$(npx --yes vercel@56.2.1 deploy --prebuilt --prod --token="$VERCEL_TOKEN")"
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+          echo "Deployed $deployment_url"
+      - name: Smoke test deployment
+        shell: bash
+        run: curl --fail --show-error --silent --retry 5 --retry-delay 5 "${{ steps.deploy.outputs.url }}/" > /dev/null

@@ -601,13 +601,15 @@ Copy `.env.example` to `.env.local` for local development. The repository must c
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | **Server-only secret** | Firebase Admin token verification and user/claim administration |
 | `NEXT_PUBLIC_SUPABASE_URL` | Browser-visible | Supabase project API URL; must be a complete HTTP(S) URL |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Browser-visible | Publishable key used with RLS and Firebase JWT access token |
-| `SUPABASE_DATABASE_URL` | **Server-only secret** | Direct/pooler PostgreSQL connection for API transactions and migrations |
+| `APP_DATABASE_URL` | **Server-only secret** | Preferred DML-only PostgreSQL connection for API transactions |
+| `MIGRATION_DATABASE_URL` | **Owner-only secret** | Schema migrations and encrypted backups; never exposed to app runtimes or previews |
+| `SUPABASE_DATABASE_URL` | **Deprecated server-only secret** | Compatibility fallback during migration to split database credentials |
 | `RESEND_API_KEY` | **Server-only secret** | Optional join-request email provider credential |
 | `EMAIL_FROM` | Server-only configuration | Verified sender address for notifications |
 
 `NEXT_PUBLIC_*` values are included in the client bundle and must never contain administrative secrets. The database URL and Firebase service account must exist only in secure local/deployment secret storage.
 
-The application does not require a Supabase service-role key for its current architecture.
+The application does not require a Supabase service-role key for its current architecture. See `docs/OPERATIONS.md` for configuring the `app_runtime` PostgreSQL role, encrypted backups, and recovery.
 
 ## 16. Local development
 
@@ -645,7 +647,7 @@ The development build uses `.next-dev`; production builds use `.next`. This sepa
 1. Add a new ordered SQL file under `supabase/migrations`.
 2. Make the migration safe for the current production schema. Prefer explicit, narrowly scoped changes.
 3. Do not edit an already-applied migration to represent a new change; add the next migration.
-4. Run `npm run supabase:schema` with a server-only database URL.
+4. Run `npm run supabase:schema` with the owner-only `MIGRATION_DATABASE_URL`.
 5. Verify RLS, indexes, constraints, and Realtime publication when adding a table.
 6. Update `lib/types.ts`, row mappers, server SQL, tests, and this document as appropriate.
 
@@ -657,7 +659,7 @@ The migration runner:
 - skips previously recorded files;
 - fails rather than silently continuing after an SQL error.
 
-Run migrations from a trusted administrative environment. Never expose the database connection string to browser code.
+Run migrations from a trusted administrative environment. The production GitHub workflow requires a manual confirmation and uploads an encrypted pre-migration backup before applying SQL. Never expose either database connection string to browser code, and never make the owner credential available to the app runtime.
 
 ## 18. Deployment
 
@@ -667,9 +669,9 @@ The code is designed for a Node-capable Next.js host. Before deployment:
 2. Ensure the Supabase URL is a valid complete URL, not a project name or dashboard URL.
 3. Add the deployed hostname to Firebase Auth authorized domains.
 4. Configure Supabase’s Firebase third-party auth integration and required JWT role claim.
-5. Apply all database migrations.
+5. Apply all database migrations through the manually confirmed production migration workflow.
 6. Configure the optional email sender only if notifications are desired.
-7. Run lint, tests, and a production build.
+7. Configure the Vercel deployment secrets and run the GitHub Actions quality gates before production deployment.
 
 `next.config.mjs` uses trailing slashes, unoptimized images, and a `Cross-Origin-Opener-Policy: same-origin-allow-popups` header to support popup authentication. `firebase.json` remains a legacy/static hosting configuration and is not evidence that Firestore is in use.
 

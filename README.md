@@ -73,6 +73,8 @@ Applied migration filenames are recorded by the schema runner so migrations are 
 
 ## Deployment
 
-The application can be deployed to a Next.js-compatible hosting provider. Configure the variables documented in `.env.example`, apply database migrations separately, and create a new deployment whenever public environment variables change.
+Pull requests run secret scanning, linting, unit tests, and a production build in GitHub Actions. Merges to `main` pass the same gates before an Actions-driven Vercel production deployment. Database migrations remain a separate, manually confirmed workflow that creates an encrypted backup before applying pending SQL.
 
 Keep all server credentials server-only. Variables containing database connection strings or Firebase Admin credentials must never use the `NEXT_PUBLIC_` prefix.
+
+Production backup, recovery, GitHub/Vercel setup, branch protection, and least-privilege database instructions are in [`docs/OPERATIONS.md`](docs/OPERATIONS.md).

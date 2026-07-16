@@ -1,0 +1,62 @@
+name: Production database migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type MIGRATE to back up and apply pending migrations
+        required: true
+        type: string
+      reason:
+        description: Why this migration is being run
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-database-maintenance
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    if: inputs.confirm == 'MIGRATE'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: production-database
+    env:
+      DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL || secrets.SUPABASE_DATABASE_URL }}
+      MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL || secrets.SUPABASE_DATABASE_URL }}
+      BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20.19.0
+          cache: npm
+      - run: npm ci
+      - name: Validate migration configuration
+        shell: bash
+        run: |
+          test -n "$MIGRATION_DATABASE_URL" || { echo 'Missing MIGRATION_DATABASE_URL'; exit 1; }
+          test -n "$BACKUP_AGE_RECIPIENT" || { echo 'Missing BACKUP_AGE_RECIPIENT repository variable'; exit 1; }
+      - name: Install age
+        run: sudo apt-get update && sudo apt-get install --yes age
+      - name: Back up before migration
+        run: bash scripts/backup-database.sh backups
+      - name: Upload pre-migration backup
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pre-migration-backup-${{ github.run_id }}
+          path: |
+            backups/*.age
+            backups/*.sha256
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+      - name: Apply pending migrations
+        run: node scripts/apply-supabase-schema.mjs

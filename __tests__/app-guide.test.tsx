@@ -33,7 +33,7 @@ describe('AppGuide', () => {
     render(<AppGuide />)
 
     expect(await screen.findByRole('heading', { name: "Welcome to Ken's Mahjong Club" })).toBeInTheDocument()
-    expect(document.querySelector('.real-tour-spotlight')).toBeInTheDocument()
+    await waitFor(() => expect(document.querySelector('.real-tour-spotlight')).toBeInTheDocument())
     expect(claimMingWelcome).toHaveBeenCalledOnce()
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Open app guide' })[0])

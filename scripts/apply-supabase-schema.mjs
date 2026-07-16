@@ -1,8 +1,9 @@
 import { readdir, readFile } from 'node:fs/promises'
 import pg from 'pg'
 
-if (!process.env.SUPABASE_DATABASE_URL) throw new Error('Missing SUPABASE_DATABASE_URL in .env.local.')
-const client = new pg.Client({ connectionString: process.env.SUPABASE_DATABASE_URL, ssl: { rejectUnauthorized: false } })
+const connectionString = process.env.MIGRATION_DATABASE_URL || process.env.SUPABASE_DATABASE_URL
+if (!connectionString) throw new Error('Missing MIGRATION_DATABASE_URL in .env.local.')
+const client = new pg.Client({ connectionString, ssl: { rejectUnauthorized: false } })
 await client.connect()
 try {
   await client.query(`create table if not exists public.app_schema_migrations (
