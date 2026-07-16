@@ -44,6 +44,8 @@ In branch protection for `main`:
 
 In Actions settings, keep the default workflow token read-only and require actions to be pinned to full commit SHAs. Dependabot will propose updates to those pins.
 
+Dependabot automatically groups patch and minor updates. Major npm and Actions upgrades are intentionally ignored because framework majors (especially React, React types, and Testing Library) need a dedicated migration branch and compatibility testing.
+
 ## Vercel configuration
 
 The production Vercel project needs the application variables from `.env.example`. Configure `APP_DATABASE_URL`, not `MIGRATION_DATABASE_URL`, in Vercel Production. The owner-level migration credential must exist only in the GitHub production environment and trusted local administration environments.
