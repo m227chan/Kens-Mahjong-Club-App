@@ -18,9 +18,9 @@
     "supabase:claims": "node --env-file=.env.local scripts/set-supabase-firebase-claims.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.57.4",
-    "firebase": "^12.15.0",
-    "firebase-admin": "^13.6.0",
+    "@supabase/supabase-js": "^2.110.7",
+    "firebase": "^12.16.0",
+    "firebase-admin": "^13.10.0",
     "next": "^16.2.10",
     "openskill": "^5.0.1",
     "pg": "^8.22.0",
