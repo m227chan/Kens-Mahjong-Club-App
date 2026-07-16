@@ -30,7 +30,6 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
+    # Action majors often carry GitHub runner runtime upgrades. Let Dependabot
+    # propose them while retaining full-SHA pins for supply-chain safety.
     open-pull-requests-limit: 3

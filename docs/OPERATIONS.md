@@ -4,12 +4,12 @@ This app uses free-tier GitHub Actions, Vercel Hobby, Firebase Authentication, a
 
 ## Pipeline overview
 
-| File | Trigger | Purpose |
-| --- | --- | --- |
-| `.github/workflows/deploy.yml` | Pull request, `main`, manual | Secret scan, lint, tests, build, then gated Vercel production deployment from `main` |
-| `.github/workflows/database-backup.yml` | Daily at 06:17 UTC, manual | Validated, encrypted `public` schema backup retained for 14 days |
-| `.github/workflows/database-migrate.yml` | Manual | Encrypted pre-migration backup, then ordered migrations |
-| `.github/dependabot.yml` | Weekly | npm and GitHub Actions update pull requests |
+| File                                     | Trigger                      | Purpose                                                                              |
+| ---------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------ |
+| `.github/workflows/deploy.yml`           | Pull request, `main`, manual | Secret scan, lint, tests, build, then gated Vercel production deployment from `main` |
+| `.github/workflows/database-backup.yml`  | Daily at 06:17 UTC, manual   | Validated, encrypted `public` schema backup retained for 14 days                     |
+| `.github/workflows/database-migrate.yml` | Manual                       | Encrypted pre-migration backup, then ordered migrations                              |
+| `.github/dependabot.yml`                 | Weekly                       | npm and GitHub Actions update pull requests                                          |
 
 Vercel's Git integration can continue producing pull-request previews. Preview environment variables must use fabricated values or a non-production backend; never make `MIGRATION_DATABASE_URL` available to Preview. Disable Vercel's automatic production deployment after the Actions deployment is verified, otherwise a merge can produce two production deployments.
 
@@ -44,7 +44,7 @@ In branch protection for `main`:
 
 In Actions settings, keep the default workflow token read-only and require actions to be pinned to full commit SHAs. Dependabot will propose updates to those pins.
 
-Dependabot automatically groups patch and minor updates. Major npm and Actions upgrades are intentionally ignored because framework majors (especially React, React types, and Testing Library) need a dedicated migration branch and compatibility testing.
+Dependabot automatically groups patch and minor npm updates. Major npm upgrades are intentionally ignored because framework majors (especially React, React types, and Testing Library) need a dedicated migration branch and compatibility testing. GitHub Actions major updates are proposed because they frequently carry required runner-runtime upgrades; review them normally and retain full commit-SHA pins.
 
 ## Vercel configuration
 
