@@ -31,7 +31,7 @@ Application data is stored in Supabase. Firebase is used only for authentication
 
 Requirements:
 
-- Node.js 20.19 or newer
+- Node.js 22
 - A Supabase project
 - A Firebase project with Google Authentication enabled
 

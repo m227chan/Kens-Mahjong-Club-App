@@ -69,7 +69,7 @@ flowchart LR
 - **Email:** Resend-compatible HTTP API for optional join-request notifications.
 - **Audio:** Web Audio API; cues are synthesized locally and do not require audio assets.
 - **Testing:** Vitest with jsdom and Testing Library dependencies.
-- **Supported runtime:** Node.js 20.19 or newer.
+- **Supported runtime:** Node.js 22.
 
 ## 4. Repository map
 
@@ -615,7 +615,7 @@ The application does not require a Supabase service-role key for its current arc
 
 Prerequisites:
 
-- Node.js 20.19+;
+- Node.js 22;
 - npm;
 - a Firebase project with Google sign-in enabled;
 - a Supabase project configured to accept Firebase JWTs;

@@ -28,7 +28,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 20.19.0
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run security:scan
@@ -54,7 +54,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 20.19.0
+          node-version: 22
           cache: npm
       - run: npm ci
       - name: Validate deployment credentials
@@ -65,6 +65,8 @@ jobs:
           test -n "$VERCEL_PROJECT_ID" || { echo 'Missing VERCEL_PROJECT_ID'; exit 1; }
       - name: Pull production configuration
         run: npx --yes vercel@56.2.1 pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - name: Validate production environment
+        run: node --env-file=.vercel/.env.production.local scripts/validate-deployment-env.mjs
       - name: Build production artifact
         run: npx --yes vercel@56.2.1 build --prod --token="$VERCEL_TOKEN"
       - name: Deploy production artifact
