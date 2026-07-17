@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState, useRef } from 'react'
 import DashboardContent from '@/components/DashboardContent'
 import GameLogsModal from '@/components/GameLogsModal'
+import NetworkGraphModal from '@/components/NetworkGraphModal'
 import { LeaderboardPanel } from '@/components/Leaderboard'
 import SessionManager from '@/components/SessionManager'
 import { useAuth } from '@/contexts/AuthContext'
@@ -109,6 +110,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [rosterOpen, setRosterOpen] = useState(false)
   const [analyticsOpen, setAnalyticsOpen] = useState(false)
   const [gameLogsOpen, setGameLogsOpen] = useState(false)
+  const [networkOpen, setNetworkOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [seasons, setSeasons] = useState<SeasonDoc[]>([])
   const [seasonAction, setSeasonAction] = useState(false)
@@ -405,6 +407,14 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             className="club-secondary-action rounded-lg px-3 py-2 text-sm font-bold transition"
           >
             Game logs
+          </button>
+          <button
+            data-tour="network-open"
+            type="button"
+            onClick={() => setNetworkOpen(true)}
+            className="club-secondary-action rounded-lg px-3 py-2 text-sm font-bold transition"
+          >
+            Network
           </button>
           <button
             data-tour="settings-open"
@@ -792,6 +802,16 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           userId={user.uid}
           canDeleteGames={isManager}
           onClose={() => setGameLogsOpen(false)}
+        />
+      ) : null}
+
+      {networkOpen ? (
+        <NetworkGraphModal
+          clubId={clubId}
+          players={players}
+          seasons={seasons}
+          currentSeason={activeSeasonNumber}
+          onClose={() => setNetworkOpen(false)}
         />
       ) : null}
     </main>

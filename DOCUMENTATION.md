@@ -54,7 +54,7 @@ flowchart LR
 | Domain algorithms        | `lib/scoring.ts`, `lib/skill-rating.ts`, `lib/stats-engine.ts`, `lib/players.ts`, `lib/session-layout.ts` | Score calculation, experience-aware multiplayer Skill, legacy ELO, ranking, titles, and session normalization |
 | Database definition      | `supabase/migrations/*.sql`                                                                               | Schema, constraints, indexes, views, RLS policies, Realtime publication, and historical baselines             |
 | Operations               | `scripts/*.mjs`                                                                                           | Ordered schema migrations and Firebase custom-claim setup                                                     |
-| Verification             | `__tests__/*.test.ts`                                                                                     | Unit coverage for players, scoring, ELO/stat behavior, and session layout                                     |
+| Verification             | `__tests__/*.test.ts`                                                                                     | Unit coverage for players, scoring, ELO/stat behavior, session layout, and network net-point attribution      |
 
 ## 3. Technology stack
 
@@ -95,6 +95,8 @@ components/
   ClubWorkspace.tsx                Main club coordinator and modal owner
   DashboardContent.tsx             Detailed chart analytics and player selection
   GameLogsModal.tsx                Paginated logs, CSV, game editing/deletion
+  NetworkGraphModal.tsx            Player co-play network modal (graph and table)
+  network/                         Co-occurrence graph, edge math, and net-points helpers
   Leaderboard.tsx                  Desktop and mobile standings
   SessionManager.tsx               Live table/session and result workflow
   SoundToggle.tsx                  Global sound control
@@ -147,9 +149,9 @@ The club route normalizes the club ID, requires authentication, subscribes to th
 
 `app/layout.tsx` loads fonts, the favicon, theme/sound/help controls, `AuthProvider`, and `SoundProvider`. The brand link always points to `/`, making it the personal-dashboard shortcut for signed-in users. The header is sticky and uses semantic theme tokens.
 
-The header help control opens `AppGuide`. Its complete reference follows the signed-in workflow from personal dashboard through clubs, rosters, seasons, sessions, scoring, standings, analytics, logs, and manager tools. It preserves the operational session reference, including table setup, participating players, the sideline, result entry, self-draw/discard rules, session reset controls, and the full fan-to-base-points map.
+The header help control opens `AppGuide`. Its complete reference follows the signed-in workflow from personal dashboard through clubs, rosters, seasons, sessions, scoring, standings, analytics, logs, player network, and manager tools. It preserves the operational session reference, including table setup, participating players, the sideline, result entry, self-draw/discard rules, session reset controls, and the full fan-to-base-points map.
 
-“Take a Tour” runs on the real signed-in interface. `AppGuide` remains mounted in the root layout while navigation and modal state change, locates visible elements through stable `data-tour` targets, scrolls them into view, and draws a fixed spotlight boundary plus Ming’s coachmark over the actual dashboard, club workspace, and real roster, analytics, game-log, and settings modals. Click-driven stops advance only after the highlighted real control is used; explanatory stops use Next. Desktop and mobile variants can share a target name, and the tour selects the visible instance. The tour only performs safe navigation and open/close interactions, never submits forms or invokes game, roster, season, membership, or settings mutations. Exiting at any time clears the spotlight and returns to `/`.
+“Take a Tour” runs on the real signed-in interface. `AppGuide` remains mounted in the root layout while navigation and modal state change, locates visible elements through stable `data-tour` targets, scrolls them into view, and draws a fixed spotlight boundary plus Ming’s coachmark over the actual dashboard, club workspace, and real roster, analytics, game-log, network, and settings modals. Click-driven stops advance only after the highlighted real control is used; explanatory stops use Next. Desktop and mobile variants can share a target name, and the tour selects the visible instance. The tour only performs safe navigation and open/close interactions, never submits forms or invokes game, roster, season, membership, or settings mutations. Exiting at any time clears the spotlight and returns to `/`.
 
 `AppGuide` is part of the product contract, not optional marketing copy. Any major user-facing feature addition or substantial workflow change must update both surfaces in the same pull request: the concise `?` help guide must explain the feature in the correct usage order, and the interactive tour must demonstrate it with a highlighted, no-write interaction. The tour must remain representative on desktop and mobile.
 
@@ -428,6 +430,17 @@ Rounding drift is assigned to the central band. Small clubs may have empty bands
 - Summary cards show rank alignment, Skill headroom, points per game, and recent Skill movement.
 - The analytics modal links to `/metrics`, which explains every displayed metric in plain language.
 - Empty and loading states explain when more games or player selection are needed.
+
+### Player Network
+
+- Opened from the club action bar (**Network**) between Game logs and Settings, owned by `ClubWorkspace` like the other club modals.
+- Loads club history with `loadAllGames` and reuses the workspace `players` list (does not open a second `subscribePlayers` realtime channel).
+- Builds an undirected co-play graph: each game is an event, each pair of seated players increments a shared-game edge weight.
+- Filters by season (default: active season), inclusive date range (default: full selected season), optional ego player, and minimum games together.
+- Graph view uses `vis-network` (dynamic client import for SSR safety). Theme tokens drive node/edge colors; dark mode uses cream default nodes and cream labels on the dark canvas.
+- With an ego player selected, node color encodes net point flow vs that player (positive = they paid the selected player more; negative = the selected player paid them more), using proportional zero-sum attribution within each game. Clicking a node sets that player as ego.
+- Table view shares the same filters and shows pair rows (or opponent + games + net when ego is set). Columns are sortable; default sort is games together descending.
+- Unit coverage for net-point attribution lives in `__tests__/points-given.test.ts`.
 
 ### Themes, motion, and sound
 
