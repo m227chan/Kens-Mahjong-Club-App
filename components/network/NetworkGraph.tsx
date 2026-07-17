@@ -66,7 +66,6 @@ export function NetworkGraph({
   useEffect(() => {
     if (!containerRef.current) return
     let cancelled = false
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let network: any
 
     const allEdges = computeNetworkEdges(data)
@@ -175,7 +174,6 @@ export function NetworkGraph({
       )
 
       if (onNodeClick) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         network.on('click', (params: any) => {
           if (params.nodes.length > 0) onNodeClick(params.nodes[0])
         })
