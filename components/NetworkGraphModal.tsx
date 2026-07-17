@@ -74,6 +74,7 @@ export default function NetworkGraphModal({
   const [egoPlayerId, setEgoPlayerId] = useState('')
   const [minGames, setMinGames] = useState(1)
   const [viewMode, setViewMode] = useState<NetworkViewMode>('graph')
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [tableSort, setTableSort] = useState<'playerA' | 'playerB' | 'opponent' | 'gamesTogether' | 'net'>('gamesTogether')
   const [tableSortDirection, setTableSortDirection] = useState<'asc' | 'desc'>('desc')
 
@@ -230,15 +231,29 @@ export default function NetworkGraphModal({
   }
 
   const egoName = egoPlayerId ? labels[egoPlayerId] ?? 'Selected player' : null
+  const seasonName = seasonFilter === 'all'
+    ? 'All seasons'
+    : seasons.find((season) => season.seasonNumber === seasonFilter)?.name ?? `Season ${seasonFilter}`
+  const fullDateRange = Boolean(
+    seasonBounds
+    && dateFrom === seasonBounds.from
+    && dateTo === seasonBounds.to
+  )
+  const filterSummary = [
+    seasonName,
+    !seasonBounds ? 'No date range' : fullDateRange ? 'Full dates' : 'Custom dates',
+    egoName ?? 'All players',
+    `${minGames}+ game${minGames === 1 ? '' : 's'}`,
+  ].join(' · ')
 
   return (
     <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
       <div data-tour="network-modal" className="responsive-modal-panel flex max-h-[92vh] w-full max-w-6xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
-        <div className="flex flex-col gap-4 border-b border-slate-200 p-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:gap-4 sm:p-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-600">Player Network</p>
             <h3 className="mt-2 text-xl font-black text-slate-950">Who plays with whom</h3>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 hidden text-sm text-slate-500 sm:block">
               Edges connect players who shared a table. Thickness shows how many games they played together.
               {egoPlayerId ? ' Node color is net points vs the selected player (green/cream = they paid selected more, red = selected paid them more).' : ''}
             </p>
@@ -285,8 +300,23 @@ export default function NetworkGraphModal({
           </div>
         </div>
 
-        <div className="border-b border-slate-200 bg-slate-50 p-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="border-b border-slate-200 bg-slate-50 p-3 sm:p-4">
+          <button
+            type="button"
+            className="flex min-h-12 w-full items-center justify-between gap-3 rounded-lg border border-slate-300 bg-white px-3 text-left md:hidden"
+            aria-expanded={filtersOpen}
+            aria-controls="network-filters"
+            onClick={() => setFiltersOpen((current) => !current)}
+          >
+            <span className="min-w-0">
+              <span className="block text-sm font-black text-slate-900">Filters</span>
+              <span className="block truncate text-xs font-semibold text-slate-500">{filterSummary}</span>
+            </span>
+            <span aria-hidden="true" className="shrink-0 text-lg font-black text-slate-600">{filtersOpen ? '−' : '+'}</span>
+          </button>
+
+          <div id="network-filters" className={`${filtersOpen ? 'block' : 'hidden'} mt-3 md:mt-0 md:block`}>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <label className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
               Season
               <select
@@ -367,10 +397,18 @@ export default function NetworkGraphModal({
                 className="mt-2 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900"
               />
             </label>
-          </div>
+            </div>
 
-          {egoPlayerId && viewMode === 'graph' ? (
-            <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+            <button
+              type="button"
+              onClick={() => setFiltersOpen(false)}
+              className="mt-3 min-h-11 w-full rounded-lg bg-[rgb(var(--bamboo))] px-4 text-sm font-black text-white md:hidden"
+            >
+              Show network
+            </button>
+
+            {egoPlayerId && viewMode === 'graph' ? (
+              <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
               <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
                 Net vs {egoName}
               </p>
@@ -381,11 +419,12 @@ export default function NetworkGraphModal({
                 />
                 <span className="text-[11px] font-semibold text-slate-500">They paid selected</span>
               </div>
-            </div>
-          ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
 
-        <div className="overflow-y-auto bg-white p-5">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-white p-2 sm:p-5">
           {loading ? (
             <div className="flex h-[480px] items-center justify-center rounded-[10px] border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-500">
               Loading network…

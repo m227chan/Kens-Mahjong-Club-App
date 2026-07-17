@@ -191,7 +191,7 @@ export function NetworkGraph({
   if (!hasData) {
     return (
       <div
-        className="flex items-center justify-center rounded-[10px] border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-500"
+        className="network-graph-canvas flex items-center justify-center rounded-[10px] border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-500"
         style={{ height }}
       >
         No games recorded yet.
@@ -202,7 +202,7 @@ export function NetworkGraph({
   return (
     <div
       ref={containerRef}
-      className="w-full rounded-[10px] border border-slate-200 bg-slate-50"
+      className="network-graph-canvas w-full rounded-[10px] border border-slate-200 bg-slate-50"
       style={{ height }}
     />
   )

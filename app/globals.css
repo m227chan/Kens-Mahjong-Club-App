@@ -352,6 +352,7 @@ html.dark .home-summary { background-image: linear-gradient(115deg,rgb(var(--bam
   .responsive-modal { align-items:stretch!important; padding:0!important; }
   .responsive-modal-panel { max-height:100dvh!important; height:100dvh; max-width:none!important; border:0!important; border-radius:0!important; }
   .responsive-modal-panel > div:first-child { padding-top:max(1rem,env(safe-area-inset-top)); }
+  .network-graph-canvas { height:clamp(22rem,55dvh,32rem)!important; }
   .home-dashboard { padding-inline:1rem; }
   .home-summary .home-number { font-size:clamp(1.85rem,11vw,2.8rem); }
   .home-club-card a,.home-club-card button,#club-actions button { min-height:44px; display:inline-flex; align-items:center; justify-content:center; }
