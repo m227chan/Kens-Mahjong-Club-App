@@ -32,6 +32,7 @@ import {
 } from '@/lib/data'
 import type { ClubDoc, ClubMembershipDoc, JoinRequestDoc, PlayerDoc, SeasonDoc } from '@/lib/types'
 import { PLAYER_EMOJIS, randomUnusedPlayerEmoji } from '@/lib/players'
+import { MAHJONG_CAMERA_COACH_ENABLED } from '@/lib/feature-flags'
 
 const iconChoices = PLAYER_EMOJIS
 
@@ -416,6 +417,16 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           >
             Network
           </button>
+          {MAHJONG_CAMERA_COACH_ENABLED ? (
+            <Link
+              href={`/club/${clubId}/coach/`}
+              className="club-secondary-action flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-bold transition md:hidden"
+              aria-label="Open camera Mahjong coach"
+            >
+              <span aria-hidden="true">📷</span>
+              <span>Coach</span>
+            </Link>
+          ) : null}
           <button
             data-tour="settings-open"
             type="button"

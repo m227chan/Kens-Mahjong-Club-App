@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "available": false,
+  "version": "hk-classical-v1-untrained",
+  "architecture": "YOLOX-Nano candidate; no production weights installed",
+  "modelUrl": null,
+  "sha256": null,
+  "input": { "width": 416, "height": 416, "layout": "NCHW" },
+  "labels": [
+    "characters_1", "characters_2", "characters_3", "characters_4", "characters_5", "characters_6", "characters_7", "characters_8", "characters_9",
+    "bamboo_1", "bamboo_2", "bamboo_3", "bamboo_4", "bamboo_5", "bamboo_6", "bamboo_7", "bamboo_8", "bamboo_9",
+    "dots_1", "dots_2", "dots_3", "dots_4", "dots_5", "dots_6", "dots_7", "dots_8", "dots_9",
+    "east", "south", "west", "north", "red_dragon", "green_dragon", "white_dragon",
+    "flower_plum", "flower_orchid", "flower_chrysanthemum", "flower_bamboo", "season_spring", "season_summer", "season_autumn", "season_winter",
+    "tile_back"
+  ],
+  "confidenceThreshold": 0.72,
+  "nmsThreshold": 0.45,
+  "outputFormat": "yolox-decoded",
+  "metrics": { "physicalSetExactHandAccuracy": null, "discardEventPrecision": null }
+}
+

@@ -28,6 +28,7 @@
     "firebase": "^12.16.0",
     "firebase-admin": "^14.2.0",
     "next": "^16.2.10",
+    "onnxruntime-web": "^1.27.0",
     "openskill": "^5.0.1",
     "pg": "^8.22.0",
     "qrcode": "^1.5.4",
