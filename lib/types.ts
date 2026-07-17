@@ -25,6 +25,28 @@ export interface ClubMembershipDoc {
   active: boolean
 }
 
+export interface AccountDeletionCandidate {
+  uid: string
+  displayName: string | null
+  email: string | null
+}
+
+export interface AccountDeletionClub {
+  clubId: string
+  clubName: string
+  universal: boolean
+  candidates: AccountDeletionCandidate[]
+}
+
+export interface AccountDeletionPlan {
+  confirmationName: string
+  soleManagerClubs: AccountDeletionClub[]
+}
+
+export type AccountManagerResolution =
+  | { action: 'transfer'; successorUid: string }
+  | { action: 'delete' }
+
 export interface JoinRequestDoc {
   id: string
   clubId: string

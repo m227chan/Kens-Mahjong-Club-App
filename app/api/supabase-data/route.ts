@@ -29,6 +29,12 @@ export async function POST(request: NextRequest) {
       any
     >
     const action = String(body.action ?? '')
+    if (action === 'deleteAccount') {
+      const expectedName = String(caller.name ?? '').trim()
+      const confirmationName = String(body.confirmationName ?? '').trim()
+      if (!expectedName || confirmationName !== expectedName)
+        throw new Error('Type your full account name exactly to confirm deletion.')
+    }
     if (['createGame', 'importGames', 'mutateGame'].includes(action)) {
       const input =
         action === 'createGame'
@@ -82,10 +88,56 @@ export async function POST(request: NextRequest) {
       }
       if (action === 'getCreatedClubCount') {
         const count = await db.query(
-          'select count(distinct id)::integer as count from clubs where manager_uid=$1',
+          'select count(distinct id)::integer as count from clubs where manager_uid=$1 and active',
           [caller.uid],
         )
         return Number(count.rows[0]?.count ?? 0)
+      }
+      if (action === 'getAccountDeletionPlan') {
+        const clubs = await db.query(
+          `select c.id club_id,c.name club_name,c.universal,
+            coalesce(jsonb_agg(jsonb_build_object(
+              'uid',candidate.firebase_uid,
+              'displayName',candidate.display_name,
+              'email',candidate.email
+            ) order by candidate.display_name,candidate.email)
+            filter (where candidate.firebase_uid is not null),'[]'::jsonb) candidates
+          from clubs c
+          join club_members own on own.club_id=c.id and own.firebase_uid=$1
+            and own.active and own.role='manager'
+          left join club_members candidate on candidate.club_id=c.id
+            and candidate.firebase_uid<>$1 and candidate.active
+          where c.active and not exists (
+            select 1 from club_members other_manager
+            where other_manager.club_id=c.id and other_manager.firebase_uid<>$1
+              and other_manager.active and other_manager.role='manager'
+          )
+          group by c.id,c.name,c.universal
+          order by c.name`,
+          [caller.uid],
+        )
+        return {
+          confirmationName: String(caller.name ?? '').trim(),
+          soleManagerClubs: clubs.rows.map((row) => ({
+            clubId: String(row.club_id),
+            clubName: String(row.club_name),
+            universal: Boolean(row.universal),
+            candidates: row.candidates ?? [],
+          })),
+        }
+      }
+      if (action === 'deleteAccount') {
+        const resolutions =
+          body.managerResolutions &&
+          typeof body.managerResolutions === 'object' &&
+          !Array.isArray(body.managerResolutions)
+            ? body.managerResolutions
+            : {}
+        await db.query('select public.delete_user_data_safely($1,$2::jsonb)', [
+          caller.uid,
+          JSON.stringify(resolutions),
+        ])
+        return null
       }
       if (action === 'createClub') {
         const name = String(body.name ?? '').trim().slice(0, 80)
@@ -96,7 +148,7 @@ export async function POST(request: NextRequest) {
         const createdCount = Number(
           (
             await db.query(
-              'select count(distinct id)::integer as count from clubs where manager_uid=$1',
+              'select count(distinct id)::integer as count from clubs where manager_uid=$1 and active',
               [caller.uid],
             )
           ).rows[0]?.count ?? 0,
@@ -356,16 +408,9 @@ export async function POST(request: NextRequest) {
       }
       if (action === 'deleteClub') {
         await requireManager(body.clubId)
-        if (body.clubId === 'KEN')
-          throw new Error("Kendall's Mahjong Club cannot be deleted.")
-        await db.query(
-          'update clubs set active=false,deleted_at=now(),deleted_by=$1 where id=$2',
-          [caller.uid, body.clubId],
-        )
-        await db.query(
-          'update club_members set active=false where club_id=$1',
-          [body.clubId],
-        )
+        await db.query('select public.delete_club_permanently($1)', [
+          body.clubId,
+        ])
         return null
       }
       if (action === 'ensureSeasons') {
@@ -527,6 +572,13 @@ export async function POST(request: NextRequest) {
       }
       throw new Error(`Unsupported Supabase action: ${action}`)
     })
+    if (action === 'deleteAccount') {
+      try {
+        await adminAuth.deleteUser(caller.uid)
+      } catch (error) {
+        if ((error as { code?: string }).code !== 'auth/user-not-found') throw error
+      }
+    }
     return NextResponse.json({ result })
   } catch (error) {
     return apiError(error, 'Database operation failed.')

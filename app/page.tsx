@@ -75,7 +75,7 @@ function LoadingHome() {
 
 export default function HomePage() {
   const router = useRouter()
-  const { user, loading, signOut } = useAuth()
+  const { user, loading } = useAuth()
   const [clubs, setClubs] = useState<ClubMembershipDoc[]>([])
   const [newClubName, setNewClubName] = useState('')
   const [joinClubId, setJoinClubId] = useState('')
@@ -366,7 +366,6 @@ export default function HomePage() {
           <h1 className="mt-2 text-3xl font-extrabold tracking-[-0.035em] text-slate-950 sm:text-4xl">{greeting}, {firstName}</h1>
           <p className="mt-2 text-sm text-slate-600">Your play across every club, in one place.</p>
         </div>
-        <button type="button" onClick={signOut} className="self-start rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:border-[rgb(var(--cinnabar))] sm:self-auto">Sign out</button>
       </header>
 
       {dataError ? (

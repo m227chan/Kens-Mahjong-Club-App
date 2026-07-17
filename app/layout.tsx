@@ -3,8 +3,7 @@ import Link from 'next/link'
 import './globals.css'
 import { Manrope, JetBrains_Mono } from 'next/font/google'
 import { AuthProvider } from '@/contexts/AuthContext'
-import ThemeToggle from '@/components/ThemeToggle'
-import SoundToggle from '@/components/SoundToggle'
+import UserSettings from '@/components/UserSettings'
 import AppGuide from '@/components/AppGuide'
 import { SoundProvider } from '@/contexts/SoundContext'
 
@@ -34,7 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <p className="brand-kicker text-[10px] font-bold uppercase tracking-[0.42em] transition-opacity group-hover:opacity-75">Ken&apos;s Mahjong Club</p>
                   <p className="font-display text-lg font-black leading-none text-[rgb(var(--ink))] transition-colors group-hover:text-[rgb(var(--bamboo))]">Score tracker</p>
                 </Link>
-                <div className="flex items-center gap-2"><SoundToggle /><ThemeToggle /><AppGuide /></div>
+                <div className="flex items-center gap-2"><AppGuide /><UserSettings /></div>
               </div>
             </header>
             <main className="flex-1">{children}</main>

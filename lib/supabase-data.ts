@@ -10,6 +10,8 @@ import {
 } from '@/lib/session-layout'
 import { computeGlobalRanks } from '@/lib/stats-engine'
 import type {
+  AccountDeletionPlan,
+  AccountManagerResolution,
   ClubDoc,
   ClubMembershipDoc,
   GameDoc,
@@ -250,6 +252,16 @@ export const createClub = (input: { name: string; user: UserLike }) =>
   serverAction<string>('createClub', { name: input.name, user: input.user })
 export const getCreatedClubCount = () =>
   serverAction<number>('getCreatedClubCount', {})
+export const getAccountDeletionPlan = () =>
+  serverAction<AccountDeletionPlan>('getAccountDeletionPlan', {})
+export const deleteAccount = (
+  confirmationName: string,
+  managerResolutions: Record<string, AccountManagerResolution>,
+) =>
+  serverAction<void>('deleteAccount', {
+    confirmationName,
+    managerResolutions,
+  })
 async function getClub(clubId: string) {
   const { data, error } = await client()
     .from('clubs')
@@ -403,8 +415,8 @@ export const updatePlayerName = (
   playerId: string,
   nextName: string,
 ) => serverAction<void>('updatePlayerName', { clubId, playerId, nextName })
-export const deleteClub = (clubId: string, managerUid: string) =>
-  serverAction<void>('deleteClub', { clubId, managerUid })
+export const deleteClub = (clubId: string) =>
+  serverAction<void>('deleteClub', { clubId })
 export async function createGame(clubId: string, input: Row) {
   const gameId = await serverAction<string>('createGame', { clubId, input })
   invalidateClubHistoryCache(clubId)

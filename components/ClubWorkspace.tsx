@@ -255,10 +255,10 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   }
 
   const confirmDeleteClub = async () => {
-    if (!user || !club || deleteConfirmName !== club.name) return
+    if (!user || !club || !isManager || club.universal || deleteConfirmName !== club.name) return
     setDeletingClub(true)
     try {
-      await deleteClub(clubId, user.uid)
+      await deleteClub(clubId)
       router.replace('/')
     } catch (error) {
       setPlayerMessage(error instanceof Error ? error.message : 'Unable to delete club.')
@@ -468,9 +468,14 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
               </div>
               {isManager && !club?.universal ? (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
-                  <p className="text-sm font-black text-rose-950">Delete club</p>
-                  <p className="mt-1 text-sm text-rose-700">Remove this club from every member&apos;s active clubs. Game history will no longer be accessible.</p>
+                  <p className="text-sm font-black text-rose-700">Delete club</p>
+                  <p className="mt-1 text-sm text-rose-700">Permanently delete this club and all of its club-specific database records. This cannot be undone.</p>
                   <button type="button" onClick={() => setDeleteConfirmOpen(true)} className="mt-4 rounded-lg bg-rose-700 px-4 py-2 text-sm font-bold text-white hover:bg-rose-600">Delete club</button>
+                </div>
+              ) : isManager && club?.universal ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-sm font-black text-amber-900">Universal club protection</p>
+                  <p className="mt-1 text-sm text-amber-800">The universal club is shared by everyone and cannot be deleted, including by its managers.</p>
                 </div>
               ) : null}
             </div>
@@ -478,12 +483,15 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         </div>
       ) : null}
 
-      {deleteConfirmOpen && club ? (
+      {deleteConfirmOpen && club && isManager && !club.universal ? (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 px-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-rose-600">Permanent action</p>
             <h3 className="mt-2 text-xl font-black text-slate-950">Delete {club.name}?</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600">Type <strong>{club.name}</strong> exactly to confirm. The club will disappear for every member.</p>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              This permanently deletes the club for every member, including its roster and player links, memberships and join requests, games and scores, statistics and rankings, seasons, sessions and table layouts, QR codes, settings, and club audit history. Your account and other clubs are not affected. This cannot be undone.
+            </p>
+            <p className="mt-3 text-sm font-bold leading-6 text-rose-700">Type <strong>{club.name}</strong> exactly to confirm.</p>
             <input autoFocus value={deleteConfirmName} onChange={(event) => setDeleteConfirmName(event.target.value)} className="mt-4 w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-rose-500" placeholder={club.name} />
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={() => { setDeleteConfirmOpen(false); setDeleteConfirmName('') }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700">Cancel</button>
