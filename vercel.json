@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "node scripts/validate-deployment-env.mjs && npm run build",
   "outputDirectory": ".next",
   "framework": "nextjs"
 }
