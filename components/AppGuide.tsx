@@ -26,6 +26,7 @@ const GUIDE_SECTIONS = [
   { icon: '🏆', title: 'Standings', body: 'The leaderboard recalculates from the selected season’s game records. Points preserve raw scores, while Skill estimates playing strength with experience and uncertainty built in.' },
   { icon: '📈', title: 'Analytics', body: 'Analytics shows score and Skill movement over time. Its Metric Definitions link explains every number in plain language.' },
   { icon: '🗂️', title: 'Game logs', body: 'Game logs are the record-level source of truth, with newest games first. Filter by session players, all data, or one player. Managers can select a record to correct or delete it; standings and analytics then recalculate.' },
+  { icon: '🕸️', title: 'Player Network', body: 'Network shows who shared a table and how often. Filter by season and date range, focus on one player (ego), and switch between the graph and a sortable table. With a player selected, node color shows net points exchanged with that player.' },
   { icon: '🔐', title: 'Club settings and managers', body: 'Settings contains season controls, join requests, manager access, navigation, and—where permitted—club deletion. Manager-only actions stay hidden or disabled for regular members.' }
 ] as const
 
@@ -46,7 +47,7 @@ const TOUR_STEPS: TourStep[] = [
   { selector: '[data-tour="clubs-list"]', title: 'Your clubs', body: 'Each card opens a real club and shows your linked player summary. The universal club is available to first-time users too.', action: 'next' },
   { selector: '[data-tour="club-actions"]', title: 'Create or join', body: 'Create a club for a new group, or join an existing one with its club ID. The tour will not submit either form.', action: 'next' },
   { selector: '[data-tour="open-club"]', title: 'Open a real club', body: 'Choose a club you already belong to. Ming will stay with you while the actual club workspace loads.', action: 'click', instruction: 'Click the highlighted Open club or Open roster button.' },
-  { selector: '[data-tour="club-header"]', title: 'The club workspace', body: 'This header identifies the current club and keeps its season, roster, analytics, game logs, share ID, and manager settings together.', action: 'next' },
+  { selector: '[data-tour="club-header"]', title: 'The club workspace', body: 'This header identifies the current club and keeps its season, roster, analytics, game logs, player network, share ID, and manager settings together.', action: 'next' },
   { selector: '[data-tour="season-selector"]', title: 'Seasons are chapters', body: 'Switch seasons to review a different chapter of standings and history. Starting a new season is a manager action in Settings; the tour will not change it.', action: 'next' },
   { selector: '[data-tour="session-manager"]', title: 'Run the live session here', body: 'Choose attendees and tables, seat players from the sideline, then record a winner or draw. Four players make a table ready. Ming will not start a session or record a game.', action: 'next' },
   { selector: '[data-tour="roster-open"], [data-tour="roster-tab"]', clickTarget: 'roster-open', intermediateTarget: 'roster-tab', title: 'Open the real roster', body: 'The roster manages tracked players, account links, emojis, names, and manager access. On mobile, open the Roster tab first, then use Manage players.', action: 'responsive', instruction: 'On mobile, tap Roster and then Manage players. On desktop, click Roster.' },
@@ -58,7 +59,10 @@ const TOUR_STEPS: TourStep[] = [
   { selector: '[data-tour="analytics-close"]', title: 'Return to the workspace', body: 'Close analytics when you are finished reviewing trends.', action: 'click', instruction: 'Click Close.' },
   { selector: '[data-tour="logs-open"]', title: 'Open the real game logs', body: 'Game logs provide the detailed history behind standings and analytics.', action: 'click', instruction: 'Click Game logs.' },
   { selector: '[data-tour="logs-modal"]', title: 'Review the source of truth', body: 'Games appear newest first. Filter the list, switch card or table view on desktop, and load older records when needed. Manager edits and deletes recalculate derived statistics.', action: 'next' },
-  { selector: '[data-tour="logs-close"]', title: 'Return to the workspace', body: 'Close the game logs to finish with club administration.', action: 'click', instruction: 'Click Close.' },
+  { selector: '[data-tour="logs-close"]', title: 'Return to the workspace', body: 'Close the game logs to continue exploring club tools.', action: 'click', instruction: 'Click Close.' },
+  { selector: '[data-tour="network-open"]', title: 'Open the player network', body: 'Network shows who played with whom and how points flowed between players.', action: 'click', instruction: 'Click Network.' },
+  { selector: '[data-tour="network-modal"]', title: 'Who plays with whom', body: 'Edges connect players who shared a table; thickness is shared games. Filter by season and date, pick an ego player for net points coloring, and switch to the sortable table when you want exact values. Ming will not change any filters for you.', action: 'next' },
+  { selector: '[data-tour="network-close"]', title: 'Return to the workspace', body: 'Close the network to finish with club administration.', action: 'click', instruction: 'Click Close.' },
   { selector: '[data-tour="settings-open"]', title: 'Open real club settings', body: 'The gear contains manager and season controls plus a route back to your dashboard.', action: 'click', instruction: 'Click the highlighted gear.' },
   { selector: '[data-tour="settings-modal"]', title: 'You know the core workflow', body: 'Settings is where managers start seasons and perform sensitive club actions. Ming never clicks those actions, and this tour has made no data writes.', action: 'finish', instruction: 'Finish returns you safely to your dashboard.' }
 ]
@@ -154,7 +158,8 @@ export default function AppGuide() {
     if (stepIndex === 11) clickTourElement('roster-open')
     if (stepIndex === 13) clickTourElement('analytics-close')
     if (stepIndex === 16) clickTourElement('logs-close')
-    if (stepIndex === 19) clickTourElement('settings-close')
+    if (stepIndex === 19) clickTourElement('network-close')
+    if (stepIndex === 22) clickTourElement('settings-close')
 
     setStepIndex((current) => Math.max(0, current - 1))
   }, [clickTourElement, router, stepIndex])

@@ -12,6 +12,7 @@ A responsive web application for organizing Mahjong clubs, running live sessions
 - Review and correct individual game records with session-player filtering and responsive card/table layouts
 - Track standings, win rates, cumulative scores, and experience-aware Skill ratings
 - Explore player and club analytics
+- Explore a player co-play network (who plays with whom, shared games, and net point flow)
 - Import and export game data as CSV
 - Use light and dark themes across desktop and mobile layouts
 - Manage memberships and manager permissions

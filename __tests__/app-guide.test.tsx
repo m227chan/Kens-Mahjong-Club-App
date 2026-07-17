@@ -60,7 +60,7 @@ describe('AppGuide', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open app guide' }))
     fireEvent.click(screen.getByRole('button', { name: /Take a Tour/ }))
 
-    expect(TOUR_STEP_COUNT).toBe(20)
+    expect(TOUR_STEP_COUNT).toBe(23)
     expect(screen.getByText('Your personal dashboard')).toBeInTheDocument()
     await waitFor(() => expect(document.querySelector('.real-tour-spotlight')).toBeInTheDocument())
     expect(screen.getByText('Real dashboard')).toBeInTheDocument()

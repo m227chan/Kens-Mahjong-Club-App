@@ -33,7 +33,8 @@
     "qrcode": "^1.5.4",
     "react": "^18",
     "react-dom": "^18",
-    "recharts": "^2.12.0"
+    "recharts": "^2.12.0",
+    "vis-network": "^10.1.0"
   },
   "overrides": {
     "postcss": "8.5.19",
