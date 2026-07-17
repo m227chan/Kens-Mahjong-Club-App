@@ -3,6 +3,10 @@ const nextConfig = {
   distDir: process.env.NODE_ENV === 'development' ? '.next-dev' : '.next',
   trailingSlash: true,
   images: { unoptimized: true },
+  // Next externalizes firebase-admin by default. Admin SDK 14 depends on the
+  // CommonJS jwks-rsa package, which in turn loads ESM-only jose 6. Bundling
+  // the Admin SDK lets Next bridge that CJS/ESM boundary in server functions.
+  transpilePackages: ['firebase-admin'],
   async headers() {
     return [
       {
