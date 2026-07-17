@@ -37,23 +37,24 @@ flowchart LR
 
 ### Runtime responsibilities
 
-| Layer | Primary files | Responsibility |
-| --- | --- | --- |
-| App shell and routes | `app/layout.tsx`, `app/page.tsx`, `app/login/page.tsx`, `app/club/[clubId]/page.tsx` | Route protection, global providers, page composition, metadata, and navigation |
-| Feature UI | `components/*.tsx` | Club workspace, roster, session management, leaderboard, analytics, game logs, sound, and theme controls |
-| Client context | `contexts/AuthContext.tsx`, `contexts/SoundContext.tsx` | Authentication lifecycle and application-wide sound state |
-| Public data boundary | `lib/data.ts` | Stable application-facing exports for data operations |
-| Supabase browser adapter | `lib/supabase-data.ts`, `lib/supabase.ts` | RLS-protected reads, Realtime subscriptions, cache management, and API calls |
-| Auth clients | `lib/firebase.ts`, `lib/firebase-admin.ts` | Browser Firebase Auth and server-side Firebase token verification |
-| Server database access | `lib/postgres-admin.ts` | Server-only PostgreSQL pool and transaction helper |
-| Privileged API | `app/api/supabase-data/route.ts` | Authenticated club, roster, season, session-support, and game actions |
-| Game/stat engine | `lib/server/supabase-game-management.ts` | Game validation, transaction locking, history changes, Skill events, legacy ELO, and full aggregate rebuilds |
-| Membership automation | `lib/server/supabase-club-management.ts`, `app/api/ensure-universal-membership/route.ts` | Default/global membership enrollment and pending manager-grant application |
-| Notifications | `app/api/send-join-request-email/route.ts` | Authenticated, escaped join-request email notifications |
-| Domain algorithms | `lib/scoring.ts`, `lib/skill-rating.ts`, `lib/stats-engine.ts`, `lib/players.ts`, `lib/session-layout.ts` | Score calculation, experience-aware multiplayer Skill, legacy ELO, ranking, titles, and session normalization |
-| Database definition | `supabase/migrations/*.sql` | Schema, constraints, indexes, views, RLS policies, Realtime publication, and historical baselines |
-| Operations | `scripts/*.mjs` | Ordered schema migrations and Firebase custom-claim setup |
-| Verification | `__tests__/*.test.ts` | Unit coverage for players, scoring, ELO/stat behavior, and session layout |
+| Layer                    | Primary files                                                                                             | Responsibility                                                                                                |
+| ------------------------ | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| App shell and routes     | `app/layout.tsx`, `app/page.tsx`, `app/login/page.tsx`, `app/club/[clubId]/page.tsx`                      | Route protection, global providers, page composition, metadata, and navigation                                |
+| Feature UI               | `components/*.tsx`                                                                                        | Club workspace, roster, session management, leaderboard, analytics, game logs, sound, and theme controls      |
+| Client context           | `contexts/AuthContext.tsx`, `contexts/SoundContext.tsx`                                                   | Authentication lifecycle and application-wide sound state                                                     |
+| Public data boundary     | `lib/data.ts`                                                                                             | Stable application-facing exports for data operations                                                         |
+| Supabase browser adapter | `lib/supabase-data.ts`, `lib/supabase.ts`                                                                 | RLS-protected reads, Realtime subscriptions, cache management, and API calls                                  |
+| Auth clients             | `lib/firebase.ts`, `lib/firebase-admin.ts`                                                                | Browser Firebase Auth and server-side Firebase token verification                                             |
+| Server database access   | `lib/postgres-admin.ts`                                                                                   | Server-only PostgreSQL pool and transaction helper                                                            |
+| Privileged API           | `app/api/supabase-data/route.ts`, `app/api/table-checkin/route.ts`, `app/api/table-qr/route.ts`            | Authenticated club, roster, season, game, QR, and transactional table actions                                 |
+| API safety boundary      | `lib/server/api.ts`                                                                                       | Strict bearer parsing, bounded JSON bodies, safe status mapping, and internal-error redaction                 |
+| Game/stat engine         | `lib/server/supabase-game-management.ts`                                                                  | Game validation, transaction locking, history changes, Skill events, legacy ELO, and full aggregate rebuilds  |
+| Membership automation    | `lib/server/supabase-club-management.ts`, `app/api/ensure-universal-membership/route.ts`                  | Default/global membership enrollment and pending manager-grant application                                    |
+| Notifications            | `app/api/send-join-request-email/route.ts`                                                                | Authenticated, escaped join-request email notifications                                                       |
+| Domain algorithms        | `lib/scoring.ts`, `lib/skill-rating.ts`, `lib/stats-engine.ts`, `lib/players.ts`, `lib/session-layout.ts` | Score calculation, experience-aware multiplayer Skill, legacy ELO, ranking, titles, and session normalization |
+| Database definition      | `supabase/migrations/*.sql`                                                                               | Schema, constraints, indexes, views, RLS policies, Realtime publication, and historical baselines             |
+| Operations               | `scripts/*.mjs`                                                                                           | Ordered schema migrations and Firebase custom-claim setup                                                     |
+| Verification             | `__tests__/*.test.ts`                                                                                     | Unit coverage for players, scoring, ELO/stat behavior, and session layout                                     |
 
 ## 3. Technology stack
 
@@ -79,6 +80,9 @@ app/
     ensure-universal-membership/   Authenticated default-membership enrollment
     send-join-request-email/       Optional manager notification
     supabase-data/                 Privileged mutation dispatcher
+    table-checkin/                 Transactional table and QR enrollment actions
+    table-qr/                      Signed QR generation, rotation, and settings
+  check-in/[publicId]/             Mobile QR onboarding and check-in
   club/[clubId]/                   Authenticated club workspace route
   login/                           Signed-out welcome and Google sign-in route
   globals.css                      Theme tokens, responsive rules, component styling
@@ -109,7 +113,7 @@ lib/
   session-layout.ts                New/legacy session layout normalization
   timestamp.ts                     Backend-neutral Timestamp compatibility object
   types.ts                         Shared domain interfaces
-  server/                          Privileged club and game services
+  server/                          Privileged club, game, API-safety, and table services
 scripts/                            Operational scripts; never imported by browser code
 supabase/migrations/                Ordered, immutable database migrations
 __tests__/                          Unit tests for deterministic domain logic
@@ -191,7 +195,7 @@ UI components should import data operations from `@/lib/data`, not directly from
 - roster and player-account linking;
 - seasons and configuration;
 - games, history pages, analytics data, and statistics;
-- live sessions and saved table arrangements;
+- live sessions and transactional table check-in;
 - game mutation and aggregate rebuild actions.
 
 This boundary makes backend behavior easier to audit and discourages database calls from spreading through components.
@@ -225,7 +229,7 @@ Actions include:
 - create, deactivate, link, unlink, and update players;
 - create and select seasons;
 - create, update, delete, import, or rebuild games and statistics;
-- save table arrangements and initialize club configuration.
+- mutate table seating and initialize club configuration.
 
 Large or related write sets belong in the server transaction path, even if a similar direct browser write appears technically possible.
 
@@ -233,27 +237,29 @@ Large or related write sets belong in the server transaction path, even if a sim
 
 The authoritative schema is the ordered SQL in `supabase/migrations`. The following is a conceptual map, not a substitute for reading the migrations before changing a table.
 
-| Relation | Purpose and important fields |
-| --- | --- |
-| `clubs` | Club identity, manager metadata, active season, active/deleted state, global/default flag, and rebuild metadata |
-| `user_profiles` | Firebase UID, display metadata, and persisted sound preference |
-| `club_members` | Club-to-Firebase-user membership, role, active state, and join metadata |
-| `join_requests` | Pending/approved/declined membership requests and resolution audit fields |
-| `players` | Club-scoped tracked player, display name, emoji, optional Firebase UID link, and soft-active state |
-| `seasons` | Club-scoped numbered seasons and active state |
-| `app_configs` | Club-scoped ELO tuning and legacy title-band configuration |
-| `games` | Game metadata: time, season, table, result type, winner/loser, fan, notes, creator, and historical flag |
-| `game_entries` | One score per game/player; cascade-deleted with the game |
-| `player_stats` | Rebuilt all-time aggregates and ranks |
-| `season_player_stats` | Rebuilt aggregates and ranks scoped to a season |
-| `elo_events` | Legacy per-game/per-player ELO history retained for compatibility |
-| `skill_events` | Per-game/per-player experience-aware Skill rating history |
-| `sessions` | One active session per club, participants, table count, table JSON, sideline, and close time |
-| `table_arrangements` | Timestamped table/sideline snapshots |
-| `pending_manager_grants` | Email-normalized manager grants applied when a matching account exists or signs in |
-| `stat_baselines` | Aggregate starting points for migrated historical data |
-| `games_with_entries` | RLS-aware view joining game metadata and score entries |
-| `user_clubs` | RLS-aware view joining memberships to basic club metadata |
+| Relation                 | Purpose and important fields                                                                                    |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `clubs`                  | Club identity, manager metadata, active season, active/deleted state, global/default flag, and rebuild metadata |
+| `user_profiles`          | Firebase UID, display metadata, and persisted sound preference                                                  |
+| `club_members`           | Club-to-Firebase-user membership, role, active state, and join metadata                                         |
+| `join_requests`          | Pending/approved/declined membership requests and resolution audit fields                                       |
+| `players`                | Club-scoped tracked player, display name, emoji, optional Firebase UID link, and soft-active state              |
+| `seasons`                | Club-scoped numbered seasons and active state                                                                   |
+| `app_configs`            | Club-scoped ELO tuning and legacy title-band configuration                                                      |
+| `games`                  | Game metadata: time, season, table, result type, winner/loser, fan, notes, creator, and historical flag         |
+| `game_entries`           | One score per game/player; cascade-deleted with the game                                                        |
+| `player_stats`           | Rebuilt all-time aggregates and ranks                                                                           |
+| `season_player_stats`    | Rebuilt aggregates and ranks scoped to a season                                                                 |
+| `elo_events`             | Legacy per-game/per-player ELO history retained for compatibility                                               |
+| `skill_events`           | Per-game/per-player experience-aware Skill rating history                                                       |
+| `sessions`               | One active session per club, participants, table count, table JSON, sideline, and close time                    |
+| `table_arrangements`     | Legacy seating snapshots retained for schema/data compatibility                                                  |
+| `club_qr_tables`         | Permanent table QR identity, token version, label, and enabled state                                             |
+| `session_table_activity` | Per-table occupancy and activity timestamps used by stale-seat cleanup                                           |
+| `pending_manager_grants` | Email-normalized manager grants applied when a matching account exists or signs in                              |
+| `stat_baselines`         | Aggregate starting points for migrated historical data                                                          |
+| `games_with_entries`     | RLS-aware view joining game metadata and score entries                                                          |
+| `user_clubs`             | RLS-aware view joining memberships to basic club metadata                                                       |
 
 ### Key database invariants
 
@@ -273,7 +279,7 @@ RLS is enabled on application tables. Policies broadly allow:
 - users to see their own memberships and members of clubs they belong to;
 - club members to read players, seasons, config, games, entries, statistics, ELO events, sessions, arrangements, and baselines for their clubs;
 - managers to manage seasons/config and review protected manager data;
-- members to write collaborative session and table-arrangement state;
+- members to write collaborative session state, with table seating routed through server transactions;
 - authenticated users to create a join request for themselves.
 
 Privileged server SQL still performs explicit authorization checks. A direct database connection bypasses browser RLS, so server code must never assume RLS has protected it.
@@ -286,11 +292,9 @@ Shared client-facing types live in `lib/types.ts`:
 - `JoinRequestDoc` describes the membership approval workflow.
 - `PlayerDoc` represents a tracked player independently of an authenticated user.
 - `GameDoc` and `GameEntryDoc` capture a result and its zero-sum scores.
-- `EloEventDoc` records rating calculation details for a player in one game.
 - `PlayerStatsDoc` is the derived all-time or season aggregate.
 - `SessionDoc` describes the active table-management state.
-- `TableArrangementDoc` is a saved seating snapshot.
-- `SeasonDoc` and `AppConfigDoc` provide season and ELO configuration.
+- `SeasonDoc` describes a club season.
 
 ### Backend-neutral timestamps
 
@@ -358,6 +362,15 @@ Shared client-facing types live in `lib/types.ts`:
 - Session dialogs are rendered through a document-body portal, centered in the viewport regardless of page scroll, and use a full-viewport opaque fade. General help lives in the global header so the session card stays focused on live play.
 - Session state is persisted collaboratively through Supabase and restored on another device.
 - Legacy malformed table keys are normalized safely; participants are recovered to the sideline rather than lost.
+
+### QR table check-in
+
+- Managers print permanent, signed QR codes for physical tables without a paid QR service.
+- Scans preserve the destination through Google sign-in and resolve membership and player linkage server-side.
+- Repeat scans exchange the signed code and seat the linked player in one request.
+- QR seating and the normal Session Manager share one row-locked PostgreSQL mutation service, preventing concurrent phones from overwriting the session layout.
+- A manager setting controls whether a valid code automatically grants regular membership or creates a pending request.
+- Codes can be rotated without changing the physical table number. See `docs/QR_TABLE_CHECKIN_SPEC.md` for the current operational reference.
 
 ### Scoring and game recording
 
@@ -585,27 +598,32 @@ Verifies the Firebase token, ensures the default/global membership and profile s
 
 Verifies the requester, confirms the pending request from PostgreSQL, escapes user-controlled HTML, builds a review URL from configured application origin, and sends an optional manager notification. Missing email configuration returns a service-unavailable response without blocking the database join request itself.
 
+### `POST /api/table-checkin` and `POST /api/table-qr`
+
+These routes verify Firebase bearer tokens and use bounded JSON bodies. Table check-in performs QR exchange, enrollment, player linking, seating, removal, and clearing through a transactional service. QR generation requires active membership; rotation and enrollment settings require a manager. Signatures are HMAC-SHA256 values derived only from the server-side QR signing secret.
+
 ## 15. Environment configuration
 
 Copy `.env.example` to `.env.local` for local development. The repository must contain names and documentation only—never real values.
 
-| Variable | Exposure | Purpose |
-| --- | --- | --- |
-| `NEXT_PUBLIC_FIREBASE_API_KEY` | Browser-visible | Firebase web application configuration |
-| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Browser-visible | Firebase Auth domain |
-| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Browser-visible | Firebase project identifier |
-| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | Browser-visible | Firebase web configuration compatibility |
-| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Browser-visible | Firebase web application configuration |
-| `NEXT_PUBLIC_FIREBASE_APP_ID` | Browser-visible | Firebase web application identifier |
-| `NEXT_PUBLIC_APP_URL` | Browser-visible | Canonical deployed origin for links and email fallbacks |
-| `FIREBASE_SERVICE_ACCOUNT_JSON` | **Server-only secret** | Firebase Admin token verification and user/claim administration |
-| `NEXT_PUBLIC_SUPABASE_URL` | Browser-visible | Supabase project API URL; must be a complete HTTP(S) URL |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Browser-visible | Publishable key used with RLS and Firebase JWT access token |
-| `APP_DATABASE_URL` | **Server-only secret** | Preferred DML-only PostgreSQL connection for API transactions |
-| `MIGRATION_DATABASE_URL` | **Owner-only secret** | Schema migrations and encrypted backups; never exposed to app runtimes or previews |
-| `SUPABASE_DATABASE_URL` | **Deprecated server-only secret** | Compatibility fallback during migration to split database credentials |
-| `RESEND_API_KEY` | **Server-only secret** | Optional join-request email provider credential |
-| `EMAIL_FROM` | Server-only configuration | Verified sender address for notifications |
+| Variable                                   | Exposure                          | Purpose                                                                            |
+| ------------------------------------------ | --------------------------------- | ---------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_FIREBASE_API_KEY`             | Browser-visible                   | Firebase web application configuration                                             |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`         | Browser-visible                   | Firebase Auth domain                                                               |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID`          | Browser-visible                   | Firebase project identifier                                                        |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`      | Browser-visible                   | Firebase web configuration compatibility                                           |
+| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Browser-visible                   | Firebase web application configuration                                             |
+| `NEXT_PUBLIC_FIREBASE_APP_ID`              | Browser-visible                   | Firebase web application identifier                                                |
+| `NEXT_PUBLIC_APP_URL`                      | Browser-visible                   | Canonical deployed origin for links and email fallbacks                            |
+| `FIREBASE_SERVICE_ACCOUNT_JSON`            | **Server-only secret**            | Firebase Admin token verification and user/claim administration                    |
+| `NEXT_PUBLIC_SUPABASE_URL`                 | Browser-visible                   | Supabase project API URL; must be a complete HTTP(S) URL                           |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`     | Browser-visible                   | Publishable key used with RLS and Firebase JWT access token                        |
+| `APP_DATABASE_URL`                         | **Server-only secret**            | Preferred DML-only PostgreSQL connection for API transactions                      |
+| `MIGRATION_DATABASE_URL`                   | **Owner-only secret**             | Schema migrations and encrypted backups; never exposed to app runtimes or previews |
+| `SUPABASE_DATABASE_URL`                    | **Deprecated server-only secret** | Compatibility fallback during migration to split database credentials              |
+| `RESEND_API_KEY`                           | **Server-only secret**            | Optional join-request email provider credential                                    |
+| `EMAIL_FROM`                               | Server-only configuration         | Verified sender address for notifications                                          |
+| `QR_SIGNING_SECRET`                        | **Server-only secret**            | Stable HMAC secret for table QR codes; minimum 32 characters                        |
 
 `NEXT_PUBLIC_*` values are included in the client bundle and must never contain administrative secrets. The database URL and Firebase service account must exist only in secure local/deployment secret storage.
 
@@ -673,7 +691,7 @@ The code is designed for a Node-capable Next.js host. Before deployment:
 6. Configure the optional email sender only if notifications are desired.
 7. Configure the Vercel deployment secrets and run the GitHub Actions quality gates before production deployment.
 
-`next.config.mjs` uses trailing slashes, unoptimized images, and a `Cross-Origin-Opener-Policy: same-origin-allow-popups` header to support popup authentication. `firebase.json` remains a legacy/static hosting configuration and is not evidence that Firestore is in use.
+`next.config.mjs` uses trailing slashes and unoptimized images. It sends popup-compatible cross-origin policy plus HSTS, anti-framing, MIME-sniffing, referrer, permissions, and restrictive base/frame/object CSP headers. Firebase Hosting and Data Connect starter artifacts were removed because Vercel and Supabase are the production platforms.
 
 ## 19. Testing and quality gates
 
@@ -688,7 +706,10 @@ Before handing off a code change, run checks in proportion to the risk:
 
 ```bash
 npm run lint
+npm run typecheck
 npm test -- --run
+npm run security:scan
+npm run security:audit
 npm run build
 ```
 
@@ -710,6 +731,7 @@ Tests must use fabricated data. Never copy production names, emails, identifiers
 
 - Client components show safe, actionable messages and retain retry paths.
 - API routes catch failures and return sanitized messages. Internal errors may be logged server-side, but credentials, ID tokens, database URLs, service-account JSON, and complete personal records must never be logged.
+- JSON request bodies have explicit byte limits, and PostgreSQL/internal runtime errors are replaced with generic client messages.
 - Realtime subscription errors should invoke an error callback where the screen has a recoverable error state.
 - Failed game transactions roll back all writes; the UI must not optimistically claim success before the response.
 - Email failure is independent of the persisted join request.
@@ -720,7 +742,7 @@ For production diagnostics, prefer counts, action names, durations, anonymous co
 ## 21. Security and privacy checklist
 
 - Never commit `.env.local` or paste its contents into documentation, issues, tests, prompts, or screenshots.
-- Never expose `FIREBASE_SERVICE_ACCOUNT_JSON`, `SUPABASE_DATABASE_URL`, or email API credentials to the browser.
+- Never expose `FIREBASE_SERVICE_ACCOUNT_JSON`, database URLs, `QR_SIGNING_SECRET`, or email API credentials to the browser.
 - Treat Firebase web configuration and Supabase publishable configuration as public identifiers protected by Auth/RLS—not as authorization secrets.
 - Verify Firebase tokens on every privileged endpoint.
 - Derive caller UID from the verified token.
@@ -770,13 +792,13 @@ For production diagnostics, prefer counts, action names, durations, anonymous co
 
 ## 23. Known constraints and intentional tradeoffs
 
-- Full statistics rebuilds are simpler and more repairable than incremental correction, but cost grows with non-baseline history. The advisory lock serializes rebuilds per club.
+- New games update statistics incrementally; edits, deletes, imports, and explicit repairs use a full rebuild. The advisory lock serializes history mutations per club.
 - The history cache is in-memory and not shared across tabs or server instances.
 - Realtime helpers often re-query a filtered dataset after a change instead of applying database change payloads locally; this favors correctness and simple mapping.
 - Some club/session operations are intentionally collaborative for all members, while roster, season, game-history correction, and destructive actions are manager-controlled.
 - The default/global membership workflow contains deployment-specific operational configuration in server code. Treat it as sensitive migration/configuration debt and do not duplicate its constants into public material.
 - A legacy historical-stat compatibility rule exists for one migrated season. It must remain isolated and should eventually move to data-driven configuration if more migrations require similar behavior.
-- `firebase.json` is retained for compatibility, but the runtime database is Supabase/PostgreSQL.
+- Firebase Functions, Data Connect, and Hosting starter artifacts are intentionally absent; Vercel runs the app and Supabase/PostgreSQL is the only application database.
 
 ## 24. Safe extension patterns
 

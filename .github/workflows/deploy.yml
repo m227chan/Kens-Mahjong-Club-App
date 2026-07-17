@@ -32,7 +32,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run security:scan
+      - run: npm run security:audit
       - run: npm run lint
+      - run: npm run typecheck
       - run: npm test -- --run
       - run: npm run build
 

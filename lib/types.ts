@@ -49,7 +49,7 @@ export interface PlayerDoc {
   active: boolean
 }
 
-export interface GameEntryDoc {
+interface GameEntryDoc {
   playerId: string
   score: number
 }
@@ -66,26 +66,6 @@ export interface GameDoc {
   loserPlayerId: string | null
   fan: number | null
   notes: string | null
-}
-
-export interface EloEventDoc {
-  id: string
-  gameId: string
-  playerId: string
-  datetime: Timestamp
-  seasonNumber?: number
-  ratingBefore: number
-  ratingAfter: number
-  delta: number
-  kFactor: number
-  marginMultiplier: number
-  opponents: Array<{
-    playerId: string
-    marginMultiplier: number
-    expectedScore: number
-    actualScore: number
-    pairDelta: number
-  }>
 }
 
 export interface SkillEventDoc {
@@ -133,13 +113,6 @@ export interface PlayerStatsDoc {
   updatedAt: Timestamp
 }
 
-export interface TableArrangementDoc {
-  id: string
-  createdAt: Timestamp
-  tables: Record<string, string[]>
-  sideline: string[]
-}
-
 export interface SessionDoc {
   id: string
   createdAt: Timestamp
@@ -151,22 +124,6 @@ export interface SessionDoc {
   tables: Record<string, string[]>
   sideline: string[]
   closedAt?: Timestamp | null
-}
-
-export interface TitleBandDoc {
-  minPoints: number
-  maxPoints: number
-  title: string
-}
-
-export interface AppConfigDoc {
-  titleBands: TitleBandDoc[]
-  eloBaseK: number
-  eloVeteranGamesThreshold: number
-  eloStartingRating: number
-  eloNewPlayerK?: number
-  eloIntermediateK?: number
-  eloNewPlayerGamesThreshold?: number
 }
 
 export interface SeasonDoc {

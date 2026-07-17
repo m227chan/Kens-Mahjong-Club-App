@@ -6,7 +6,7 @@ This app uses free-tier GitHub Actions, Vercel Hobby, Firebase Authentication, a
 
 | File                                     | Trigger                      | Purpose                                                                         |
 | ---------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------- |
-| `.github/workflows/deploy.yml`           | Pull request, `main`, manual | Secret scan, lint, tests, build, then gated remote Vercel production deployment |
+| `.github/workflows/deploy.yml`           | Pull request, `main`, manual | Secret/dependency scans, lint, typecheck, tests, build, then gated remote deployment |
 | `.github/workflows/database-backup.yml`  | Daily at 06:17 UTC, manual   | Validated, encrypted `public` schema backup retained for 14 days                |
 | `.github/workflows/database-migrate.yml` | Manual                       | Encrypted pre-migration backup, then ordered migrations                         |
 | `.github/dependabot.yml`                 | Weekly                       | npm and GitHub Actions update pull requests                                     |
@@ -48,7 +48,7 @@ Dependabot automatically groups patch and minor npm updates. Major npm upgrades 
 
 ## Vercel configuration
 
-The production Vercel project needs the application variables from `.env.example`. Configure `APP_DATABASE_URL`, not `MIGRATION_DATABASE_URL`, in Vercel Production. The owner-level migration credential must exist only in the GitHub production environment and trusted local administration environments. Production is built remotely in Vercel so variables marked Sensitive remain unreadable to GitHub Actions and are decrypted only during the Vercel build.
+The production Vercel project needs the application variables from `.env.example`. Configure `APP_DATABASE_URL`, not `MIGRATION_DATABASE_URL`, in Vercel Production. `QR_SIGNING_SECRET` must be a stable random value of at least 32 characters and must never use a `NEXT_PUBLIC_` prefix. The owner-level migration credential must exist only in the GitHub production environment and trusted local administration environments. Production is built remotely in Vercel so variables marked Sensitive remain unreadable to GitHub Actions and are decrypted only during the Vercel build.
 
 After adding `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID`, manually run `CI and production deploy`. Verify the smoke test and production URL before disabling Vercel's automatic production deployment. Keep Git preview deployments enabled if their environment is isolated from production data.
 

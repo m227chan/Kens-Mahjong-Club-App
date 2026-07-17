@@ -1,8 +1,0 @@
-{
-  "projects": {
-    "default": "your-firebase-project-id",
-    "ken-mahjong": "ken-mahjong"
-  },
-  "targets": {},
-  "etags": {}
-}

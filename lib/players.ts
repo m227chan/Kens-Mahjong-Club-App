@@ -43,7 +43,7 @@ export const RANK_TITLES = [
 
 const RANK_TITLE_PROPORTIONS = [0.04, 0.07, 0.12, 0.17, 0.20, 0.17, 0.12, 0.07, 0.04] as const
 
-export type RankTitle = (typeof RANK_TITLES)[number]
+type RankTitle = (typeof RANK_TITLES)[number]
 
 export function rankTitleBandSizes(totalPlayers: number) {
   const playerCount = Math.max(0, Math.floor(totalPlayers))

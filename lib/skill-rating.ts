@@ -4,9 +4,9 @@ export const SKILL_PROVISIONAL_GAMES = 20
 const SKILL_SCALE = 20
 const SKILL_START = 1500
 
-export type SkillState = { mu: number; sigma: number; gamesPlayed: number }
-export type SkillEntry = SkillState & { playerId: string; score: number }
-export type SkillResult = SkillState & { playerId: string; ratingBefore: number; ratingAfter: number; delta: number }
+type SkillState = { mu: number; sigma: number; gamesPlayed: number }
+type SkillEntry = SkillState & { playerId: string; score: number }
+type SkillResult = SkillState & { playerId: string; ratingBefore: number; ratingAfter: number; delta: number }
 
 export function initialSkillState(): SkillState {
   const value = rating()

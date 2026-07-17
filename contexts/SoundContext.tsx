@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { useAuth } from '@/contexts/AuthContext'
 import { getSoundPreference, setSoundPreference } from '@/lib/supabase-data'
 
-export type SoundCue = 'win' | 'loss' | 'draw' | 'achievement' | 'tile' | 'confirmation' | 'rank-up' | 'rank-down' | 'error'
+type SoundCue = 'win' | 'loss' | 'draw' | 'achievement' | 'tile' | 'confirmation' | 'rank-up' | 'rank-down' | 'error'
 
 type SoundContextValue = {
   enabled: boolean

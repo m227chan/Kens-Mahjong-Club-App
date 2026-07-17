@@ -45,7 +45,7 @@ describe.skipIf(!connectionString)('incremental game save database transaction',
         (select count(*)::int from skill_events where game_id=$2) skill_events`, [row.club_id, inserted.gameId])
 
       expect(retried).toEqual({ gameId: inserted.gameId, created: false })
-      expect(statements).toBe(11)
+      expect(statements).toBeLessThanOrEqual(9)
       expect(after.rows[0]).toMatchObject({ games: before.rows[0].games + 1, entries: 4, elo_events: 4, skill_events: 4 })
 
       const comparableStats = async () => (await client.query(`select 'all' scope,player_id,total_points,games_played,games_won,games_lost,win_loss_ratio,best_single_game,worst_single_game,elo_rating,elo_peak,elo_games_played,last5_elo_delta,recent_elo_deltas,skill_mu,skill_sigma,skill_rating,skill_peak,skill_games_played,last5_skill_delta,recent_skill_deltas,days_attended,last_played_at

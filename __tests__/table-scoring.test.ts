@@ -34,7 +34,7 @@ describe('table QR signatures', () => {
   const identity = { clubId: 'club-example', tableNumber: 3, tokenVersion: 1, publicId: 'public-example' }
 
   beforeEach(() => {
-    process.env.QR_SIGNING_SECRET = 'test-only-secret'
+    process.env.QR_SIGNING_SECRET = 'test-only-secret-at-least-32-bytes'
     process.env.NEXT_PUBLIC_APP_URL = 'https://mahjong.example/'
   })
 
