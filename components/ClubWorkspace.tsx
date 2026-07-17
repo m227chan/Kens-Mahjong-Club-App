@@ -420,11 +420,12 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             data-tour="settings-open"
             type="button"
             onClick={() => setSettingsOpen(true)}
-            aria-label="Settings"
-            title="Settings"
-            className="club-secondary-action club-settings-action flex h-10 w-10 items-center justify-center rounded-lg text-lg font-bold transition"
+            aria-label="Club settings"
+            title="Club settings"
+            className="club-secondary-action club-settings-action flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-bold transition"
           >
-            ⚙️
+            <span aria-hidden="true" className="text-base">&#9881;</span>
+            <span>Club settings</span>
           </button>
         </div>
       </div>
@@ -435,7 +436,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             <div className="border-b border-slate-200 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Settings</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Club settings</p>
                   <h3 className="mt-2 text-xl font-black text-slate-950">{club?.name ?? membership.clubName}</h3>
                   <p className="mt-1 text-sm text-slate-500">Manage navigation and season controls for this club.</p>
                 </div>

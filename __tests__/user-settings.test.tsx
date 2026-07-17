@@ -50,9 +50,12 @@ describe('user settings', () => {
 
   it('consolidates preferences and requires a valid manager handoff plus exact name', async () => {
     render(<UserSettings />)
-    fireEvent.click(screen.getByRole('button', { name: 'Open user settings' }))
+    const settingsButton = screen.getByRole('button', { name: 'Account and app settings' })
+    expect(settingsButton.textContent).toBe('MC')
+    fireEvent.click(settingsButton)
 
-    expect(screen.getByRole('dialog').className).toContain('md:absolute')
+    expect(screen.getByRole('dialog').className).toContain('absolute')
+    expect(screen.getByRole('heading', { name: 'Account & app settings' })).toBeTruthy()
     expect(screen.getByText('Preferences')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Sound effects/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Light \/ dark mode/ })).toBeTruthy()
@@ -60,7 +63,7 @@ describe('user settings', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete my account' }))
     await screen.findByText('Sunday Mahjong')
-    expect(screen.getByRole('dialog').className).toContain('md:absolute')
+    expect(screen.getByRole('dialog').className).toContain('absolute')
 
     const finalButton = screen.getByRole('button', { name: 'Permanently delete account' }) as HTMLButtonElement
     expect(finalButton.disabled).toBe(true)

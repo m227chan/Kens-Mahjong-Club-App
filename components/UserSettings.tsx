@@ -29,6 +29,17 @@ export default function UserSettings() {
   const [error, setError] = useState<string | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
   const settingsRootRef = useRef<HTMLDivElement | null>(null)
+  const accountInitials = useMemo(() => {
+    const displayName = user?.displayName?.trim()
+    if (displayName) {
+      const parts = displayName.split(/\s+/).filter(Boolean)
+      return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts.at(-1)?.[0] ?? '' : '')).toUpperCase()
+    }
+    const emailName = user?.email?.split('@')[0] ?? ''
+    const parts = emailName.split(/[._\-\s]+/).filter(Boolean)
+    const initials = ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts.at(-1)?.[0] ?? '' : '')).toUpperCase()
+    return initials || 'U'
+  }, [user?.displayName, user?.email])
 
   useEffect(() => {
     const stored = window.localStorage.getItem('theme')
@@ -133,20 +144,20 @@ export default function UserSettings() {
       <button
         type="button"
         onClick={() => { setOpen(true); setDeletingMode(false); setError(null) }}
-        aria-label="Open user settings"
-        title="Settings"
-        className="group flex h-11 w-11 items-center justify-center rounded-full border border-[rgb(var(--line))] bg-[rgb(var(--surface))] text-xl font-black text-[rgb(var(--ink))] shadow-[3px_3px_0_rgb(var(--shadow)/0.08)] hover:border-[rgb(var(--bamboo))]"
+        aria-label="Account and app settings"
+        title="Account & app settings"
+        className="group flex h-11 w-11 items-center justify-center rounded-full border border-[rgb(var(--bamboo-bright))] bg-[rgb(var(--bamboo))] text-sm font-black tracking-[0.04em] text-white shadow-[3px_3px_0_rgb(var(--shadow)/0.08)] transition hover:bg-[rgb(var(--bamboo-bright))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--gold))] focus-visible:ring-offset-2"
       >
-        <span aria-hidden="true">&#9881;</span>
+        <span aria-hidden="true">{accountInitials}</span>
       </button>
 
       {open ? (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/75 px-4 py-6 md:absolute md:inset-auto md:right-0 md:top-[calc(100%+0.75rem)] md:block md:bg-transparent md:p-0" role="dialog" aria-labelledby="user-settings-title" onMouseDown={(event) => { if (event.target === event.currentTarget) close() }}>
-          <section className={`flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl md:max-h-[calc(100vh-6rem)] ${deletingMode ? 'md:w-[32rem]' : 'md:w-96'}`}>
+        <div className="absolute right-0 top-[calc(100%+0.75rem)] z-[100]" role="dialog" aria-labelledby="user-settings-title">
+          <section className={`flex max-h-[calc(100dvh-6rem)] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl ${deletingMode ? 'w-[min(32rem,calc(100vw-2.5rem))]' : 'w-[min(24rem,calc(100vw-2.5rem))]'}`}>
             <header className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-[rgb(var(--bamboo))]">Account</p>
-                <h2 id="user-settings-title" className="mt-2 text-xl font-black text-slate-950">{deletingMode ? 'Delete your account' : 'Settings'}</h2>
+                <h2 id="user-settings-title" className="mt-2 text-xl font-black text-slate-950">{deletingMode ? 'Delete your account' : 'Account & app settings'}</h2>
               </div>
               <button type="button" onClick={close} disabled={busy} aria-label="Close settings" className="rounded border border-slate-300 px-3 py-2 text-sm font-black text-slate-700 disabled:opacity-40">Close</button>
             </header>

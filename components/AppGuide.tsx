@@ -63,7 +63,7 @@ const TOUR_STEPS: TourStep[] = [
   { selector: '[data-tour="network-open"]', title: 'Open the player network', body: 'Network shows who played with whom and how points flowed between players.', action: 'click', instruction: 'Click Network.' },
   { selector: '[data-tour="network-modal"]', title: 'Who plays with whom', body: 'Edges connect players who shared a table; thickness is shared games. Filter by season and date, pick an ego player for net points coloring, and switch to the sortable table when you want exact values. Ming will not change any filters for you.', action: 'next' },
   { selector: '[data-tour="network-close"]', title: 'Return to the workspace', body: 'Close the network to finish with club administration.', action: 'click', instruction: 'Click Close.' },
-  { selector: '[data-tour="settings-open"]', title: 'Open real club settings', body: 'The gear contains manager and season controls plus a route back to your dashboard.', action: 'click', instruction: 'Click the highlighted gear.' },
+  { selector: '[data-tour="settings-open"]', title: 'Open real club settings', body: 'Club settings contains manager and season controls plus a route back to your dashboard.', action: 'click', instruction: 'Click the highlighted Club settings button.' },
   { selector: '[data-tour="settings-modal"]', title: 'You know the core workflow', body: 'Settings is where managers start seasons and perform sensitive club actions. Ming never clicks those actions, and this tour has made no data writes.', action: 'finish', instruction: 'Finish returns you safely to your dashboard.' }
 ]
 

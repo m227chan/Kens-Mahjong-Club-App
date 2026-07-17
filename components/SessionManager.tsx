@@ -1678,6 +1678,11 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
             type="button"
             onClick={() => setHeaderMenuOpen((current) => !current)}
             id="btnMenu"
+            aria-label="Session actions"
+            title="Session actions"
+            aria-haspopup="menu"
+            aria-expanded={headerMenuOpen}
+            aria-controls="headerMenu"
             style={{ display: page === 'session' ? '' : 'none' }}
           >
             ⋯
@@ -1685,6 +1690,8 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           {headerMenuOpen ? (
             <div
               id="headerMenu"
+              role="menu"
+              aria-label="Session actions"
               style={{
                 display: 'block',
                 position: 'absolute',

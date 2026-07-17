@@ -570,7 +570,7 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
     width:auto!important;
     height:auto!important;
     min-width:0;
-    font-size:1.15rem!important;
+    font-size:.875rem!important;
   }
   .club-settings-action:hover,.club-settings-action:active{background:rgb(var(--action-muted-hover))!important}
   .club-settings-action:focus-visible{outline:2px solid rgb(var(--gold));outline-offset:2px}
