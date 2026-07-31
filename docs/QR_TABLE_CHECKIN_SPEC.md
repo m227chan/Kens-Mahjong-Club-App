@@ -56,4 +56,4 @@ The hot paths intentionally avoid request and query waterfalls:
 5. Keep automatic enrollment off when possession of a printed code should not grant regular membership.
 6. Rotate and reprint a code if its URL is shared outside the intended club.
 
-The full system architecture, authorization model, and production recovery procedures are documented in `DOCUMENTATION.md` and `docs/OPERATIONS.md`.
+The full system architecture, authorization model, and production recovery procedures are documented in [`HANDBOOK.md`](HANDBOOK.md) and [`OPERATIONS.md`](OPERATIONS.md).

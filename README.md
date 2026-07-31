@@ -85,4 +85,6 @@ Keep all server credentials server-only. Variables containing database connectio
 
 Production backup, recovery, GitHub/Vercel setup, branch protection, and least-privilege database instructions are in [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 
-The latest security, performance, cleanliness, documentation, and CI audit is recorded in [`docs/ENGINEERING_AUDIT.md`](docs/ENGINEERING_AUDIT.md).
+The complete architecture, domain model, security design, and development guide are in [`docs/HANDBOOK.md`](docs/HANDBOOK.md).
+
+The latest security, performance, cleanliness, documentation, and CI audit is recorded in [`docs/audits/2026-07-16-engineering-audit.md`](docs/audits/2026-07-16-engineering-audit.md).

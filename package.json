@@ -12,7 +12,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "pretypecheck": "node scripts/require-node-22.mjs",
+    "pretypecheck": "node scripts/require-node-22.mjs && next typegen",
     "typecheck": "tsc --noEmit",
     "security:scan": "node scripts/check-tracked-secrets.mjs",
     "security:audit": "npm audit --omit=dev --audit-level=moderate",

@@ -372,7 +372,7 @@ Shared client-facing types live in `lib/types.ts`:
 - Repeat scans exchange the signed code and seat the linked player in one request.
 - QR seating and the normal Session Manager share one row-locked PostgreSQL mutation service, preventing concurrent phones from overwriting the session layout.
 - A manager setting controls whether a valid code automatically grants regular membership or creates a pending request.
-- Codes can be rotated without changing the physical table number. See `docs/QR_TABLE_CHECKIN_SPEC.md` for the current operational reference.
+- Codes can be rotated without changing the physical table number. See [`QR_TABLE_CHECKIN_SPEC.md`](QR_TABLE_CHECKIN_SPEC.md) for the current operational reference.
 
 ### Scoring and game recording
 
@@ -640,7 +640,7 @@ Copy `.env.example` to `.env.local` for local development. The repository must c
 
 `NEXT_PUBLIC_*` values are included in the client bundle and must never contain administrative secrets. The database URL and Firebase service account must exist only in secure local/deployment secret storage.
 
-The application does not require a Supabase service-role key for its current architecture. See `docs/OPERATIONS.md` for configuring the `app_runtime` PostgreSQL role, encrypted backups, and recovery.
+The application does not require a Supabase service-role key for its current architecture. See [`OPERATIONS.md`](OPERATIONS.md) for configuring the `app_runtime` PostgreSQL role, encrypted backups, and recovery.
 
 ## 16. Local development
 
