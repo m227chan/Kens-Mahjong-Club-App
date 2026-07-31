@@ -7,6 +7,14 @@ const clean = (value) => {
   return wrapped ? trimmed.slice(1, -1).trim() : trimmed
 }
 
+const vercelEnvironment = clean(process.env.VERCEL_ENV)
+if (vercelEnvironment && vercelEnvironment !== 'production') {
+  console.log(
+    `Skipping production environment validation for Vercel ${vercelEnvironment}.`,
+  )
+  process.exit(0)
+}
+
 const required = [
   'NEXT_PUBLIC_FIREBASE_API_KEY',
   'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',

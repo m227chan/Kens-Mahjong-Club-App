@@ -7,7 +7,7 @@ This app uses free-tier GitHub Actions, Vercel Hobby, Firebase Authentication, a
 | File                                     | Trigger                      | Purpose                                                                         |
 | ---------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------- |
 | `.github/workflows/deploy.yml`           | Pull request, `main`, manual | Secret/dependency scans, lint, typecheck, tests, build, then gated remote deployment |
-| `.github/workflows/database-backup.yml`  | Daily at 06:17 UTC, manual   | Validated, encrypted `public` schema backup retained for 14 days                |
+| `.github/workflows/database-backup.yml`  | Manual (schedule paused)     | Validated, encrypted `public` schema backup retained for 14 days                |
 | `.github/workflows/database-migrate.yml` | Manual                       | Encrypted pre-migration backup, then ordered migrations                         |
 | `.github/dependabot.yml`                 | Weekly                       | npm and GitHub Actions update pull requests                                     |
 
@@ -21,7 +21,7 @@ Create a GitHub environment named `production-deploy`. Add a required reviewer a
 - `VERCEL_ORG_ID`: from the linked project's `.vercel/project.json`.
 - `VERCEL_PROJECT_ID`: from the linked project's `.vercel/project.json`.
 
-Create `production-database` with a required reviewer and store `MIGRATION_DATABASE_URL` there. Create `database-backup` without required reviewers so its scheduled job can run unattended, and store `MIGRATION_DATABASE_URL` there too. The duplicate is intentional: backup jobs get no deployment authority, deployment jobs get no database-owner credential, and migrations require approval. Add `BACKUP_AGE_RECIPIENT` as a repository variable because it is a public encryption recipient, not a secret.
+Create `production-database` with a required reviewer and store `MIGRATION_DATABASE_URL` there. Create `database-backup` and store `MIGRATION_DATABASE_URL` there too. The duplicate is intentional: backup jobs get no deployment authority, deployment jobs get no database-owner credential, and migrations require approval. Scheduled backups are currently paused, so backups from this workflow must be started manually. Add `BACKUP_AGE_RECIPIENT` as a repository variable because it is a public encryption recipient, not a secret.
 
 During the transition, workflows accept `SUPABASE_DATABASE_URL` when `MIGRATION_DATABASE_URL` is absent. Remove that fallback secret after the split setup is working.
 
@@ -68,9 +68,9 @@ When a migration adds a table that the server must access, explicitly grant only
 
 ## Backups
 
-The daily workflow uses PostgreSQL 17 `pg_dump` custom format for the `public` schema, validates the archive with `pg_restore --list`, encrypts it with the age public key, creates a SHA-256 checksum, and uploads only encrypted files. Firebase remains the identity provider, and this app does not store application files in Supabase Storage, so the `public` database schema is the recovery scope.
+The backup workflow uses PostgreSQL 17 `pg_dump` custom format for the `public` schema, validates the archive with `pg_restore --list`, encrypts it with the age public key, creates a SHA-256 checksum, and uploads only encrypted files. Firebase remains the identity provider, and this app does not store application files in Supabase Storage, so the `public` database schema is the recovery scope.
 
-Run the workflow manually after an important club event if losing the time since the previous nightly backup would be unacceptable. Download one encrypted artifact monthly to separate local or external storage. GitHub automatically disables scheduled workflows on public repositories after 60 days without repository activity, so check the most recent successful backup periodically.
+While the schedule is paused, run the workflow manually often enough to meet the club's recovery needs and after important club events. Download one encrypted artifact monthly to separate local or external storage, and check the most recent successful backup periodically.
 
 ## Restore drill and recovery
 
@@ -102,7 +102,7 @@ For an incident:
 5. Restore selected data or replace production only after validation.
 6. Apply any migrations newer than the restored snapshot, rebuild derived statistics, smoke test, then resume writes.
 
-The daily schedule has a worst-case recovery point of roughly 24 hours. The audit log narrows that gap for game edits and deletions but is not a replacement for off-site backups.
+With scheduled backups paused, the recovery point is the most recent manual or pre-migration backup. The audit log narrows the gap for game edits and deletions but is not a replacement for off-site backups.
 
 ## Migration procedure
 

@@ -60,5 +60,5 @@ Scope: application code, API trust boundaries, database mutation paths, dependen
 
 - Developers must use Node.js 22.x and run `npm ci` after switching runtimes.
 - Vercel Production must keep a stable `QR_SIGNING_SECRET` of at least 32 characters.
-- Continue quarterly backup restore drills and verify the daily encrypted-backup workflow remains enabled.
+- Continue quarterly backup restore drills; scheduled encrypted backups are currently paused, so create manual backups until the schedule is deliberately re-enabled.
 - Re-run the quality workflow after dependency updates; grades represent the audited commit, not future changes.

@@ -1,8 +1,8 @@
 name: Encrypted database backup
 
 on:
-  schedule:
-    - cron: "17 6 * * *"
+  # Scheduled backups are paused. Keep the workflow available for deliberate
+  # manual backups without granting it an unattended trigger.
   workflow_dispatch:
 
 permissions:
