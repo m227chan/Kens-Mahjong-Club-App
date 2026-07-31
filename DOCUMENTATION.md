@@ -684,7 +684,8 @@ The development build uses `.next-dev`; production builds use `.next`. This sepa
 
 The migration runner:
 
-- creates `public.app_schema_migrations` if required;
+- creates the owner-only `app_internal.app_schema_migrations` ledger if required;
+- moves the legacy `public.app_schema_migrations` ledger into that internal schema while preserving its history;
 - applies files in filename order;
 - records each applied filename;
 - skips previously recorded files;
