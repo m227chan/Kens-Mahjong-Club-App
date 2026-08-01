@@ -23,7 +23,7 @@ const GUIDE_SECTIONS = [
   { icon: '📈', title: 'Analytics', body: 'Analytics shows score and Skill movement over time. Its Metric Definitions link explains every number in plain language.' },
   { icon: '🗂️', title: 'Game logs', body: 'Game logs are the record-level source of truth, with newest games first. Members can correct games they created for 24 hours. Managers can correct or delete any record; standings and analytics then recalculate.' },
   { icon: '🕸️', title: 'Player Network', body: 'Network shows who shared a table and how often. Filter by season and date range, focus on one player (ego), and switch between the graph and a sortable table. With a player selected, node color shows net points exchanged with that player.' },
-  { icon: '🔐', title: 'Club settings and managers', body: 'Settings contains season controls, club-specific fan limits and point mappings, join requests, manager access, navigation, and—where permitted—club deletion. Manager-only actions stay hidden or disabled for regular members.' }
+  { icon: '🔐', title: 'Club settings and managers', body: 'Settings contains season controls, club-specific fan scoring and leaderboard title systems, join requests, manager access, navigation, and—where permitted—club deletion. Managers can use proportional title bands or exact top/bottom counts. Manager-only actions stay hidden or disabled for regular members.' }
 ] as const
 
 type TourAction = 'next' | 'click' | 'responsive' | 'finish'
@@ -60,7 +60,7 @@ const TOUR_STEPS: TourStep[] = [
   { selector: '[data-tour="network-modal"]', title: 'Who plays with whom', body: 'Edges connect players who shared a table; thickness is shared games. Filter by season and date, pick an ego player for net points coloring, and switch to the sortable table when you want exact values. Ming will not change any filters for you.', action: 'next' },
   { selector: '[data-tour="network-close"]', title: 'Return to the workspace', body: 'Close the network to finish with club administration.', action: 'click', instruction: 'Click Close.' },
   { selector: '[data-tour="settings-open"]', title: 'Open real club settings', body: 'Club settings contains manager and season controls plus a route back to your dashboard.', action: 'click', instruction: 'Click the highlighted Club settings button.' },
-  { selector: '[data-tour="settings-modal"]', title: 'You know the core workflow', body: 'Settings is where managers start seasons, configure club house scoring rules, and perform sensitive club actions. Ming never clicks those actions, and this tour has made no data writes.', action: 'finish', instruction: 'Finish returns you safely to your dashboard.' }
+  { selector: '[data-tour="settings-modal"]', title: 'You know the core workflow', body: 'Settings is where managers start seasons, configure club house scoring and custom leaderboard titles, and perform sensitive club actions. Ming never clicks those actions, and this tour has made no data writes.', action: 'finish', instruction: 'Finish returns you safely to your dashboard.' }
 ]
 
 export const TOUR_STEP_COUNT = TOUR_STEPS.length

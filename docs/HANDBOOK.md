@@ -247,7 +247,7 @@ The authoritative schema is the ordered SQL in `supabase/migrations`. The follow
 | `join_requests`          | Pending/approved/declined membership requests and resolution audit fields                                       |
 | `players`                | Club-scoped tracked player, display name, emoji, optional Firebase UID link, and soft-active state              |
 | `seasons`                | Club-scoped numbered seasons and active state                                                                   |
-| `app_configs`            | Club-scoped scoring rules, ELO tuning, and legacy title-band configuration                                       |
+| `app_configs`            | Club-scoped scoring rules, customizable leaderboard title rules, and ELO tuning                                  |
 | `games`                  | Game metadata: time, season, table, result type, winner/loser, fan, notes, creator, and historical flag         |
 | `game_entries`           | One score per game/player; cascade-deleted with the game                                                        |
 | `player_stats`           | Rebuilt all-time aggregates and ranks                                                                           |
@@ -412,13 +412,15 @@ Every stored game must contain two to four distinct players, finite numeric scor
 
 #### Rank-title distribution
 
-Titles are recalculated from the player’s position in current points standings; they are not stored as a permanent achievement. `lib/players.ts` distributes nine ordered titles across a symmetric set of bands using proportions:
+Titles are recalculated from the player’s position in current points standings; they are not stored as a permanent achievement. Each club stores an ordered title system in `app_configs.title_bands`, and managers edit it through a collapsed settings card. Titles can be added, removed, renamed, and reordered.
+
+The default system distributes nine titles using these proportions:
 
 ```text
 4% / 7% / 12% / 17% / 20% / 17% / 12% / 7% / 4%
 ```
 
-Rounding drift is assigned to the central band. Small clubs may have empty bands. Stable leaderboard sorting prevents arbitrary title movement when primary ranking values tie. The legacy `players.title` field is not the authoritative displayed rank title.
+Proportional mode lets managers customize every percentage and requires a 100% total. Exact-count mode assigns fixed quantities from the top and bottom of the ordered list while one selected title fills all remaining middle ranks—for example, one Messiah, two Masters, and one Moron. Rounding drift in proportional mode is absorbed by the largest band. Small clubs may have empty or truncated bands. Stable leaderboard sorting prevents arbitrary title movement when primary ranking values tie. The legacy `players.title` field is not the authoritative displayed rank title.
 
 ### Analytics
 

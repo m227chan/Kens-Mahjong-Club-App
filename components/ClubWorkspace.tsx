@@ -9,6 +9,7 @@ import NetworkGraphModal from '@/components/NetworkGraphModal'
 import { LeaderboardPanel } from '@/components/Leaderboard'
 import SessionManager from '@/components/SessionManager'
 import ScoringRulesSettings from '@/components/ScoringRulesSettings'
+import TitleRulesSettings from '@/components/TitleRulesSettings'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSound } from '@/contexts/SoundContext'
 import {
@@ -30,11 +31,13 @@ import {
   subscribeJoinRequests,
   subscribePlayers,
   subscribeScoringRules,
+  subscribeTitleRules,
   subscribeSeasons
 } from '@/lib/data'
 import type { ClubDoc, ClubMembershipDoc, JoinRequestDoc, PlayerDoc, SeasonDoc } from '@/lib/types'
 import { PLAYER_EMOJIS, randomUnusedPlayerEmoji } from '@/lib/players'
 import { DEFAULT_SCORING_RULES, type ScoringRules } from '@/lib/scoring-rules'
+import { DEFAULT_TITLE_RULES, type TitleRules } from '@/lib/title-rules'
 
 const iconChoices = PLAYER_EMOJIS
 
@@ -102,6 +105,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [joinRequests, setJoinRequests] = useState<JoinRequestDoc[]>([])
   const [players, setPlayers] = useState<PlayerDoc[]>([])
   const [scoringRules, setScoringRules] = useState<ScoringRules>(DEFAULT_SCORING_RULES)
+  const [titleRules, setTitleRules] = useState<TitleRules>(DEFAULT_TITLE_RULES)
   const [playerName, setPlayerName] = useState('')
   const [playerIcon, setPlayerIcon] = useState(() => randomUnusedPlayerEmoji(new Set()))
   const [iconPickerOpen, setIconPickerOpen] = useState(false)
@@ -142,6 +146,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   useEffect(() => subscribeClubMembers(clubId, setMembers), [clubId])
   useEffect(() => subscribePlayers(clubId, setPlayers), [clubId])
   useEffect(() => subscribeScoringRules(clubId, setScoringRules), [clubId])
+  useEffect(() => subscribeTitleRules(clubId, setTitleRules), [clubId])
   useEffect(() => subscribeSeasons(clubId, setSeasons), [clubId])
   useEffect(() => {
     if (!isManager || club?.universal) {
@@ -483,6 +488,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                 )}
               </div>
               <ScoringRulesSettings clubId={clubId} rules={scoringRules} isManager={isManager} />
+              <TitleRulesSettings clubId={clubId} rules={titleRules} isManager={isManager} />
               {isManager && !club?.universal ? (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
                   <p className="text-sm font-black text-rose-700">Delete club</p>
@@ -593,7 +599,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           </section>
 
           <div className={mobileView === 'standings' ? 'block md:block' : 'hidden md:block'}>
-            <LeaderboardPanel clubId={clubId} seasonNumber={activeSeasonNumber} players={players} />
+            <LeaderboardPanel clubId={clubId} seasonNumber={activeSeasonNumber} players={players} titleRules={titleRules} />
           </div>
         </div>
 

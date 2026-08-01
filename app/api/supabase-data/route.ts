@@ -10,6 +10,7 @@ import {
   hasReachedCreatedClubLimit,
 } from '@/lib/club-limits'
 import { validateScoringRules } from '@/lib/scoring-rules'
+import { DEFAULT_TITLE_RULES, validateTitleRules } from '@/lib/title-rules'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -440,6 +441,17 @@ export async function POST(request: NextRequest) {
           throw new Error('Club settings are still initializing. Try again.')
         return null
       }
+      if (action === 'updateTitleRules') {
+        await requireManager(body.clubId)
+        const rules = validateTitleRules(body.rules)
+        const updated = await db.query(
+          'update app_configs set title_bands=$1,updated_at=now() where club_id=$2',
+          [JSON.stringify(rules), body.clubId],
+        )
+        if (!updated.rowCount)
+          throw new Error('Club settings are still initializing. Try again.')
+        return null
+      }
       if (action === 'deleteClub') {
         await requireManager(body.clubId)
         await db.query('select public.delete_club_permanently($1)', [
@@ -589,17 +601,7 @@ export async function POST(request: NextRequest) {
           `insert into app_configs(club_id,title_bands,elo_base_k,elo_veteran_games_threshold,elo_starting_rating,elo_new_player_k,elo_intermediate_k,elo_new_player_games_threshold) values($1,$2,16,50,1500,32,24,20) on conflict do nothing`,
           [
             body.clubId,
-            JSON.stringify([
-              { minPoints: 3000, maxPoints: 99999, title: 'Messiah' },
-              { minPoints: 1800, maxPoints: 2999, title: 'Master' },
-              { minPoints: 350, maxPoints: 1799, title: 'Musketeer' },
-              { minPoints: 150, maxPoints: 349, title: 'Marshal' },
-              { minPoints: -650, maxPoints: 149, title: 'Monk' },
-              { minPoints: -700, maxPoints: -651, title: 'Mortal' },
-              { minPoints: -1150, maxPoints: -701, title: 'Minion' },
-              { minPoints: -1550, maxPoints: -1151, title: 'Mongrel' },
-              { minPoints: -99999, maxPoints: -1551, title: 'Moron' },
-            ]),
+            JSON.stringify(DEFAULT_TITLE_RULES),
           ],
         )
         return null

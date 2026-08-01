@@ -27,6 +27,11 @@ import {
   scoringRulesFromRow,
   type ScoringRules,
 } from '@/lib/scoring-rules'
+import {
+  DEFAULT_TITLE_RULES,
+  titleRulesFromRow,
+  type TitleRules,
+} from '@/lib/title-rules'
 
 type UserLike = {
   uid: string
@@ -423,6 +428,8 @@ export const updatePlayerName = (
 ) => serverAction<void>('updatePlayerName', { clubId, playerId, nextName })
 export const updateScoringRules = (clubId: string, rules: ScoringRules) =>
   serverAction<void>('updateScoringRules', { clubId, rules })
+export const updateTitleRules = (clubId: string, rules: TitleRules) =>
+  serverAction<void>('updateTitleRules', { clubId, rules })
 export const deleteClub = (clubId: string) =>
   serverAction<void>('deleteClub', { clubId })
 export async function createGame(clubId: string, input: Row) {
@@ -472,6 +479,27 @@ export function subscribeScoringRules(
   }
   return realtime(
     `scoring-rules:${clubId}`,
+    'app_configs',
+    `club_id=eq.${clubId}`,
+    load,
+    callback,
+  )
+}
+export function subscribeTitleRules(
+  clubId: string,
+  callback: (rules: TitleRules) => void,
+) {
+  const load = async () => {
+    const { data, error } = await client()
+      .from('app_configs')
+      .select('title_bands')
+      .eq('club_id', clubId)
+      .maybeSingle()
+    if (error) throw error
+    return data ? titleRulesFromRow(data as Row) : DEFAULT_TITLE_RULES
+  }
+  return realtime(
+    `title-rules:${clubId}`,
     'app_configs',
     `club_id=eq.${clubId}`,
     load,

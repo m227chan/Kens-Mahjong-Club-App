@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { subscribePlayerStats, subscribePlayers } from '@/lib/data'
 import type { PlayerDoc, PlayerStatsDoc } from '@/lib/types'
 import { titleForStanding } from '@/lib/players'
+import { DEFAULT_TITLE_RULES, type TitleRules } from '@/lib/title-rules'
 
 function formatSigned(value: number) {
   if (value > 0) return `+${value}`
@@ -62,11 +63,13 @@ export function LeaderboardPanel({
   seasonNumber,
   compact = false,
   players: suppliedPlayers,
+  titleRules = DEFAULT_TITLE_RULES,
 }: {
   clubId: string
   seasonNumber?: number
   compact?: boolean
   players?: PlayerDoc[]
+  titleRules?: TitleRules
 }) {
   const [subscribedPlayers, setSubscribedPlayers] = useState<PlayerDoc[]>([])
   const [stats, setStats] = useState<PlayerStatsDoc[]>([])
@@ -324,6 +327,7 @@ export function LeaderboardPanel({
                           Math.max(1, row.pointsRank),
                           stats.length,
                           row.gamesPlayed,
+                          titleRules,
                         )}
                       </p>
                     </div>
@@ -430,6 +434,7 @@ export function LeaderboardPanel({
                           Math.max(1, row.pointsRank),
                           stats.length,
                           row.gamesPlayed,
+                          titleRules,
                         )}
                       </p>
                     </div>

@@ -1,4 +1,11 @@
 // 14 distinct colors — assigned by index, never by name
+import {
+  DEFAULT_TITLE_RULES,
+  titleBandSizes,
+  titleForRank,
+  type TitleRules,
+} from '@/lib/title-rules'
+
 export const PLAYER_COLORS = [
   '#F59E0B', // amber
   '#10B981', // emerald
@@ -41,32 +48,14 @@ export const RANK_TITLES = [
   'Moron'
 ] as const
 
-const RANK_TITLE_PROPORTIONS = [0.04, 0.07, 0.12, 0.17, 0.20, 0.17, 0.12, 0.07, 0.04] as const
-
 type RankTitle = (typeof RANK_TITLES)[number]
 
-export function rankTitleBandSizes(totalPlayers: number) {
-  const playerCount = Math.max(0, Math.floor(totalPlayers))
-  const sizes = RANK_TITLE_PROPORTIONS.map((proportion) => Math.round(playerCount * proportion))
-  const assignedPlayers = sizes.reduce((sum, size) => sum + size, 0)
-
-  // All rounding drift belongs to the largest, central band.
-  sizes[4] += playerCount - assignedPlayers
-  return sizes
+export function rankTitleBandSizes(totalPlayers: number, rules: TitleRules = DEFAULT_TITLE_RULES) {
+  return titleBandSizes(totalPlayers, rules)
 }
 
-export function titleForStanding(rank: number, totalPlayers: number, _gamesPlayed?: number): RankTitle {
-  const playerCount = Math.max(1, Math.floor(totalPlayers))
-  const safeRank = Math.min(playerCount, Math.max(1, Math.floor(rank)))
-  const bandSizes = rankTitleBandSizes(playerCount)
-  let lastRankInBand = 0
-
-  for (let index = 0; index < bandSizes.length; index += 1) {
-    lastRankInBand += bandSizes[index]
-    if (safeRank <= lastRankInBand) return RANK_TITLES[index]
-  }
-
-  return RANK_TITLES[RANK_TITLES.length - 1]
+export function titleForStanding(rank: number, totalPlayers: number, _gamesPlayed?: number, rules: TitleRules = DEFAULT_TITLE_RULES) {
+  return titleForRank(rank, totalPlayers, rules)
 }
 
 // Colors cycle if player count exceeds palette length
@@ -83,7 +72,8 @@ export function assignPlayerColors(
 
 export function assignTitles(
   rankedPlayers: { name: string; rank: number; roundsPlayed: number }[],
-  totalPlayers: number
+  totalPlayers: number,
+  rules: TitleRules = DEFAULT_TITLE_RULES,
 ): Record<string, { title: string; emoji: string }> {
   const titleEmoji: Record<RankTitle, string> = {
     Messiah: '\u{1F451}',
@@ -99,8 +89,8 @@ export function assignTitles(
 
   return Object.fromEntries(
     rankedPlayers.map((player) => {
-      const title = titleForStanding(player.rank, totalPlayers, player.roundsPlayed)
-      return [player.name, { title, emoji: titleEmoji[title] }]
+      const title = titleForStanding(player.rank, totalPlayers, player.roundsPlayed, rules)
+      return [player.name, { title, emoji: titleEmoji[title as RankTitle] ?? '🏅' }]
     })
   )
 }
