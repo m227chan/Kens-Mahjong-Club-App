@@ -599,6 +599,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           key={playerId}
           type="button"
           className={`loser-chip winner-choice${selected ? ' selected winner-selected' : ''}`}
+          aria-pressed={selected}
           onClick={() => setWinner(tableId, playerId)}
         >
           {info.icon ?? '👤'} {shortName(info.displayName)}
@@ -615,6 +616,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           key={playerId}
           type="button"
           className={`loser-chip discard-choice${selected ? ' selected discard-selected' : ''}`}
+          aria-pressed={selected}
           onClick={() => setLoser(tableId, playerId)}
         >
           {info.icon ?? '👤'} {shortName(info.displayName)}
@@ -629,6 +631,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           key={fanValue}
           type="button"
           className={`fan-chip${selected ? ' selected' : ''}`}
+          aria-pressed={selected}
           onClick={() => setFan(tableId, fanValue)}
         >
           {fanLabel(fanValue, scoringRules)}
@@ -656,7 +659,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
 
     return (
       <>
-        <div className="win-panel-title">👑 Select Winner</div>
+        <div id={`win-panel-title-${tableId}`} className="win-panel-title">👑 Select Winner</div>
         <div className="loser-row visible" style={{ marginBottom: 8 }}>
           <div className="loser-label">Who won?</div>
           <div className="loser-chips">{winnerChips}</div>
@@ -668,6 +671,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
               <button
                 type="button"
                 className={`win-type-btn${selfSelected ? ' selected' : ''}`}
+                aria-pressed={selfSelected}
                 onClick={() => setWinType(tableId, 'self')}
               >
                 🀄 Self-draw<br />
@@ -676,6 +680,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
               <button
                 type="button"
                 className={`win-type-btn${discardSelected ? ' selected' : ''}`}
+                aria-pressed={discardSelected}
                 onClick={() => setWinType(tableId, 'discard')}
               >
                 🎴 Discard win
@@ -857,12 +862,18 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
       return (
         <div key={tableId} className={`table-card${isValid ? ' valid' : ''}`} id={`table-${tableId}`}>
           {playersOnTable.length > 0 ? (
-            <button className="clear-table-btn" type="button" onClick={() => clearSingleTable(tableId)}>✕</button>
+            <button className="clear-table-btn" type="button" onClick={() => clearSingleTable(tableId)} aria-label={`Clear ${tableName}`}>✕</button>
           ) : null}
           <div className="table-header">
-            <span className="table-name" onClick={() => toggleTable(tableId)} style={{ cursor: 'pointer', userSelect: 'none', flex: 1 }}>
+            <button
+              type="button"
+              className="table-name"
+              onClick={() => toggleTable(tableId)}
+              aria-expanded={!collapsedTables[tableId]}
+              aria-controls={`tableBody-${tableId}`}
+            >
               🀄 {tableName}
-            </span>
+            </button>
             <span className={`table-status ${isValid ? 'valid' : 'waiting'}`}>
               {isValid ? '✓ Ready' : `${playersOnTable.length}/4`}
             </span>
@@ -883,7 +894,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
                 <polyline points="7 7 17 7 17 17"></polyline>
               </svg>
             </Link>
-            <span id={`tableChevron-${tableId}`} onClick={() => toggleTable(tableId)} style={{ fontSize: 10, color: 'var(--gray)', cursor: 'pointer' }}>
+            <span id={`tableChevron-${tableId}`} aria-hidden="true" style={{ fontSize: 10, color: 'var(--gray)' }}>
               {collapsedTables[tableId] ? '▼' : '▲'}
             </span>
           </div>
@@ -909,15 +920,15 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
                         onDragStart={(event) => handleDragStart(event, playerId, tableId)}
                         onDragEnd={handleDragEnd}
                       >
-                        <button className="chip-remove-btn" type="button" onClick={() => removeToSideline(tableId, playerId)} title="Remove">
+                        <button className="chip-remove-btn" type="button" onClick={() => removeToSideline(tableId, playerId)} title="Remove" aria-label={`Move ${info.displayName} to the sideline`}>
                           ×
                         </button>
                         <div className="chip-icon">{info.icon ?? '👤'}</div>
                         <div className="chip-name" title={info.displayName}>{shortName(info.displayName)}</div>
-                        <button className="chip-win-btn" type="button" onClick={() => setWinner(tableId, playerId)} title="Won!">
+                        <button className="chip-win-btn" type="button" onClick={() => setWinner(tableId, playerId)} title="Won!" aria-label={`Record ${info.displayName} as the winner`}>
                           👑
                         </button>
-                        <button className="chip-swap-btn" type="button" onClick={() => openSwapPicker(tableId, playerId)} title="Swap">
+                        <button className="chip-swap-btn" type="button" onClick={() => openSwapPicker(tableId, playerId)} title="Swap" aria-label={`Swap ${info.displayName} with another player`}>
                           ⇄
                         </button>
                       </div>
@@ -926,18 +937,19 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
                 }
 
                 return (
-                  <div
+                  <button
                     key={seatIndex}
+                    type="button"
                     className="seat-slot"
                     id={`seat-${tableId}-${seatIndex}`}
                     onDragOver={(event) => handleDragOver(event, 'table')}
                     onDragLeave={(event) => handleDragLeave(event, 'table')}
                     onDrop={(event) => handleDrop(event, 'table', tableId)}
                     onClick={() => openPicker(tableId)}
-                    style={{ cursor: 'pointer' }}
+                    aria-label={`Add a player to seat ${seatIndex + 1} at ${tableName}`}
                   >
                     <span className="empty-seat-hint">+ Add</span>
-                  </div>
+                  </button>
                 )
               })}
             </div>
@@ -950,7 +962,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
               </button>
             </div>
             {winState.tableId === tableId && typeof document !== 'undefined'
-              ? createPortal(<div className="win-panel active session-result-dialog" id={`winPanel-${tableId}`}>{renderWinPanel(tableId)}</div>, document.body)
+              ? createPortal(<div className="win-panel active session-result-dialog" id={`winPanel-${tableId}`} role="dialog" aria-modal="true" aria-labelledby={`win-panel-title-${tableId}`}>{renderWinPanel(tableId)}</div>, document.body)
               : <div className="win-panel" id={`winPanel-${tableId}`} />}
           </div>
         </div>
@@ -965,19 +977,22 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
     <div data-tour="session-manager" className="session-manager">
       <style jsx global>{`
 
-        :root {
-          --purple: #667eea;
-          --purple-dark: #5568d3;
-          --green: #48bb78;
-          --green-dark: #38a169;
-          --red: #fc8181;
-          --red-dark: #e53e3e;
-          --gold: #f6ad55;
-          --gray: #718096;
-          --border: #e2e8f0;
-          --white: #ffffff;
-          --card-bg: #ffffff;
-          --radius: 10px;
+        .session-manager,
+        .session-result-dialog,
+        #pickerOverlay,
+        #swapPickerOverlay {
+          --purple: rgb(var(--bamboo));
+          --purple-dark: rgb(var(--bamboo-bright));
+          --green: rgb(var(--bamboo));
+          --green-dark: rgb(var(--bamboo-bright));
+          --red: rgb(var(--cinnabar));
+          --red-dark: rgb(var(--cinnabar));
+          --session-gold: rgb(var(--gold));
+          --gray: rgb(var(--muted));
+          --border: rgb(var(--line));
+          --white: rgb(var(--surface));
+          --card-bg: rgb(var(--surface));
+          --radius: 4px;
         }
 
         .header {
@@ -1184,6 +1199,8 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         .table-name {
           font-size: 12px; font-weight: 700;
           color: #0f172a; flex: 1;
+          border: 0; background: transparent; padding: 0;
+          text-align: left; cursor: pointer;
         }
         .table-status {
           font-size: 10px; font-weight: 600;
@@ -1409,7 +1426,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           opacity: 0.4; transform: scale(0.9);
         }
         .player-chip.winner-candidate {
-          outline: 2px solid var(--gold);
+          outline: 2px solid var(--session-gold);
           outline-offset: 2px;
           border-radius: 6px;
         }
@@ -1508,7 +1525,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         .chip-win-btn {
           position: absolute; top: -4px; right: -4px;
           width: 16px; height: 16px;
-          background: var(--gold);
+          background: var(--session-gold);
           border-radius: 50%;
           border: none; cursor: pointer;
           font-size: 9px; display: none;
@@ -1609,7 +1626,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           transform: scale(1.08);
         }
         /* Clubhouse session system */
-        .session-manager { --purple:rgb(var(--bamboo)); --purple-dark:rgb(var(--bamboo-bright)); --green:rgb(var(--bamboo)); --green-dark:rgb(var(--bamboo-bright)); --red:rgb(var(--cinnabar)); --red-dark:rgb(var(--cinnabar)); --gold:rgb(var(--gold)); --gray:rgb(var(--muted)); --border:rgb(var(--line)); --white:rgb(var(--surface)); --card-bg:rgb(var(--surface)); --radius:4px; color:rgb(var(--ink)); font-family:var(--font-sans),sans-serif; overflow:hidden; border:1px solid rgb(var(--line)); border-radius:4px; background:rgb(var(--canvas)/.58); box-shadow:5px 6px 0 rgb(var(--shadow)/.07); }
+        .session-manager { color:rgb(var(--ink)); font-family:var(--font-sans),sans-serif; overflow:hidden; border:1px solid rgb(var(--line)); border-radius:4px; background:rgb(var(--canvas)/.58); box-shadow:5px 6px 0 rgb(var(--shadow)/.07); }
         .session-manager .header { position:relative; top:auto; padding:16px 18px; border:0; border-bottom:3px double rgb(var(--line)); border-radius:0; background:rgb(var(--surface)); box-shadow:none; }
         .session-manager .header>div:first-child>div:first-child { font-family:var(--font-sans),sans-serif; font-size:22px!important; letter-spacing:-.02em; }
         .session-manager .header-sub { margin-top:4px; color:rgb(var(--muted)); font-size:10px; letter-spacing:.08em; text-transform:uppercase; }
@@ -1619,7 +1636,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         .session-manager .tables-scroll { padding:14px; background:transparent; }
         .session-manager input[type=text],.session-manager input[type=number] { border:1px solid rgb(var(--line))!important; border-radius:3px!important; background:rgb(var(--surface))!important; color:rgb(var(--ink))!important; box-shadow:inset 3px 0 0 rgb(var(--bamboo)); outline:none; }
         .session-manager input:focus { border-color:rgb(var(--bamboo))!important; box-shadow:inset 3px 0 0 rgb(var(--cinnabar)),0 0 0 2px rgb(var(--bamboo)/.12); }
-        .session-manager .sideline-section { order:1; margin:12px 12px 0; padding:12px; border:1px solid rgb(var(--line)); border-left:4px solid rgb(var(--gold)); border-radius:3px; background:rgb(var(--surface-2)); box-shadow:none; }
+        .session-manager .sideline-section { order:1; margin:12px 12px 0; padding:12px; border:1px solid rgb(var(--line)); border-left:4px solid var(--session-gold); border-radius:3px; background:rgb(var(--surface-2)); box-shadow:none; }
         .session-manager .section-label { margin:0 0 10px; color:rgb(var(--ink)); font-size:10px; letter-spacing:.16em; }
         .session-manager .section-label .badge { border:1px solid rgb(var(--gold)/.32); border-radius:2px; padding:1px 7px; background:rgb(var(--gold)/.12); color:rgb(var(--muted)); }
         .session-manager .sideline-area { min-height:74px; padding:10px; gap:12px; border:1px dashed rgb(var(--line)); border-radius:2px; background:rgb(var(--surface)); }
@@ -1641,13 +1658,13 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         .session-manager .player-chip:hover .chip-icon { border-color:rgb(var(--cinnabar)); transform:translateY(-1px); }
         .session-manager .table-actions { padding:12px 14px 14px; gap:10px; border-top:1px solid rgb(var(--line)); }
         .session-manager .btn-draw,.session-manager .btn-secondary,.session-manager .btn-cancel-win { border:1px solid rgb(var(--line)); border-radius:3px; background:rgb(var(--surface-2)); color:rgb(var(--ink)); }
-        .session-manager .btn-draw:hover { border-color:rgb(var(--gold)); background:rgb(var(--gold)/.1); color:rgb(var(--ink)); }
+        .session-manager .btn-draw:hover { border-color:var(--session-gold); background:rgb(var(--gold)/.1); color:rgb(var(--ink)); }
         .session-manager .btn-primary,.session-manager .btn-submit-game { border-radius:3px; background:rgb(var(--bamboo)); color:rgb(var(--surface)); box-shadow:2px 2px 0 rgb(var(--shadow)/.12); }
         .session-manager .setup-card { border-radius:3px; border-color:rgb(var(--line)); background:rgb(var(--surface)); box-shadow:3px 3px 0 rgb(var(--shadow)/.05); }
         .session-manager .setup-card h3 { color:rgb(var(--ink)); letter-spacing:.14em; }
         .session-manager .player-toggle { border:1px solid rgb(var(--line)); border-radius:3px; background:rgb(var(--surface-2)); }
         .session-manager .player-toggle.selected { border-color:rgb(var(--bamboo)); background:rgb(var(--bamboo)/.1); box-shadow:inset 0 -3px 0 rgb(var(--bamboo)); }
-        .session-manager .win-panel { border-top-color:rgb(var(--gold)); background:rgb(var(--gold)/.09); color:rgb(var(--ink)); padding:12px; }
+        .session-manager .win-panel { border-top-color:var(--session-gold); background:rgb(var(--gold)/.09); color:rgb(var(--ink)); padding:12px; }
         .session-manager .win-panel-title { color:rgb(var(--cinnabar)); font-size:13px; font-weight:800; }
         .session-manager .loser-label, .session-manager .fan-label { color:rgb(var(--ink)); font-size:13px; font-weight:800; }
         .session-manager .win-type-btn, .session-manager .loser-chip, .session-manager .fan-chip { border-color:rgb(var(--line)); border-radius:3px; background:rgb(var(--surface)); color:rgb(var(--ink)); font-size:13px; padding:6px 12px; }
@@ -1686,7 +1703,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
             id="btnMenu"
             aria-label="Session actions"
             title="Session actions"
-            aria-haspopup="menu"
+            aria-haspopup="dialog"
             aria-expanded={headerMenuOpen}
             aria-controls="headerMenu"
             style={{ display: page === 'session' ? '' : 'none' }}
@@ -1696,7 +1713,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           {headerMenuOpen ? (
             <div
               id="headerMenu"
-              role="menu"
+              role="dialog"
               aria-label="Session actions"
               style={{
                 display: 'block',
@@ -1733,6 +1750,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           <div className="desktop-table-count">
             <input
               type="number"
+              aria-label="Number of tables"
               min={1}
               max={99}
               value={setupTableCount}
@@ -1772,6 +1790,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           <h3>👥 Select Participating Players</h3>
           <input
             type="text"
+            aria-label="Search participating players"
             value={setupSearch}
             onChange={(event) => setSetupSearch(event.target.value)}
             placeholder="Search players…"
@@ -1783,6 +1802,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
                 key={player.id}
                 type="button"
                 className={`player-toggle${setupParticipants.includes(player.id) ? ' selected' : ''}`}
+                aria-pressed={setupParticipants.includes(player.id)}
                 onClick={() => togglePlayerSetup(player.id)}
               >
                 <span className="icon">{player.icon || '👤'}</span>
@@ -1800,7 +1820,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
               {savingSession ? 'Saving...' : 'Start Session'}
             </button>
           </div>
-          {setupError ? <div className="error-msg" style={{ display: 'block' }}>{setupError}</div> : null}
+          {setupError ? <div className="error-msg" role="alert" aria-live="assertive" style={{ display: 'block' }}>{setupError}</div> : null}
         </div>
       </div>
 
@@ -1809,6 +1829,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           <div style={{ paddingBottom: 8 }}>
             <input
               type="text"
+              aria-label="Search tables or players"
               value={tableSearch}
               onChange={(event) => setTableSearch(event.target.value)}
               placeholder="🔍 Search table or player…"
@@ -1819,11 +1840,18 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         </div>
 
         <div className="sideline-section">
-          <div className="section-label" onClick={toggleSideline} style={{ cursor: 'pointer', userSelect: 'none' }}>
+          <button
+            type="button"
+            className="section-label"
+            onClick={toggleSideline}
+            aria-expanded={!sidelineCollapsed}
+            aria-controls="sidelineBody"
+            style={{ width: '100%', border: 0, background: 'transparent', padding: 0, textAlign: 'left', cursor: 'pointer' }}
+          >
             🪑 Sideline
             <span className="badge" id="sidelineCount">{sessionSideline.length}</span>
             <span id="sidelineChevron" style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--gray)' }}>{sidelineCollapsed ? '▼' : '▲'}</span>
-          </div>
+          </button>
           <div id="sidelineBody" style={{ display: sidelineCollapsed ? 'none' : 'block' }}>
             <div
               className={`sideline-area${dragContext.player ? ' drag-over' : ''}`}
@@ -1858,7 +1886,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         </div>
       </div>
 
-      {toast ? <div className="toast active">{toast}</div> : null}
+      {toast ? <div className="toast active" role="status" aria-live="polite">{toast}</div> : null}
       {flash && typeof document !== 'undefined' ? createPortal(
         <div className="score-flash" role="status" aria-live="polite">
           <div className="celebration-confetti" aria-hidden="true">
@@ -1888,7 +1916,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         <div style={{ background: 'white', borderRadius: 14, overflow: 'hidden', width: '100%', maxWidth: 340, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
           <div style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div id="add-player-title" style={{ fontSize: 14, fontWeight: 800, color: 'white' }}>Add Player to Table {pickerTableId}</div>
-            <button type="button" onClick={closePicker} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, color: 'white', fontSize: 18, width: 30, height: 30, cursor: 'pointer' }}>×</button>
+            <button type="button" onClick={closePicker} aria-label="Close player picker" style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, color: 'white', fontSize: 18, width: 30, height: 30, cursor: 'pointer' }}>×</button>
           </div>
           <div style={{ padding: '10px 12px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
             <div style={{ marginBottom: 7, fontSize: 11, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Selected ({(session.tables[pickerTableId] || []).length}/4)</div>
@@ -1902,6 +1930,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           <div style={{ padding: '10px 12px', borderBottom: '1px solid #e2e8f0' }}>
             <input
               type="text"
+              aria-label="Search players on the sideline"
               value={pickerSearch}
               onChange={(event) => setPickerSearch(event.target.value)}
               placeholder="Search players…"
@@ -1930,18 +1959,19 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         </div>
       </div>, document.body) : null}
 
-      {swapPickerTableId && typeof document !== 'undefined' ? createPortal(<div id="swapPickerOverlay" role="dialog" aria-modal="true" style={{ display: 'flex', position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.68)', zIndex: 20010, padding: 16, alignItems: 'center', justifyContent: 'center' }}>
+      {swapPickerTableId && typeof document !== 'undefined' ? createPortal(<div id="swapPickerOverlay" role="dialog" aria-modal="true" aria-labelledby="swap-player-title" style={{ display: 'flex', position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.68)', zIndex: 20010, padding: 16, alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ background: 'white', borderRadius: 14, overflow: 'hidden', width: '100%', maxWidth: 340, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
           <div style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: 'white' }}>Swap {swapPickerPlayer ? shortName(playerInfo(swapPickerPlayer).displayName) : ''}</div>
+              <div id="swap-player-title" style={{ fontSize: 14, fontWeight: 800, color: 'white' }}>Swap {swapPickerPlayer ? shortName(playerInfo(swapPickerPlayer).displayName) : ''}</div>
               <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 1 }}>Select a player to swap with</div>
             </div>
-            <button type="button" onClick={closeSwapPicker} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, color: 'white', fontSize: 18, width: 30, height: 30, cursor: 'pointer' }}>×</button>
+            <button type="button" onClick={closeSwapPicker} aria-label="Close player swap" style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, color: 'white', fontSize: 18, width: 30, height: 30, cursor: 'pointer' }}>×</button>
           </div>
           <div style={{ padding: '10px 12px', borderBottom: '1px solid #e2e8f0' }}>
             <input
               type="text"
+              aria-label="Search players to swap"
               value={swapPickerSearch}
               onChange={(event) => setSwapPickerSearch(event.target.value)}
               placeholder="Search players…"

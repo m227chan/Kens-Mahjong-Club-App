@@ -62,7 +62,7 @@ export default function UserSettings() {
   useEffect(() => {
     if (!open) return
     const closeDropdown = (event: PointerEvent) => {
-      if (!busy && !settingsRootRef.current?.contains(event.target as Node)) {
+      if (!busy && !deletingMode && !settingsRootRef.current?.contains(event.target as Node)) {
         setOpen(false)
         setError(null)
       }
@@ -143,8 +143,10 @@ export default function UserSettings() {
     <div ref={settingsRootRef} className="relative">
       <button
         type="button"
-        onClick={() => { setOpen(true); setDeletingMode(false); setError(null) }}
+        onClick={() => { if (open) close(); else { setOpen(true); setDeletingMode(false); setError(null) } }}
         aria-label="Account and app settings"
+        aria-haspopup="dialog"
+        aria-expanded={open}
         title="Account & app settings"
         className="group flex h-11 w-11 items-center justify-center rounded-full border border-[rgb(var(--bamboo-bright))] bg-[rgb(var(--bamboo))] text-sm font-black tracking-[0.04em] text-white shadow-[3px_3px_0_rgb(var(--shadow)/0.08)] transition hover:bg-[rgb(var(--bamboo-bright))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--gold))] focus-visible:ring-offset-2"
       >
@@ -167,10 +169,10 @@ export default function UserSettings() {
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                   <p className="font-black text-slate-950">Preferences</p>
                   <div className="mt-3 grid gap-2">
-                    <button type="button" onClick={toggleSound} className="flex min-h-12 items-center justify-between rounded border border-slate-300 bg-white px-4 py-3 text-left font-bold text-slate-800">
+                    <button type="button" aria-pressed={soundEnabled} onClick={toggleSound} className="flex min-h-12 items-center justify-between rounded border border-slate-300 bg-white px-4 py-3 text-left font-bold text-slate-800">
                       <span>Sound effects</span><span className="text-sm text-slate-500">{soundEnabled ? 'On' : 'Off'}</span>
                     </button>
-                    <button type="button" onClick={toggleTheme} className="flex min-h-12 items-center justify-between rounded border border-slate-300 bg-white px-4 py-3 text-left font-bold text-slate-800">
+                    <button type="button" aria-pressed={darkMode} onClick={toggleTheme} className="flex min-h-12 items-center justify-between rounded border border-slate-300 bg-white px-4 py-3 text-left font-bold text-slate-800">
                       <span>Light / dark mode</span><span className="text-sm text-slate-500">{darkMode ? 'Dark' : 'Light'}</span>
                     </button>
                   </div>

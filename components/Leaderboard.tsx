@@ -40,21 +40,29 @@ function SortHeader({
   direction: SortDirection
   onSort: (column: SortKey) => void
 }) {
+  const isActive = active === column
   return (
-    <button
-      type="button"
-      onClick={() => onSort(column)}
-      className="group flex w-full items-center gap-1 text-left hover:text-[rgb(var(--bamboo))]"
-      title={`Sort ${label}`}
+    <div
+      role="columnheader"
+      aria-sort={isActive ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
-      <span>{label}</span>
-      <span
-        aria-hidden="true"
-        className={`transition-opacity ${active === column ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        aria-pressed={isActive}
+        aria-label={`Sort by ${label}${isActive ? `, currently ${direction === 'asc' ? 'ascending' : 'descending'}` : ''}`}
+        className="group flex w-full items-center gap-1 text-left hover:text-[rgb(var(--bamboo))]"
+        title={`Sort ${label}`}
       >
-        {active === column ? (direction === 'asc' ? '▲' : '▼') : '↕'}
-      </span>
-    </button>
+        <span>{label}</span>
+        <span
+          aria-hidden="true"
+          className={`transition-opacity ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+        >
+          {isActive ? (direction === 'asc' ? '▲' : '▼') : '↕'}
+        </span>
+      </button>
+    </div>
   )
 }
 
@@ -74,6 +82,7 @@ export function LeaderboardPanel({
   const [subscribedPlayers, setSubscribedPlayers] = useState<PlayerDoc[]>([])
   const [stats, setStats] = useState<PlayerStatsDoc[]>([])
   const [mobileExpanded, setMobileExpanded] = useState(false)
+  const [expandedMobileRows, setExpandedMobileRows] = useState<Record<string, boolean>>({})
   const [sortKey, setSortKey] = useState<SortKey>('points')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [nameFilter, setNameFilter] = useState('')
@@ -195,7 +204,7 @@ export function LeaderboardPanel({
               type="button"
               aria-expanded={filtersOpen}
               onClick={() => setFiltersOpen((current) => !current)}
-              className={`rounded border px-3 py-1.5 text-xs font-bold ${activeFilterCount ? 'border-[rgb(var(--bamboo))] bg-[rgb(var(--bamboo)/.08)] text-[rgb(var(--bamboo))]' : 'border-slate-300 bg-white text-slate-600'}`}
+              className={`min-h-11 rounded border px-3 py-1.5 text-xs font-bold ${activeFilterCount ? 'border-[rgb(var(--bamboo))] bg-[rgb(var(--bamboo)/.08)] text-[rgb(var(--bamboo))]' : 'border-slate-300 bg-white text-slate-600'}`}
             >
               Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}
             </button>
@@ -307,37 +316,48 @@ export function LeaderboardPanel({
             </div>
             <div className="divide-y divide-slate-200">
               {mobileRows.map((row, index) => (
-                <article
-                  key={row.playerId}
-                  className="grid min-h-16 grid-cols-[42px_minmax(0,1fr)_72px_64px] items-center gap-2 px-3 py-2.5"
-                >
-                  <span className="font-mono text-base font-black text-[rgb(var(--cinnabar))]">
-                    #{row.pointsRank || index + 1}
-                  </span>
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="flex h-9 w-8 shrink-0 items-center justify-center rounded border border-slate-200 bg-slate-50 text-base">
-                      {row.icon}
+                <article key={row.playerId}>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedMobileRows((current) => ({ ...current, [row.playerId]: !current[row.playerId] }))}
+                    aria-expanded={Boolean(expandedMobileRows[row.playerId])}
+                    aria-controls={`mobile-player-stats-${row.playerId}`}
+                    className="grid min-h-16 w-full grid-cols-[42px_minmax(0,1fr)_72px_64px] items-center gap-2 px-3 py-2.5 text-left"
+                  >
+                    <span className="font-mono text-base font-black text-[rgb(var(--cinnabar))]">
+                      #{row.pointsRank || index + 1}
                     </span>
-                    <div className="min-w-0">
-                      <h3 className="truncate text-sm font-extrabold text-slate-950">
-                        {row.displayName}
-                      </h3>
-                      <p className="truncate text-xs leading-5 text-slate-500">
-                        {titleForStanding(
-                          Math.max(1, row.pointsRank),
-                          stats.length,
-                          row.gamesPlayed,
-                          titleRules,
-                        )}
-                      </p>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="flex h-9 w-8 shrink-0 items-center justify-center rounded border border-slate-200 bg-slate-50 text-base">
+                        {row.icon}
+                      </span>
+                      <div className="min-w-0">
+                        <h3 className="truncate text-sm font-extrabold text-slate-950">
+                          {row.displayName}
+                        </h3>
+                        <p className="truncate text-xs leading-5 text-slate-500">
+                          {titleForStanding(
+                            Math.max(1, row.pointsRank),
+                            stats.length,
+                            row.gamesPlayed,
+                            titleRules,
+                          )}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <span className="font-mono text-sm font-bold text-slate-900">
-                    {row.totalPoints}
-                  </span>
-                  <span className="font-mono text-sm font-bold text-slate-900">
-                    {row.skillRating}
-                  </span>
+                    <span className="font-mono text-sm font-bold text-slate-900">{row.totalPoints}</span>
+                    <span className="flex items-center justify-between gap-1 font-mono text-sm font-bold text-slate-900">
+                      {row.skillRating}<span aria-hidden="true" className="text-[rgb(var(--muted))]">{expandedMobileRows[row.playerId] ? '⌃' : '⌄'}</span>
+                    </span>
+                  </button>
+                  {expandedMobileRows[row.playerId] ? (
+                    <div id={`mobile-player-stats-${row.playerId}`} className="grid grid-cols-4 gap-2 border-t border-slate-200 bg-slate-50 px-3 py-3 text-center">
+                      <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Games</p><p className="mt-1 font-mono text-sm font-bold text-slate-900">{row.gamesPlayed}</p></div>
+                      <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Wins</p><p className="mt-1 font-mono text-sm font-bold text-slate-900">{row.gamesWon}</p></div>
+                      <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Losses</p><p className="mt-1 font-mono text-sm font-bold text-slate-900">{row.gamesLost}</p></div>
+                      <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Win ratio</p><p className="mt-1 font-mono text-sm font-bold text-slate-900">{formatWinRate(row.gamesWon, row.gamesPlayed)}</p></div>
+                    </div>
+                  ) : null}
                 </article>
               ))}
             </div>
@@ -347,15 +367,13 @@ export function LeaderboardPanel({
                 onClick={() => setMobileExpanded((current) => !current)}
                 className="mobile-leaderboard-toggle w-full border-t border-slate-200 px-4 py-3 text-sm font-bold text-[rgb(var(--bamboo))]"
               >
-                {mobileExpanded
-                  ? 'Show top 5'
-                  : 'Show all ' + visibleRows.length + ' players'}
+                {mobileExpanded ? 'Show fewer players' : 'Show all ' + visibleRows.length + ' players'}
               </button>
             ) : null}
           </div>
           <div className="hidden overflow-x-auto md:block">
-            <div className="min-w-[646px]">
-              <div className="grid grid-cols-[56px_minmax(150px,1.7fr)_minmax(64px,.7fr)_minmax(64px,.7fr)_minmax(52px,.55fr)_minmax(52px,.55fr)_minmax(56px,.6fr)_minmax(72px,.8fr)] gap-2 border-b border-slate-200 bg-slate-50 px-3 py-3 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
+            <div className="min-w-[646px]" role="table" aria-label="Club leaderboard">
+              <div role="row" className="grid grid-cols-[56px_minmax(150px,1.7fr)_minmax(64px,.7fr)_minmax(64px,.7fr)_minmax(52px,.55fr)_minmax(52px,.55fr)_minmax(56px,.6fr)_minmax(72px,.8fr)] gap-2 border-b border-slate-200 bg-slate-50 px-3 py-3 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
                 <SortHeader
                   label="Rank"
                   column="rank"
@@ -416,12 +434,13 @@ export function LeaderboardPanel({
               {visibleRows.map((row, index) => (
                 <div
                   key={row.playerId}
+                  role="row"
                   className="leaderboard-row grid grid-cols-[56px_minmax(150px,1.7fr)_minmax(64px,.7fr)_minmax(64px,.7fr)_minmax(52px,.55fr)_minmax(52px,.55fr)_minmax(56px,.6fr)_minmax(72px,.8fr)] gap-2 border-b border-slate-200/70 px-3 py-4 last:border-b-0 hover:bg-[rgb(var(--bamboo)/0.045)]"
                 >
-                  <div className="flex items-center font-display text-xl font-black text-[rgb(var(--cinnabar))]">
+                  <div role="cell" className="flex items-center font-display text-xl font-black text-[rgb(var(--cinnabar))]">
                     #{row.pointsRank || '-'}
                   </div>
-                  <div className="flex min-w-0 items-start gap-2.5">
+                  <div role="rowheader" className="flex min-w-0 items-start gap-2.5">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-sm font-bold text-slate-700">
                       {row.icon}
                     </span>
@@ -439,22 +458,22 @@ export function LeaderboardPanel({
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center text-sm font-semibold text-slate-700">
+                  <div role="cell" className="flex items-center text-sm font-semibold text-slate-700">
                     {row.totalPoints}
                   </div>
-                  <div className="flex items-center text-sm font-semibold text-slate-700">
+                  <div role="cell" className="flex items-center text-sm font-semibold text-slate-700">
                     {row.skillRating}
                   </div>
-                  <div className="flex items-center text-sm font-semibold text-slate-700">
+                  <div role="cell" className="flex items-center text-sm font-semibold text-slate-700">
                     {row.gamesPlayed}
                   </div>
-                  <div className="flex items-center text-sm font-semibold text-slate-700">
+                  <div role="cell" className="flex items-center text-sm font-semibold text-slate-700">
                     {row.gamesWon}
                   </div>
-                  <div className="flex items-center text-sm font-semibold text-slate-700">
+                  <div role="cell" className="flex items-center text-sm font-semibold text-slate-700">
                     {row.gamesLost}
                   </div>
-                  <div className="flex items-center text-sm font-semibold text-slate-700">
+                  <div role="cell" className="flex items-center text-sm font-semibold text-slate-700">
                     {formatWinRate(row.gamesWon, row.gamesPlayed)}
                   </div>
                 </div>

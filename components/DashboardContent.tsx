@@ -32,6 +32,8 @@ export default function DashboardContent({ clubId, seasonNumber }: { clubId: str
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([])
   const [playerSearch, setPlayerSearch] = useState('')
   const [gameRange, setGameRange] = useState(50)
+  const [analyticsLoading, setAnalyticsLoading] = useState(true)
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null)
   const initializedSelection = useRef('')
 
   useEffect(() => subscribePlayers(clubId, (nextPlayers) => setPlayers(nextPlayers)), [clubId])
@@ -39,13 +41,21 @@ export default function DashboardContent({ clubId, seasonNumber }: { clubId: str
   useEffect(() => subscribeActiveSession(clubId, seasonNumber ?? 1, setSession), [clubId, seasonNumber])
   useEffect(() => {
     let cancelled = false
+    setAnalyticsLoading(true)
+    setAnalyticsError(null)
     void Promise.all([
       loadAnalyticsGames(clubId, gameRange, seasonNumber),
       loadAnalyticsSkillEvents(clubId, gameRange, seasonNumber)
     ]).then(([nextGames, nextEvents]) => {
       if (!cancelled) { setGames(nextGames); setSkillEvents(nextEvents) }
-    }).catch(() => {
-      if (!cancelled) { setGames([]); setSkillEvents([]) }
+    }).catch((error) => {
+      if (!cancelled) {
+        setGames([])
+        setSkillEvents([])
+        setAnalyticsError(error instanceof Error ? error.message : 'Analytics could not be loaded. Check your connection and try again.')
+      }
+    }).finally(() => {
+      if (!cancelled) setAnalyticsLoading(false)
     })
     return () => { cancelled = true }
   }, [clubId, gameRange, seasonNumber])
@@ -123,24 +133,31 @@ export default function DashboardContent({ clubId, seasonNumber }: { clubId: str
     return rows
   }, [skillEvents, selectedPlayerIds, sortedGames, visibleGameIds])
 
+  const gameSummary = analyticsLoading
+    ? 'Loading recorded games…'
+    : gameRange === 0
+      ? `${visibleGames.length} recorded game${visibleGames.length === 1 ? '' : 's'} loaded.`
+      : visibleGames.length
+        ? `Showing the most recent ${visibleGames.length} game${visibleGames.length === 1 ? '' : 's'} available for this view.`
+        : 'No recorded games are available for this view.'
+
   return (
-    <div id="dashboard" className="space-y-5">
+    <div id="dashboard" className="space-y-5" aria-busy={analyticsLoading}>
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Dashboard</p>
         <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Club performance</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Showing {visibleGames.length} of {sortedGames.length} recorded games.
-            </p>
+            <p className="mt-1 text-sm text-slate-500" role="status" aria-live="polite">{gameSummary}</p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Games included in analytics">
             {gameRangeOptions.map((option) => (
               <button
                 key={option.label}
                 type="button"
                 onClick={() => setGameRange(option.value)}
-                className={`rounded-lg border px-3 py-2 text-xs font-bold transition ${gameRange === option.value ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
+                aria-pressed={gameRange === option.value}
+                className={`min-h-11 rounded-lg border px-3 py-2 text-xs font-bold transition ${gameRange === option.value ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
               >
                 {option.label}
               </button>
@@ -149,42 +166,58 @@ export default function DashboardContent({ clubId, seasonNumber }: { clubId: str
         </div>
       </section>
 
+      {analyticsError ? <p role="alert" className="rounded border border-rose-200 bg-rose-50 p-4 text-sm font-bold text-rose-700">{analyticsError}</p> : null}
+
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div><h3 className="text-sm font-bold text-slate-800">Players shown</h3><p className="mt-1 text-xs text-slate-500">Defaults to the active session. Select only the players you want to compare.</p></div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => setSelectedPlayerIds(session?.participants ?? [])} disabled={!session?.participants.length} className="rounded border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40">Session players</button>
-            <button type="button" onClick={() => setSelectedPlayerIds([])} className="rounded border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700">Clear all</button>
+            <button type="button" onClick={() => setSelectedPlayerIds(session?.participants ?? [])} disabled={!session?.participants.length} className="min-h-11 rounded border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40">Session players</button>
+            <button type="button" onClick={() => setSelectedPlayerIds([])} className="min-h-11 rounded border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700">Clear all</button>
           </div>
         </div>
-        <input value={playerSearch} onChange={(event) => setPlayerSearch(event.target.value)} placeholder="Search 50+ players…" className="mt-4 min-h-11 w-full rounded border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-[rgb(var(--bamboo))]" />
-        <div className="mt-3 max-h-44 overflow-y-auto rounded border border-slate-200 bg-slate-50 p-2">
+        <input type="search" aria-label="Search players" value={playerSearch} onChange={(event) => setPlayerSearch(event.target.value)} placeholder="Search players…" className="mt-4 min-h-11 w-full rounded border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-[rgb(var(--bamboo))]" />
+        <div className="mt-3 max-h-44 overflow-y-auto rounded border border-slate-200 bg-slate-50 p-2" role="group" aria-label="Players included in charts">
           <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
             {searchedPlayers.map((player) => {
               const checked = selectedPlayerIds.includes(player.id)
               return (
-                <label key={player.id} className={`flex min-h-10 cursor-pointer items-center gap-2 rounded px-2.5 py-2 text-sm font-semibold ${checked ? 'bg-[rgb(var(--bamboo))] text-white' : 'bg-white text-slate-700 hover:bg-slate-100'}`}>
+                <label key={player.id} className={`flex min-h-11 cursor-pointer items-center gap-2 rounded px-2.5 py-2 text-sm font-semibold ${checked ? 'bg-[rgb(var(--bamboo))] text-white' : 'bg-white text-slate-700 hover:bg-slate-100'}`}>
                   <input type="checkbox" checked={checked} onChange={() => setSelectedPlayerIds((current) => checked ? current.filter((id) => id !== player.id) : [...current, player.id])} className="h-4 w-4" />
                   <span>{player.icon}</span><span className="truncate">{player.displayName}</span>
                 </label>
               )
             })}
+            {searchedPlayers.length === 0 ? <p className="p-3 text-sm font-semibold text-slate-500">No players match that search.</p> : null}
           </div>
         </div>
-        <p className="mt-2 text-xs font-semibold text-slate-500">{selectedPlayerIds.length} player{selectedPlayerIds.length === 1 ? '' : 's'} selected</p>
+        <p className="mt-2 text-xs font-semibold text-slate-500" role="status" aria-live="polite">{selectedPlayerIds.length} player{selectedPlayerIds.length === 1 ? '' : 's'} selected</p>
+        {selectedPlayers.length ? (
+          <div className="mt-4 border-t border-slate-200 pt-3" aria-label="Chart legend">
+            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Chart legend</p>
+            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+              {selectedPlayers.map((player, index) => (
+                <li key={player.id} className="flex min-h-8 items-center gap-2 text-xs font-bold text-slate-700">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: palette[index % palette.length] }} aria-hidden="true" />
+                  <span>{player.icon} {player.displayName}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </section>
 
       <section className="grid gap-5">
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h3 className="text-sm font-bold text-slate-800">Cumulative score chart</h3>
           {cumulativeData.length > 0 && selectedPlayers.length > 0 ? (
-            <div className="mt-4 h-80">
+            <div className="mt-4 h-64 sm:h-80" role="img" aria-label={`Cumulative score history for ${selectedPlayers.map((player) => player.displayName).join(', ')}`}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={cumulativeData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--line))" opacity={0.2} />
                   <XAxis dataKey="label" tick={{ fill: 'rgb(var(--muted))', fontSize: 12 }} />
                   <YAxis tick={{ fill: 'rgb(var(--muted))', fontSize: 12 }} />
-                  <Tooltip />
+                  <Tooltip contentStyle={{ backgroundColor: 'rgb(var(--surface-1))', borderColor: 'rgb(var(--line))', borderRadius: 4, color: 'rgb(var(--ink))' }} labelStyle={{ color: 'rgb(var(--ink))', fontWeight: 800 }} />
                   {selectedPlayers.map((player, index) => (
                     <Line
                       key={player.id}
@@ -210,13 +243,13 @@ export default function DashboardContent({ clubId, seasonNumber }: { clubId: str
           <h3 className="text-sm font-bold text-slate-800">Skill rank bump chart</h3>
           <p className="mt-2 text-sm text-slate-500">Shows how selected players&apos; club rank changes over time.</p>
           {bumpChartData.length > 0 && selectedPlayers.length > 0 ? (
-            <div className="mt-4 h-80">
+            <div className="mt-4 h-64 sm:h-80" role="img" aria-label={`Skill rank history for ${selectedPlayers.map((player) => player.displayName).join(', ')}`}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={bumpChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--line))" opacity={0.2} />
                   <XAxis dataKey="label" tick={{ fill: 'rgb(var(--muted))', fontSize: 12 }} />
                   <YAxis reversed tick={{ fill: 'rgb(var(--muted))', fontSize: 12 }} allowDecimals={false} />
-                  <Tooltip />
+                  <Tooltip contentStyle={{ backgroundColor: 'rgb(var(--surface-1))', borderColor: 'rgb(var(--line))', borderRadius: 4, color: 'rgb(var(--ink))' }} labelStyle={{ color: 'rgb(var(--ink))', fontWeight: 800 }} />
                   {selectedPlayers.map((player, index) => (
                     <Line
                       key={player.id}

@@ -394,6 +394,9 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           <button
             data-tour="roster-open"
             type="button"
+            aria-haspopup="dialog"
+            aria-expanded={rosterOpen}
+            aria-controls="club-roster-dialog"
             onClick={() => {
               setPlayerMessage(null)
               setRosterOpen(true)
@@ -405,6 +408,9 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           <button
             data-tour="analytics-open"
             type="button"
+            aria-haspopup="dialog"
+            aria-expanded={analyticsOpen}
+            aria-controls="club-analytics-dialog"
             onClick={() => setAnalyticsOpen(true)}
             className="club-secondary-action rounded-lg px-3 py-2 text-sm font-bold transition"
           >
@@ -431,6 +437,9 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             type="button"
             onClick={() => setSettingsOpen(true)}
             aria-label="Club settings"
+            aria-haspopup="dialog"
+            aria-expanded={settingsOpen}
+            aria-controls="club-settings-dialog"
             title="Club settings"
             className="club-secondary-action club-settings-action flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-bold transition"
           >
@@ -442,12 +451,12 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
 
       {settingsOpen ? (
         <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
-          <div data-tour="settings-modal" className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-2xl">
+          <div id="club-settings-dialog" data-tour="settings-modal" role="dialog" aria-modal="true" aria-labelledby="club-settings-title" className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-2xl">
             <div className="border-b border-slate-200 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Club settings</p>
-                  <h3 className="mt-2 text-xl font-black text-slate-950">{club?.name ?? membership.clubName}</h3>
+                  <h3 id="club-settings-title" className="mt-2 text-xl font-black text-slate-950">{club?.name ?? membership.clubName}</h3>
                   <p className="mt-1 text-sm text-slate-500">Manage navigation and season controls for this club.</p>
                 </div>
                 <button
@@ -493,7 +502,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                 <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
                   <p className="text-sm font-black text-rose-700">Delete club</p>
                   <p className="mt-1 text-sm text-rose-700">Permanently delete this club and all of its club-specific database records. This cannot be undone.</p>
-                  <button type="button" onClick={() => setDeleteConfirmOpen(true)} className="mt-4 rounded-lg bg-rose-700 px-4 py-2 text-sm font-bold text-white hover:bg-rose-600">Delete club</button>
+                  <button type="button" onClick={() => setDeleteConfirmOpen(true)} aria-haspopup="dialog" aria-controls="delete-club-dialog" className="mt-4 rounded-lg bg-rose-700 px-4 py-2 text-sm font-bold text-white hover:bg-rose-600">Delete club</button>
                 </div>
               ) : isManager && club?.universal ? (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
@@ -508,10 +517,10 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
 
       {deleteConfirmOpen && club && isManager && !club.universal ? (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 px-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+          <div id="delete-club-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-club-title" aria-describedby="delete-club-description" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-rose-600">Permanent action</p>
-            <h3 className="mt-2 text-xl font-black text-slate-950">Delete {club.name}?</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
+            <h3 id="delete-club-title" className="mt-2 text-xl font-black text-slate-950">Delete {club.name}?</h3>
+            <p id="delete-club-description" className="mt-2 text-sm leading-6 text-slate-600">
               This permanently deletes the club for every member, including its roster and player links, memberships and join requests, games and scores, statistics and rankings, seasons, sessions and table layouts, QR codes, settings, and club audit history. Your account and other clubs are not affected. This cannot be undone.
             </p>
             <p className="mt-3 text-sm font-bold leading-6 text-rose-700">Type <strong>{club.name}</strong> exactly to confirm.</p>
@@ -546,7 +555,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_460px]">
         <div className="min-w-0 space-y-6">
           {joinRequestNotice ? (
-            <div role="status" aria-live="polite" className={`rounded-lg border px-4 py-3 text-sm font-bold shadow-sm ${joinRequestNotice.error ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
+            <div role={joinRequestNotice.error ? 'alert' : 'status'} aria-live={joinRequestNotice.error ? 'assertive' : 'polite'} className={`rounded-lg border px-4 py-3 text-sm font-bold shadow-sm ${joinRequestNotice.error ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
               {joinRequestNotice.message}
             </div>
           ) : null}
@@ -588,6 +597,9 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             <button
               data-tour="roster-open"
               type="button"
+              aria-haspopup="dialog"
+              aria-expanded={rosterOpen}
+              aria-controls="club-roster-dialog"
               onClick={() => {
                 setPlayerMessage(null)
                 setRosterOpen(true)
@@ -610,11 +622,11 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
 
       {rosterOpen ? (
         <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
-          <div data-tour="roster-modal" className="responsive-modal-panel flex max-h-[90vh] w-full max-w-5xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
+          <div id="club-roster-dialog" data-tour="roster-modal" role="dialog" aria-modal="true" aria-labelledby="club-roster-title" className="responsive-modal-panel flex max-h-[90vh] w-full max-w-5xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <div className="p-5 pb-0">
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-600">Club roster</p>
-                <h3 className="mt-2 text-xl font-black text-slate-950">Players and linked users</h3>
+                <h3 id="club-roster-title" className="mt-2 text-xl font-black text-slate-950">Players and linked users</h3>
                 <p className="mt-1 text-sm text-slate-500">{players.length} tracked players in {club?.name ?? membership.clubName}</p>
               </div>
               <button data-tour="roster-close" type="button" onClick={() => setRosterOpen(false)} className="mr-5 mt-5 rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">
@@ -644,7 +656,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                       {promotingManager ? 'Promoting...' : 'Promote manager'}
                     </button>
                   </div>
-                  {managerMessage ? <p className="mt-3 text-sm font-semibold text-slate-700">{managerMessage}</p> : null}
+                  {managerMessage ? <p role="status" aria-live="polite" className="mt-3 text-sm font-semibold text-slate-700">{managerMessage}</p> : null}
                 </section>
               ) : null}
               {isManager ? <section className="rounded-lg border border-teal-200 bg-teal-50 p-4">
@@ -705,8 +717,8 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                     </label>
                   ) : null}
                 </div>
-                {playerMessage ? <p className="mt-3 text-sm font-semibold text-slate-700">{playerMessage}</p> : null}
               </section> : null}
+              {playerMessage ? <p role="status" aria-live="polite" className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">{playerMessage}</p> : null}
 
               <section className="mt-5">
                 <div className="flex items-center justify-between gap-3">
@@ -792,11 +804,11 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
 
       {analyticsOpen ? (
         <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
-          <div data-tour="analytics-modal" className="responsive-modal-panel flex max-h-[92vh] w-full max-w-6xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
+          <div id="club-analytics-dialog" data-tour="analytics-modal" role="dialog" aria-modal="true" aria-labelledby="club-analytics-title" className="responsive-modal-panel flex max-h-[92vh] w-full max-w-6xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
             <div className="flex items-start justify-between gap-3 border-b border-slate-200 p-5">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">Analytics</p>
-                <h3 className="mt-2 text-xl font-black text-slate-950">{club?.name ?? membership.clubName} insights</h3>
+                <h3 id="club-analytics-title" className="mt-2 text-xl font-black text-slate-950">{club?.name ?? membership.clubName} insights</h3>
                 <p className="mt-1 text-sm text-slate-500">Dashboard charts, Skill movement, and club analytics.</p>
                 <Link href="/metrics" className="mt-3 inline-flex items-center gap-3 rounded-full border border-[rgb(var(--bamboo)/.45)] bg-[rgb(var(--bamboo)/.08)] px-4 py-2 text-xs font-black text-[rgb(var(--bamboo))] transition hover:translate-x-1 hover:bg-[rgb(var(--bamboo)/.14)]">
                   <span>How are these metrics calculated?</span><span aria-hidden="true">→</span>

@@ -25,6 +25,12 @@
   --action-muted-hover: 215 205 171;
   --shadow: 38 35 25;
   --radius-panel: 4px;
+  --felt: 9 48 36;
+  --felt-deep: 5 30 23;
+  --tile-face: 255 252 239;
+  --tile-edge: 221 211 178;
+  --on-accent: 255 255 255;
+  --focus-ring: 220 79 54;
 }
 
 html.dark {
@@ -49,6 +55,12 @@ html.dark {
   --action-muted: 43 52 47;
   --action-muted-hover: 54 64 57;
   --shadow: 0 8 5;
+  --felt: 8 41 31;
+  --felt-deep: 3 22 16;
+  --tile-face: 238 231 207;
+  --tile-edge: 109 111 91;
+  --on-accent: 255 255 255;
+  --focus-ring: 243 188 82;
 }
 
 * { box-sizing: border-box; }
@@ -82,7 +94,7 @@ body {
 button, input, textarea, select { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button { transition: transform 140ms ease, background-color 140ms ease, border-color 140ms ease, color 140ms ease; }
-button:active { transform: translateY(1px); }
+button:active:not(:disabled) { transform: translateY(1px); }
 :focus-visible { outline: 2px solid rgb(var(--cinnabar)); outline-offset: 3px; }
 
 /* Translate the existing utility vocabulary into the shared clubhouse tokens. */
@@ -681,5 +693,303 @@ body.table-focus-mode>div,body.table-focus-mode main{max-width:none!important}
   opacity: 0.96 !important;
   cursor: grabbing !important;
   position: relative;
+}
+
+/* 2026 clubhouse interaction system
+   A tactile Mahjong table, not a generic admin dashboard. */
+html { scroll-behavior: smooth; }
+body { min-width: 320px; text-rendering: optimizeLegibility; }
+
+.club-header {
+  border-bottom-color: rgb(255 255 255 / .11) !important;
+  background:
+    linear-gradient(90deg, rgb(var(--felt-deep) / .98), rgb(var(--felt) / .96) 55%, rgb(var(--felt-deep) / .98)) !important;
+  box-shadow: 0 12px 38px rgb(0 18 13 / .22) !important;
+}
+.club-header .brand-kicker { color: rgb(246 124 95) !important; }
+.club-header a[aria-label="Go to your personal dashboard"] > span:last-child > span:last-child { color: rgb(255 249 226) !important; }
+.club-header a[aria-label="Go to your personal dashboard"] > span:first-child {
+  border-color: rgb(255 255 255 / .18) !important;
+  background: linear-gradient(145deg, rgb(255 252 239), rgb(226 218 190)) !important;
+  box-shadow: 2px 3px 0 rgb(0 0 0 / .3), inset 0 1px 0 white !important;
+}
+.club-header [aria-label="Open app guide"] {
+  border-color: rgb(255 255 255 / .2) !important;
+  background: rgb(255 255 255 / .08) !important;
+  color: rgb(255 249 226) !important;
+}
+.club-header [aria-label="Account and app settings"] {
+  border-color: rgb(112 222 169 / .5) !important;
+  background: rgb(32 143 99) !important;
+  color: white !important;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+select,
+textarea {
+  border-color: rgb(var(--line)) !important;
+  background-color: rgb(var(--surface-1)) !important;
+  color: rgb(var(--ink)) !important;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid rgb(var(--bamboo) / .2);
+  outline-offset: 1px;
+  border-color: rgb(var(--bamboo)) !important;
+}
+button:disabled { cursor: not-allowed; }
+[aria-pressed="true"] { box-shadow: inset 0 -3px 0 rgb(0 0 0 / .16), 0 0 0 1px rgb(var(--surface-1) / .15); }
+
+/* Quieter nested surfaces; the live table and hero moments carry the drama. */
+section.rounded-lg,
+article.rounded-lg,
+div.rounded-lg.border.bg-white {
+  border-radius: 8px !important;
+  box-shadow: inset 0 1px 0 rgb(var(--ink) / .055), 0 12px 32px rgb(var(--shadow) / .09) !important;
+}
+.home-summary,
+.login-card,
+.session-manager {
+  box-shadow: 6px 8px 0 rgb(var(--shadow) / .09), 0 24px 64px rgb(var(--shadow) / .13) !important;
+}
+.home-club-card {
+  position: relative;
+  overflow: hidden;
+  background-image:
+    radial-gradient(circle at 100% 0%, rgb(var(--gold) / .1), transparent 9rem),
+    linear-gradient(145deg, rgb(var(--surface-1)), rgb(var(--surface-2) / .72));
+}
+.home-club-card::after {
+  content: "🀄";
+  position: absolute;
+  right: .8rem;
+  bottom: -.6rem;
+  font-size: 4.8rem;
+  opacity: .028;
+  transform: rotate(-8deg);
+  pointer-events: none;
+}
+.club-drag-handle {
+  height: 30px;
+  border: 0;
+  border-bottom: 1px solid rgb(var(--line) / .65);
+  background: rgb(var(--surface-2) / .72);
+}
+.club-drag-dots { opacity: .55; }
+
+/* Login: sign in first on phones, with a real locally bundled Google mark. */
+.login-card::after {
+  content: "";
+  position: absolute;
+  inset: auto 1.25rem -.45rem;
+  height: .45rem;
+  border-radius: 0 0 6px 6px;
+  background: linear-gradient(90deg, rgb(var(--gold)), rgb(var(--cinnabar)), rgb(var(--bamboo)));
+  opacity: .75;
+}
+.google-mark {
+  display: block;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: 1px solid rgb(255 255 255 / .7);
+  border-radius: 50%;
+  padding: 4px;
+  background: white;
+  object-fit: contain;
+}
+.login-feature-list li > span {
+  display: grid;
+  width: 2rem;
+  height: 2.3rem;
+  place-items: center;
+  border: 1px solid rgb(var(--line));
+  border-radius: 4px;
+  background: rgb(var(--surface-1));
+  box-shadow: 2px 3px 0 rgb(var(--shadow) / .1);
+}
+
+/* Modal and mobile sheet rhythm. */
+.responsive-modal { backdrop-filter: blur(10px); }
+.responsive-modal-panel {
+  border-radius: 10px !important;
+  box-shadow: 0 26px 90px rgb(0 8 5 / .38) !important;
+}
+.playful-sheet {
+  position: relative;
+  border: 1px solid rgb(var(--line));
+  box-shadow: 0 -18px 60px rgb(0 8 5 / .28);
+}
+.playful-sheet::before {
+  content: "";
+  position: sticky;
+  top: .55rem;
+  z-index: 3;
+  display: block;
+  width: 2.8rem;
+  height: .28rem;
+  margin: .55rem auto 0;
+  border-radius: 999px;
+  background: rgb(var(--line));
+}
+.fan-choice-grid { grid-template-columns: repeat(auto-fit, minmax(3.1rem, 1fr)) !important; }
+
+/* The focused table is the signature moment: deep felt plus physical seat tiles. */
+.focused-table {
+  --ink: 248 242 217;
+  --muted: 184 190 168;
+  --surface: 15 52 40;
+  --surface-1: 15 52 40;
+  --surface-2: 24 69 53;
+  --line: 54 91 75;
+  color: rgb(var(--ink));
+  background-color: rgb(var(--felt-deep)) !important;
+  background-image:
+    radial-gradient(circle at 18% 0%, rgb(54 142 101 / .22), transparent 28rem),
+    linear-gradient(140deg, rgb(var(--felt)), rgb(var(--felt-deep))) !important;
+}
+.focused-table > header,
+.focused-table > footer {
+  background: rgb(var(--felt-deep) / .92) !important;
+  box-shadow: 0 8px 26px rgb(0 0 0 / .22);
+}
+.focused-table article,
+.focused-table section[aria-label*="seats"] > button {
+  border-color: rgb(100 128 110 / .65) !important;
+  background: linear-gradient(145deg, rgb(24 69 53), rgb(13 49 37)) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .07), 3px 4px 0 rgb(0 0 0 / .18) !important;
+}
+.focused-table article:hover { transform: translateY(-2px); }
+.focused-table .qr-single-card {
+  --ink: 23 31 27;
+  --muted: 82 96 88;
+  --surface: 255 252 239;
+  --surface-1: 255 252 239;
+  --surface-2: 245 241 223;
+  --line: 211 203 176;
+}
+
+/* Long-form metric reference becomes a compact score ledger. */
+.metrics-hero {
+  overflow: hidden;
+  background-image:
+    linear-gradient(115deg, rgb(var(--bamboo) / .09), transparent 55%),
+    radial-gradient(circle at 100% 0%, rgb(var(--gold) / .18), transparent 18rem);
+}
+.metrics-group { animation: ledger-in .42s cubic-bezier(.2,.75,.25,1) both; }
+.metrics-group:nth-child(2) { animation-delay: 80ms; }
+.metrics-group:nth-child(3) { animation-delay: 140ms; }
+.metric-definition { overflow: clip; transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease; }
+.metric-definition[open] { border-color: rgb(var(--bamboo) / .55) !important; box-shadow: 3px 4px 0 rgb(var(--bamboo) / .08); }
+.metric-definition summary:hover { background: rgb(var(--bamboo) / .055); }
+@keyframes ledger-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* Session surface: table state remains visually primary, menus stay quiet. */
+.session-manager .table-card {
+  overflow: hidden;
+  border-top: 3px solid rgb(var(--bamboo)) !important;
+  border-radius: 8px !important;
+}
+.session-manager .table-header,
+.session-manager .table-name,
+.session-manager .table-status,
+.session-manager .player-chip,
+.session-manager .chip-name { color: rgb(var(--ink)) !important; }
+.session-manager .table-name { min-height: 44px; }
+.session-manager .player-chip { transition: transform 160ms ease, border-color 160ms ease, background-color 160ms ease; }
+.session-manager .player-chip:hover { transform: translateY(-2px); }
+html.dark .session-manager .btn-primary,
+html.dark .session-manager .btn-submit-game,
+html.dark [class*="bg-[rgb(var(--bamboo))]"] {
+  background-color: rgb(18 116 81) !important;
+  color: white !important;
+}
+
+/* Charts, data cards, and game logs remain readable in both themes. */
+.game-log-card { background: rgb(var(--surface-1)) !important; }
+.game-log-card > span:last-child > span { background: rgb(var(--surface-2)) !important; }
+.recharts-default-tooltip {
+  border: 1px solid rgb(var(--line)) !important;
+  border-radius: 7px !important;
+  background: rgb(var(--surface-1)) !important;
+  color: rgb(var(--ink)) !important;
+  box-shadow: 0 14px 36px rgb(var(--shadow) / .18);
+}
+
+@media (hover:hover) and (pointer:fine) {
+  button:not(:disabled):hover { transform: translateY(-1px); }
+  .club-header button:hover { transform: translateY(-1px) rotate(.5deg); }
+}
+
+@media (max-width: 820px) {
+  .club-atmosphere { background-attachment: scroll, scroll, scroll; }
+  .login-welcome { padding-top: 1.25rem; }
+  .login-card { order: -1; }
+  .login-intro { width: min(100%, 480px); margin-inline: auto; }
+  .login-intro h1 { font-size: clamp(2.15rem, 10.5vw, 3.25rem); }
+  .login-feature-list { margin-top: 1.25rem; }
+  .login-feature-list li { grid-template-columns: 36px 1fr; gap: .75rem; padding: .8rem 0; }
+  .login-card-mark { margin-bottom: 1rem; }
+}
+
+@media (max-width: 767px) {
+  body { padding-bottom: env(safe-area-inset-bottom); }
+  .club-header { padding-inline: .75rem; }
+  .club-header > div { gap: .5rem; }
+  .responsive-modal-panel {
+    padding-bottom: env(safe-area-inset-bottom);
+    border-radius: 0 !important;
+  }
+  .responsive-modal-panel > div:first-child {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: rgb(var(--surface-1) / .96);
+    backdrop-filter: blur(14px);
+  }
+  .mobile-workspace-tabs {
+    top: 68px !important;
+    border-radius: 8px;
+  }
+  .home-club-card { margin-inline: 1px; }
+  .home-club-card > div.p-5 { padding-top: .85rem; }
+  .network-graph-canvas { height: clamp(18rem, 48dvh, 27rem) !important; }
+  .metrics-category-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .metrics-category-nav a { justify-content: center; padding-inline: .5rem; font-size: .78rem; }
+  .metrics-group-header { display: grid; grid-template-columns: 2rem minmax(0,1fr); column-gap: .5rem; }
+  .metrics-group-header > p { grid-row: 1 / span 2; padding-top: .35rem; }
+  .metrics-group-header > h2 { margin-top: 0; }
+  .metrics-group-header > p:last-child { grid-column: 2; }
+  .club-header [role="dialog"] {
+    position: fixed !important;
+    inset: 0 !important;
+    display: flex;
+    align-items: flex-end;
+    padding: 0;
+    background: rgb(0 8 5 / .72);
+    backdrop-filter: blur(8px);
+  }
+  .club-header [role="dialog"] > section {
+    width: 100% !important;
+    max-height: min(92dvh, 760px) !important;
+    border-radius: 12px 12px 0 0 !important;
+    padding-bottom: max(.5rem, env(safe-area-inset-bottom));
+  }
+}
+
+@media (hover:none), (pointer:coarse) {
+  .club-atmosphere { background-attachment: scroll, scroll, scroll; }
+  .club-drag-dots { opacity: .55 !important; }
+  .session-manager .chip-remove-btn,
+  .session-manager .chip-win-btn,
+  .session-manager .chip-swap-btn,
+  .session-manager .clear-table-btn { min-width: 32px !important; min-height: 32px !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { transition-duration: .01ms !important; }
+  .login-animated-tile { animation: none !important; opacity: .055; transform: translate3d(-50%,-50%,0); will-change: auto; }
+  .login-tile-anchor { will-change: auto; }
+  .metrics-group { animation: none; }
 }
 

@@ -469,13 +469,20 @@ export default function FocusedTableView({
             event.target === event.currentTarget && setPickerOpen(false)
           }
         >
-          <section className="max-h-[88dvh] w-full flex flex-col rounded-t-2xl bg-[rgb(var(--surface))]">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="focused-player-picker-title"
+            className="playful-sheet max-h-[88dvh] w-full flex flex-col rounded-t-2xl bg-[rgb(var(--surface))]"
+          >
             <div className="flex-shrink-0 p-4 pb-0">
               <div className="mx-auto max-w-xl">
                 {/* Header */}
                 <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-black">Add players</h2>
+                  <h2 id="focused-player-picker-title" className="text-xl font-black">Add players</h2>
                   <button
+                    type="button"
+                    aria-label="Close player picker"
                     onClick={() => {
                       setPickerOpen(false);
                       setSearch("");
@@ -527,6 +534,7 @@ export default function FocusedTableView({
                 {/* Search */}
                 <input
                   autoFocus
+                  aria-label="Search the club roster"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Search roster…"
@@ -615,10 +623,17 @@ export default function FocusedTableView({
 
       {resultOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 sm:items-center">
-          <section className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-[rgb(var(--surface))] p-4 sm:rounded-xl">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="focused-result-title"
+            className="playful-sheet max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-[rgb(var(--surface))] p-4 sm:rounded-xl"
+          >
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-black">Record winner</h2>
+              <h2 id="focused-result-title" className="text-xl font-black">Record winner</h2>
               <button
+                type="button"
+                aria-label="Close result editor"
                 onClick={() => setResultOpen(false)}
                 className="h-11 w-11 rounded-full border"
               >
@@ -634,6 +649,8 @@ export default function FocusedTableView({
                 return (
                   <button
                     key={id}
+                    type="button"
+                    aria-pressed={winner === id}
                     onClick={() => {
                       setWinner(id);
                       if (loser === id) setLoser("");
@@ -650,6 +667,8 @@ export default function FocusedTableView({
             </p>
             <div className="mt-2 grid grid-cols-2 gap-2">
               <button
+                type="button"
+                aria-pressed={winType === "self"}
                 onClick={() => {
                   setWinType("self");
                   setLoser("");
@@ -659,6 +678,8 @@ export default function FocusedTableView({
                 Self-draw
               </button>
               <button
+                type="button"
+                aria-pressed={winType === "discard"}
                 onClick={() => setWinType("discard")}
                 className={`min-h-12 rounded-lg border font-black ${winType === "discard" ? "bg-[rgb(var(--cinnabar))] text-white" : ""}`}
               >
@@ -678,6 +699,8 @@ export default function FocusedTableView({
                       return (
                         <button
                           key={id}
+                          type="button"
+                          aria-pressed={loser === id}
                           onClick={() => setLoser(id)}
                           className={`min-h-12 rounded-lg border text-sm font-black ${loser === id ? "bg-[rgb(var(--cinnabar))] text-white" : ""}`}
                         >
@@ -691,10 +714,12 @@ export default function FocusedTableView({
             <p className="mt-4 text-xs font-black uppercase tracking-widest text-[rgb(var(--muted))]">
               Fan
             </p>
-            <div className="mt-2 grid grid-cols-6 gap-1">
+            <div className="fan-choice-grid mt-2 grid grid-cols-6 gap-1" role="group" aria-label="Fan value">
               {fanValues(scoringRules).map((value) => (
                 <button
                   key={value}
+                  type="button"
+                  aria-pressed={fan === value}
                   onClick={() => setFan(value)}
                   className={`min-h-11 rounded border text-sm font-black ${fan === value ? "bg-[rgb(var(--bamboo))] text-white" : ""}`}
                 >
@@ -709,6 +734,7 @@ export default function FocusedTableView({
               <div
                 className="focused-score-preview mt-4 grid grid-cols-2 gap-2 rounded-xl border p-2 shadow-inner"
                 aria-label="Calculated score changes"
+                aria-live="polite"
               >
                 {occupants.map((id) => {
                   const info = player(id);
@@ -745,8 +771,8 @@ export default function FocusedTableView({
 
       {qr ? (
         <div className="qr-single-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4">
-          <section className="qr-single-card w-full max-w-sm rounded-xl bg-white p-5 text-center text-slate-950">
-            <h2 className="text-2xl font-black">Table {tableNumber}</h2>
+          <section role="dialog" aria-modal="true" aria-labelledby="focused-qr-title" className="qr-single-card w-full max-w-sm rounded-xl bg-white p-5 text-center text-slate-950">
+            <h2 id="focused-qr-title" className="text-2xl font-black">Table {tableNumber}</h2>
             <div
               className="mx-auto mt-3 w-full max-w-[300px]"
               dangerouslySetInnerHTML={{ __html: qr.svg }}

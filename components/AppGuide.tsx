@@ -107,7 +107,10 @@ export default function AppGuide() {
   const clubId = pathname.match(/^\/club\/([^/]+)/)?.[1]
 
   useEffect(() => {
-    if (!user || !clubId) return
+    if (!user || !clubId) {
+      setScoringRules(DEFAULT_SCORING_RULES)
+      return
+    }
     return subscribeScoringRules(decodeURIComponent(clubId), setScoringRules)
   }, [clubId, user])
   const welcomeClaimRef = useRef<string | null>(null)
@@ -306,7 +309,7 @@ export default function AppGuide() {
 
   return (
     <>
-      <button ref={helpButtonRef} type="button" className={helpButtonClass} aria-label="Open app guide" title="App guide" onClick={openGuide}>?</button>
+      <button ref={helpButtonRef} type="button" className={helpButtonClass} aria-label="Open app guide" aria-haspopup="dialog" aria-expanded={guideOpen} title="App guide" onClick={openGuide}>?</button>
       {welcomeOpen ? createPortal(
         <div className="real-tour-layer" aria-live="polite">
           {welcomeSpotlight ? <div className="real-tour-spotlight" style={{ top: welcomeSpotlight.top, left: welcomeSpotlight.left, width: welcomeSpotlight.width, height: welcomeSpotlight.height }} aria-hidden="true" /> : <div className="real-tour-dimmer" aria-hidden="true" />}

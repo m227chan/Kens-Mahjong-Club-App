@@ -83,10 +83,11 @@ export default function HomePage() {
   const [clubStats, setClubStats] = useState<Record<string, PlayerStatsDoc[]>>({})
   const [clubGameCounts, setClubGameCounts] = useState<Record<string, number>>({})
   const [createdClubCount, setCreatedClubCount] = useState<number | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [busyAction, setBusyAction] = useState<'create' | 'join' | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [dataError, setDataError] = useState(false)
   const [hour, setHour] = useState(12)
+  const [reorderAnnouncement, setReorderAnnouncement] = useState('')
 
   const [clubOrder, setClubOrder] = useState<string[]>([])
   const [pressingClubId, setPressingClubId] = useState<string | null>(null)
@@ -145,6 +146,25 @@ export default function HomePage() {
     if (u) localStorage.setItem(`club-order-${u.uid}`, JSON.stringify(nextOrder))
   }
 
+  const handleReorderKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, clubId: string) => {
+    if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return
+    const current = orderedClubsRef.current
+    const currentIndex = current.findIndex((club) => club.clubId === clubId)
+    if (currentIndex === -1) return
+    const targetIndex = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? current.length - 1
+        : event.key === 'ArrowUp'
+          ? Math.max(0, currentIndex - 1)
+          : Math.min(current.length - 1, currentIndex + 1)
+    if (targetIndex === currentIndex) return
+    event.preventDefault()
+    moveClubCard(clubId, current[targetIndex].clubId)
+    const clubName = current[currentIndex].clubName
+    setReorderAnnouncement(`${clubName} moved to position ${targetIndex + 1} of ${current.length}.`)
+  }
+
   const cleanDragState = () => {
     if (pressTimeoutRef.current) { clearTimeout(pressTimeoutRef.current); pressTimeoutRef.current = null }
     setPressingClubId(null)
@@ -155,7 +175,7 @@ export default function HomePage() {
     isDraggingRef.current = false
   }
 
-  const handleHandlePointerDown = (e: React.PointerEvent<HTMLDivElement>, clubId: string) => {
+  const handleHandlePointerDown = (e: React.PointerEvent<HTMLButtonElement>, clubId: string) => {
     // Only primary pointer (left mouse, first touch)
     if (e.button !== 0 && e.pointerType === 'mouse') return
     // Already tracking a drag
@@ -315,12 +335,12 @@ export default function HomePage() {
   const createdClubLimitReached = createdClubCount !== null && hasReachedCreatedClubLimit(createdClubCount)
 
   const handleCreateClub = async () => {
-    if (!user) return
+    if (!user || busyAction || !newClubName.trim()) return
     if (createdClubLimitReached) {
       setMessage(CREATED_CLUB_LIMIT_MESSAGE)
       return
     }
-    setBusy(true); setMessage(null)
+    setBusyAction('create'); setMessage(null)
     try {
       const clubId = await createClub({ name: newClubName, user })
       await ensureConfig(clubId)
@@ -329,12 +349,12 @@ export default function HomePage() {
       router.push(`/club/${encodeURIComponent(clubId)}`)
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'We could not create that club. Please try again.')
-    } finally { setBusy(false) }
+    } finally { setBusyAction(null) }
   }
 
   const handleJoinClub = async () => {
-    if (!user) return
-    setBusy(true); setMessage(null)
+    if (!user || busyAction || !joinClubId.trim()) return
+    setBusyAction('join'); setMessage(null)
     try {
       const result = await requestToJoinClub({ clubId: joinClubId, user, appUrl: window.location.origin })
       const cleanClubId = joinClubId.trim().toUpperCase()
@@ -343,7 +363,7 @@ export default function HomePage() {
       else setMessage('Your request was sent to the club manager.')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'We could not send that request. Please try again.')
-    } finally { setBusy(false) }
+    } finally { setBusyAction(null) }
   }
 
   const handleLeaveClub = async (clubId: string) => {
@@ -369,7 +389,7 @@ export default function HomePage() {
       </header>
 
       {dataError ? (
-        <div className="mt-7 rounded-lg border border-amber-200 bg-amber-50 p-5 text-sm text-slate-700">
+        <div role="alert" className="mt-7 rounded-lg border border-amber-200 bg-amber-50 p-5 text-sm text-slate-700">
           <strong className="block text-slate-950">Your dashboard could not be refreshed.</strong>
           Check your connection and reload when you are ready.
         </div>
@@ -403,6 +423,8 @@ export default function HomePage() {
           <div><p className="text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">Memberships</p><h2 className="mt-2 text-2xl font-extrabold text-slate-950">Your clubs</h2></div>
           <p className="text-sm font-semibold text-slate-500">{clubs.length} active</p>
         </div>
+        <p id="club-reorder-instructions" className="sr-only">Hold and drag to reorder clubs. With a keyboard, use the arrow keys, Home, or End.</p>
+        <p className="sr-only" role="status" aria-live="polite">{reorderAnnouncement}</p>
 
         {clubSummaries.length ? (
           <div className="home-club-wave mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -418,13 +440,17 @@ export default function HomePage() {
                 style={{ '--club-delay': `${index * 65}ms` } as React.CSSProperties}
               >
                 {/* Drag handle — press-and-hold here to reorder */}
-                <div
-                  className="club-drag-handle"
+                <button
+                  type="button"
+                  className="club-drag-handle min-h-11"
                   title="Hold to reorder"
+                  aria-label={`Reorder ${club.clubName}`}
+                  aria-describedby="club-reorder-instructions"
                   onPointerDown={(e) => handleHandlePointerDown(e, club.clubId)}
+                  onKeyDown={(event) => handleReorderKeyDown(event, club.clubId)}
                 >
-                  <span className="club-drag-dots" aria-hidden="true" />
-                </div>
+                  <span className="club-drag-dots" style={{ opacity: 0.55 }} aria-hidden="true" />
+                </button>
 
                 <div className="p-5">
                 <div className="flex items-start justify-between gap-4">
@@ -477,14 +503,23 @@ export default function HomePage() {
       <section id="club-actions" data-tour="club-actions" className="mt-9 rounded-lg border border-slate-200 bg-white p-5 sm:p-6">
         <div className="grid gap-6 lg:grid-cols-[220px_1fr_1fr] lg:items-end">
           <div><p className="text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">Grow your table</p><h2 className="mt-2 text-xl font-extrabold text-slate-950">Create or join</h2><p className="mt-2 text-sm leading-5 text-slate-600">Secondary actions when you are ready for another club.</p></div>
-          <label className="text-sm font-bold text-slate-700">
-            <span className="flex items-center justify-between gap-3"><span>New club name</span><span className="text-[11px] font-semibold tracking-wide text-slate-400" title="Clubs you have created">{createdClubCount ?? '–'}/{MAX_CREATED_CLUBS} created</span></span>
-            <div className="mt-2 flex gap-2"><input value={newClubName} onChange={(event) => setNewClubName(event.target.value)} disabled={createdClubLimitReached} placeholder="Sunday Mahjong" className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-[rgb(var(--bamboo))] disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400" /><button type="button" onClick={handleCreateClub} disabled={busy || !newClubName.trim() || createdClubLimitReached} className="rounded bg-[rgb(var(--bamboo))] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40">Create</button></div>
+          <form onSubmit={(event) => { event.preventDefault(); void handleCreateClub() }} aria-busy={busyAction === 'create'}>
+            <label htmlFor="new-club-name" className="flex items-center justify-between gap-3 text-sm font-bold text-slate-700"><span>New club name</span><span className="text-[11px] font-semibold tracking-wide text-slate-400" title="Clubs you have created">{createdClubCount ?? '–'}/{MAX_CREATED_CLUBS} created</span></label>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+              <input id="new-club-name" name="clubName" value={newClubName} onChange={(event) => setNewClubName(event.target.value)} disabled={createdClubLimitReached} autoComplete="off" placeholder="Sunday Mahjong" className="min-h-11 min-w-0 flex-1 rounded border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-[rgb(var(--bamboo))] disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400" />
+              <button type="submit" disabled={busyAction !== null || !newClubName.trim() || createdClubLimitReached} className="min-h-11 rounded bg-[rgb(var(--bamboo))] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40">{busyAction === 'create' ? 'Creating…' : 'Create'}</button>
+            </div>
             {createdClubLimitReached ? <span className="mt-2 block text-xs font-medium leading-5 text-amber-700">{CREATED_CLUB_LIMIT_MESSAGE}</span> : null}
-          </label>
-          <label className="text-sm font-bold text-slate-700">Existing club ID<div className="mt-2 flex gap-2"><input value={joinClubId} onChange={(event) => setJoinClubId(event.target.value.toUpperCase())} placeholder="ABC123" className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-3 py-2.5 uppercase outline-none focus:border-[rgb(var(--bamboo))]" /><button type="button" onClick={handleJoinClub} disabled={busy || !joinClubId.trim()} className="rounded border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 disabled:opacity-40">Join</button></div></label>
+          </form>
+          <form onSubmit={(event) => { event.preventDefault(); void handleJoinClub() }} aria-busy={busyAction === 'join'}>
+            <label htmlFor="join-club-id" className="text-sm font-bold text-slate-700">Existing club ID</label>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+              <input id="join-club-id" name="clubId" value={joinClubId} onChange={(event) => setJoinClubId(event.target.value.toUpperCase())} autoCapitalize="characters" autoComplete="off" spellCheck={false} placeholder="ABC123" className="min-h-11 min-w-0 flex-1 rounded border border-slate-300 bg-white px-3 py-2.5 uppercase outline-none focus:border-[rgb(var(--bamboo))]" />
+              <button type="submit" disabled={busyAction !== null || !joinClubId.trim()} className="min-h-11 rounded border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 disabled:opacity-40">{busyAction === 'join' ? 'Joining…' : 'Join'}</button>
+            </div>
+          </form>
         </div>
-        {message ? <p className="mt-4 border-l-4 border-[rgb(var(--gold))] bg-amber-50 px-4 py-3 text-sm font-semibold text-slate-700">{message}</p> : null}
+        {message ? <p role="status" aria-live="polite" className="mt-4 border-l-4 border-[rgb(var(--gold))] bg-amber-50 px-4 py-3 text-sm font-semibold text-slate-700">{message}</p> : null}
       </section>
     </main>
   )

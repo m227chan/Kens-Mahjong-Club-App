@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSound } from '@/contexts/SoundContext'
@@ -22,10 +23,14 @@ function FloatingTiles() {
 
     let bounds = field.current.getBoundingClientRect()
     let frame = 0
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const coarsePointer = window.matchMedia('(pointer: coarse)')
     const pointer = { x: -1000, y: -1000, active: false }
     const motion = tiles.map(() => ({ x: 0, y: 0, vx: 0, vy: 0, lastClack: 0 }))
+    const physicsEnabled = () => !document.hidden && !reducedMotion.matches && !coarsePointer.matches
     const resize = () => { if (field.current) bounds = field.current.getBoundingClientRect() }
     const move = (event: PointerEvent) => {
+      if (!physicsEnabled()) return
       pointer.x = event.clientX - bounds.left
       pointer.y = event.clientY - bounds.top
       pointer.active = true
@@ -33,6 +38,10 @@ function FloatingTiles() {
     const leave = () => { pointer.active = false }
 
     const tick = () => {
+      if (!physicsEnabled()) {
+        frame = 0
+        return
+      }
       tiles.forEach((tile, index) => {
         const node = nodes.current[index]
         if (!node) return
@@ -61,18 +70,34 @@ function FloatingTiles() {
       frame = requestAnimationFrame(tick)
     }
 
+    const syncPhysics = () => {
+      pointer.active = false
+      if (!physicsEnabled()) {
+        if (frame) cancelAnimationFrame(frame)
+        frame = 0
+        return
+      }
+      if (!frame) frame = requestAnimationFrame(tick)
+    }
+
     addEventListener('resize', resize)
     addEventListener('pointermove', move, { passive: true })
     addEventListener('pointercancel', leave)
     document.addEventListener('mouseleave', leave)
-    frame = requestAnimationFrame(tick)
+    document.addEventListener('visibilitychange', syncPhysics)
+    reducedMotion.addEventListener('change', syncPhysics)
+    coarsePointer.addEventListener('change', syncPhysics)
+    syncPhysics()
 
     return () => {
-      cancelAnimationFrame(frame)
+      if (frame) cancelAnimationFrame(frame)
       removeEventListener('resize', resize)
       removeEventListener('pointermove', move)
       removeEventListener('pointercancel', leave)
       document.removeEventListener('mouseleave', leave)
+      document.removeEventListener('visibilitychange', syncPhysics)
+      reducedMotion.removeEventListener('change', syncPhysics)
+      coarsePointer.removeEventListener('change', syncPhysics)
     }
   }, [play])
 
@@ -140,7 +165,7 @@ export default function LoginPage(){
         <h2>Welcome back</h2>
         <p className="login-card-copy">Sign in to open your clubs and pick up where the last game ended.</p>
         <button type="button" onClick={handleSignIn} disabled={loading||signingIn} className="login-google-button">
-          <span className="google-mark" aria-hidden="true">G</span>
+          <Image className="google-mark object-contain p-[3px]" src="/google-g.png" alt="" width={25} height={25} aria-hidden="true" />
           {loading?'Checking sign-in status…':signingIn?'Opening Google sign-in…':'Continue with Google'}
         </button>
         {(localError??authError)&&<p className="login-error" role="alert">{localError??authError}</p>}

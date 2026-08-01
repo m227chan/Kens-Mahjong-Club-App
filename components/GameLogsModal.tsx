@@ -467,11 +467,11 @@ export default function GameLogsModal({
 
   return (
     <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
-      <div data-tour="logs-modal" className="responsive-modal-panel flex max-h-[92vh] w-full max-w-7xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
+      <div role="dialog" aria-modal="true" aria-labelledby="game-logs-title" data-tour="logs-modal" className="responsive-modal-panel flex max-h-[92vh] w-full max-w-7xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
         <div className="flex flex-col gap-4 border-b border-slate-200 p-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-600">Game logs</p>
-            <h3 className="mt-2 text-xl font-black text-slate-950">Club game logs</h3>
+            <h3 id="game-logs-title" className="mt-2 text-xl font-black text-slate-950">Club game logs</h3>
             <p className="mt-1 text-sm text-slate-500">One record per game. {isManager ? 'Managers can edit or delete any record.' : 'You can edit games you created for 24 hours.'}</p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -517,13 +517,13 @@ export default function GameLogsModal({
                 </select>
               </label>
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => setViewMode('all')} className={`rounded-lg border px-3 py-2 text-sm font-bold ${viewMode === 'all' ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 bg-white text-slate-600'}`}>
+                <button type="button" aria-pressed={viewMode === 'all'} onClick={() => setViewMode('all')} className={`min-h-11 rounded-lg border px-3 py-2 text-sm font-bold ${viewMode === 'all' ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 bg-white text-slate-600'}`}>
                   Show all data
                 </button>
-                <button type="button" onClick={() => setViewMode('session')} className={`rounded-lg border px-3 py-2 text-sm font-bold ${viewMode === 'session' ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 bg-white text-slate-600'}`}>
+                <button type="button" aria-pressed={viewMode === 'session'} onClick={() => setViewMode('session')} className={`min-h-11 rounded-lg border px-3 py-2 text-sm font-bold ${viewMode === 'session' ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 bg-white text-slate-600'}`}>
                   Session players
                 </button>
-                <button type="button" onClick={() => setViewMode('player')} className={`rounded-lg border px-3 py-2 text-sm font-bold ${viewMode === 'player' ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 bg-white text-slate-600'}`}>
+                <button type="button" aria-pressed={viewMode === 'player'} onClick={() => setViewMode('player')} className={`min-h-11 rounded-lg border px-3 py-2 text-sm font-bold ${viewMode === 'player' ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 bg-white text-slate-600'}`}>
                   Specific player
                 </button>
               </div>
@@ -554,19 +554,19 @@ export default function GameLogsModal({
             <label className="text-xs font-bold text-slate-600">Maximum score<input type="number" value={maximumScore} onChange={(event) => setMaximumScore(event.target.value)} disabled={!scoreFilterPlayerId} placeholder="Any" className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm font-medium text-slate-800 disabled:bg-slate-100" /></label>
             <button type="button" onClick={() => { setTableSearch(''); setScoreFilterPlayerId(''); setMinimumScore(''); setMaximumScore(''); setTableSort('datetime'); setTableSortDirection('desc') }} className="min-h-10 self-end rounded border border-slate-300 bg-white px-3 text-sm font-bold text-slate-700">Reset table</button>
           </div> : null}
-          {importMessage ? <p className="mt-3 text-sm font-semibold text-slate-600">{importMessage}</p> : null}
+          {importMessage ? <p role="status" className="mt-3 text-sm font-semibold text-slate-600">{importMessage}</p> : null}
         </div>
 
         <div className="min-h-0 flex-1 overflow-auto p-3 sm:p-4">
           <div className={`grid grid-cols-1 gap-3 ${layoutMode === 'table' ? 'md:hidden' : ''}`}>
             {displayedGames.map((game) => (
-              <button key={game.id} type="button" onClick={() => openGame(game)} disabled={!canEditGame(game)} className="group w-full overflow-hidden rounded border border-slate-200 bg-white text-left shadow-sm transition enabled:hover:-translate-y-0.5 enabled:hover:border-[rgb(var(--bamboo))] enabled:hover:shadow-md enabled:active:translate-y-0 disabled:cursor-default">
+              <article key={game.id} className="game-log-card group w-full overflow-hidden rounded border border-slate-200 bg-white text-left shadow-sm transition hover:border-[rgb(var(--bamboo)/.55)]">
                 <span className="flex items-center justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-5 sm:py-4">
                   <span className="min-w-0">
                     <strong className="block truncate text-sm text-slate-900 sm:text-base">{formatDate(game)}</strong>
                     <span className="mt-1 inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[.08em] text-slate-500">Season {game.seasonNumber ?? 1}</span>
                   </span>
-                  {canEditGame(game) ? <span className="shrink-0 text-xs font-bold text-[rgb(var(--bamboo))] transition-transform group-hover:translate-x-1">Review record →</span> : null}
+                  {canEditGame(game) ? <button type="button" onClick={() => openGame(game)} className="min-h-11 shrink-0 rounded border border-[rgb(var(--bamboo)/.4)] px-3 text-xs font-bold text-[rgb(var(--bamboo))] transition-transform group-hover:translate-x-0.5">Review record →</button> : <span className="shrink-0 text-xs font-bold text-slate-500">Read only</span>}
                 </span>
                 <span className="grid grid-cols-2 gap-px bg-[rgb(var(--line))] sm:grid-cols-4">
                   {game.entries.map((entry) => {
@@ -582,7 +582,7 @@ export default function GameLogsModal({
                     )
                   })}
                 </span>
-              </button>
+              </article>
             ))}
           </div>
 
@@ -626,9 +626,9 @@ export default function GameLogsModal({
 
       {selectedGame ? (
         <div className="responsive-modal fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/80 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && !savingGame) setSelectedGame(null) }}>
-          <div className="responsive-modal-panel max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-lg border border-slate-200 bg-white p-5 shadow-2xl sm:p-6">
+          <div role="dialog" aria-modal="true" aria-labelledby="game-record-title" className="responsive-modal-panel max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-lg border border-slate-200 bg-white p-5 shadow-2xl sm:p-6">
             <div className="flex items-start justify-between gap-4">
-              <div><p className="text-xs font-bold uppercase tracking-[.16em] text-[rgb(var(--bamboo))]">Game record</p><h4 className="mt-2 text-xl font-black text-slate-950">Review and update</h4></div>
+              <div><p className="text-xs font-bold uppercase tracking-[.16em] text-[rgb(var(--bamboo))]">Game record</p><h4 id="game-record-title" className="mt-2 text-xl font-black text-slate-950">Review and update</h4></div>
               <button type="button" onClick={() => setSelectedGame(null)} disabled={savingGame} className="rounded border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">Close</button>
             </div>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -648,7 +648,7 @@ export default function GameLogsModal({
             </div>
             <label className="mt-5 block text-sm font-bold text-slate-700">Notes<textarea value={draftNotes} onChange={(event) => setDraftNotes(event.target.value)} rows={3} className="mt-2 w-full resize-y rounded border border-slate-300 bg-white p-3 text-slate-900" /></label>
             <p className="mt-3 text-xs leading-5 text-slate-500">Saving or deleting rebuilds points, Skill ratings, rankings, win rates, titles, and analytics from the complete game history.</p>
-            {importMessage ? <p className="mt-3 rounded border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{importMessage}</p> : null}
+            {importMessage ? <p role="status" className="mt-3 rounded border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{importMessage}</p> : null}
             <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
               {isManager ? <button type="button" onClick={() => mutateGame('delete')} disabled={savingGame} className="min-h-11 rounded border border-rose-300 px-4 py-2 text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50">Delete game</button> : <span />}
               <button type="button" onClick={() => mutateGame('update')} disabled={savingGame || !draftDate} className="min-h-11 rounded bg-[rgb(var(--bamboo))] px-5 py-2 text-sm font-bold text-white disabled:opacity-50">{savingGame ? 'Rebuilding statistics…' : 'Save changes'}</button>

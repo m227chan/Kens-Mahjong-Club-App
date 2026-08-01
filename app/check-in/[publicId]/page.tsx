@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
@@ -28,6 +29,7 @@ export default function TableCheckInPage() {
   const router = useRouter()
   const { user, loading, signingIn, authError, signInWithGoogle } = useAuth()
   const [signature, setSignature] = useState('')
+  const [signatureResolved, setSignatureResolved] = useState(false)
   const [exchange, setExchange] = useState<Exchange | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -35,17 +37,22 @@ export default function TableCheckInPage() {
   const [newName, setNewName] = useState('')
   const [newIcon, setNewIcon] = useState('🀄')
   const [fullTable, setFullTable] = useState<string[] | null>(null)
+  const [pendingReplacement, setPendingReplacement] = useState<TablePlayer | null>(null)
   const exchangeAttemptKey = useRef('')
 
   useEffect(() => {
-    const key = `mahjong:table-qr:${publicId}`
-    const fromHash =
-      new URLSearchParams(window.location.hash.replace(/^#/, '')).get('k') ?? ''
-    const saved = fromHash || window.sessionStorage.getItem(key) || ''
-    if (saved) window.sessionStorage.setItem(key, saved)
-    setSignature(saved)
-    if (window.location.hash)
-      window.history.replaceState(null, '', window.location.pathname)
+    try {
+      const key = `mahjong:table-qr:${publicId}`
+      const fromHash =
+        new URLSearchParams(window.location.hash.replace(/^#/, '')).get('k') ?? ''
+      const saved = fromHash || window.sessionStorage.getItem(key) || ''
+      if (saved) window.sessionStorage.setItem(key, saved)
+      setSignature(saved)
+      if (window.location.hash)
+        window.history.replaceState(null, '', window.location.pathname)
+    } finally {
+      setSignatureResolved(true)
+    }
   }, [publicId])
 
   const finishCheckIn = async (details: Exchange, replacePlayerId?: string) => {
@@ -57,6 +64,7 @@ export default function TableCheckInPage() {
     })
     if (result.status === 'table_full') {
       setFullTable(result.occupants)
+      setPendingReplacement(null)
       return
     }
     window.sessionStorage.removeItem(`mahjong:table-qr:${publicId}`)
@@ -66,7 +74,7 @@ export default function TableCheckInPage() {
   }
 
   useEffect(() => {
-    if (loading || !user || !signature || exchange || busy) return
+    if (!signatureResolved || loading || !user || !signature || exchange || busy) return
     const attemptKey = `${user.uid}:${publicId}:${signature}`
     if (exchangeAttemptKey.current === attemptKey) return
     exchangeAttemptKey.current = attemptKey
@@ -95,7 +103,7 @@ export default function TableCheckInPage() {
       .finally(() => setBusy(false))
     // finishCheckIn intentionally uses current route state only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busy, exchange, loading, publicId, signature, user])
+  }, [busy, exchange, loading, publicId, signature, signatureResolved, user])
 
   const filtered = useMemo(
     () =>
@@ -178,14 +186,34 @@ export default function TableCheckInPage() {
     }
   }
 
+  const confirmReplacement = async () => {
+    if (!exchange || !pendingReplacement) return
+    setBusy(true)
+    setError(null)
+    try {
+      await finishCheckIn(exchange, pendingReplacement.id)
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : 'Unable to replace that player.',
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const occupants =
     fullTable
       ?.map((id) => exchange?.players.find((player) => player.id === id))
       .filter((player): player is TablePlayer => Boolean(player)) ?? []
 
   return (
-    <main className="mx-auto flex min-h-[calc(100dvh-90px)] max-w-lg items-center px-4 py-8">
-      <section className="w-full rounded-xl border border-slate-200 bg-white p-5 shadow-xl">
+    <main className="table-check-in-page mx-auto flex min-h-[calc(100dvh-90px)] max-w-lg items-center px-4 py-8">
+      <section
+        className="table-check-in-card w-full rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+        aria-busy={!signatureResolved || loading || busy}
+      >
         <p className="text-xs font-black uppercase tracking-[.18em] text-[rgb(var(--bamboo))]">
           Table check-in
         </p>
@@ -194,12 +222,12 @@ export default function TableCheckInPage() {
             ? `${exchange.clubName} · Table ${exchange.tableNumber}`
             : 'Your table is waiting'}
         </h1>
-        {!signature ? (
+        {signatureResolved && !signature ? (
           <p className="mt-4 rounded border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-800">
             This QR link is incomplete. Scan the printed table code again.
           </p>
         ) : null}
-        {!loading && !user ? (
+        {signatureResolved && signature && !loading && !user ? (
           <div className="mt-5">
             <p className="text-sm text-slate-600">
               Sign in once so your games stay connected to your roster player.
@@ -210,12 +238,21 @@ export default function TableCheckInPage() {
               onClick={() => void signInWithGoogle()}
               className="mt-4 min-h-12 w-full rounded-lg bg-[rgb(var(--bamboo))] px-4 font-black text-white"
             >
-              {signingIn ? 'Opening Google…' : 'Continue with Google'}
+              <span className="flex items-center justify-center gap-3">
+                <span className="grid h-7 w-7 place-items-center rounded-full bg-white" aria-hidden="true">
+                  <Image src="/google-g.png" alt="" width={20} height={20} />
+                </span>
+                {signingIn ? 'Opening Google…' : 'Continue with Google'}
+              </span>
             </button>
           </div>
         ) : null}
-        {loading || busy ? (
-          <div className="mt-6 rounded-lg bg-slate-50 p-5 text-center text-sm font-bold text-slate-600">
+        {!signatureResolved || loading || busy ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className="mt-6 rounded-lg bg-slate-50 p-5 text-center text-sm font-bold text-slate-600"
+          >
             Preparing your table…
           </div>
         ) : null}
@@ -278,12 +315,19 @@ export default function TableCheckInPage() {
                 yourself once.
               </p>
             </div>
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search the roster…"
-              className="min-h-12 w-full rounded-lg border border-slate-300 px-3"
-            />
+            <div>
+              <label htmlFor="check-in-roster-search" className="mb-2 block text-sm font-bold text-slate-700">
+                Search the roster
+              </label>
+              <input
+                id="check-in-roster-search"
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Player name…"
+                className="min-h-12 w-full rounded-lg border border-slate-300 px-3"
+              />
+            </div>
             <div className="max-h-56 space-y-2 overflow-y-auto">
               {filtered.map((player) => (
                 <button
@@ -300,31 +344,44 @@ export default function TableCheckInPage() {
                   <span>{player.displayName}</span>
                 </button>
               ))}
+              {filtered.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-sm font-semibold text-slate-600">
+                  {search.trim()
+                    ? 'No available roster players match that search.'
+                    : 'No unlinked roster players are available. Create your player below.'}
+                </p>
+              ) : null}
             </div>
             <div className="border-t border-slate-200 pt-4">
               <p className="text-sm font-black text-slate-800">
                 Not on the roster?
               </p>
-              <div className="mt-2 grid grid-cols-[64px_1fr] gap-2">
-                <input
-                  aria-label="Player emoji"
-                  value={newIcon}
-                  onChange={(event) =>
-                    setNewIcon(event.target.value.slice(0, 12))
-                  }
-                  className="min-h-12 rounded-lg border border-slate-300 px-2 text-center text-xl"
-                />
-                <input
-                  value={newName}
-                  onChange={(event) => setNewName(event.target.value)}
-                  placeholder="Your player name"
-                  className="min-h-12 rounded-lg border border-slate-300 px-3"
-                />
+              <div className="mt-2 grid grid-cols-[84px_1fr] gap-2">
+                <label className="text-xs font-bold text-slate-600">
+                  Emoji
+                  <input
+                    value={newIcon}
+                    onChange={(event) =>
+                      setNewIcon(event.target.value.slice(0, 12))
+                    }
+                    className="mt-1 min-h-12 w-full rounded-lg border border-slate-300 px-2 text-center text-xl"
+                  />
+                </label>
+                <label className="text-xs font-bold text-slate-600">
+                  Player name
+                  <input
+                    value={newName}
+                    onChange={(event) => setNewName(event.target.value)}
+                    placeholder="Your player name"
+                    className="mt-1 min-h-12 w-full rounded-lg border border-slate-300 px-3"
+                  />
+                </label>
               </div>
               <button
                 type="button"
+                disabled={busy || !newName.trim() || !newIcon.trim()}
                 onClick={() => void resolvePlayer('create')}
-                className="mt-3 min-h-12 w-full rounded-lg bg-[rgb(var(--bamboo))] px-4 font-black text-white"
+                className="mt-3 min-h-12 w-full rounded-lg bg-[rgb(var(--bamboo))] px-4 font-black text-white disabled:cursor-not-allowed disabled:opacity-45"
               >
                 Create me as a player
               </button>
@@ -338,24 +395,60 @@ export default function TableCheckInPage() {
               Table {exchange?.tableNumber} is full
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              Choose someone to move to the sideline. You will take their seat.
+              Select someone to move to the sideline, then confirm the change.
             </p>
-            <div className="mt-4 grid grid-cols-2 gap-2">
+            <div
+              className="mt-4 grid grid-cols-2 gap-2"
+              role="group"
+              aria-label="Choose a player to move to the sideline"
+            >
               {occupants.map((player) => (
                 <button
                   key={player.id}
                   type="button"
                   disabled={busy}
-                  onClick={() =>
-                    exchange && void finishCheckIn(exchange, player.id)
-                  }
-                  className="min-h-20 rounded-lg border border-slate-300 p-3 font-bold"
+                  aria-pressed={pendingReplacement?.id === player.id}
+                  onClick={() => setPendingReplacement(player)}
+                  className={`min-h-20 rounded-lg border p-3 font-bold transition ${
+                    pendingReplacement?.id === player.id
+                      ? 'border-[rgb(var(--cinnabar))] bg-rose-50 text-slate-900'
+                      : 'border-slate-300'
+                  }`}
                 >
                   <span className="block text-2xl">{player.icon}</span>
                   {player.displayName}
                 </button>
               ))}
             </div>
+            {pendingReplacement ? (
+              <div
+                className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4"
+                role="group"
+                aria-label="Confirm seat replacement"
+              >
+                <p className="text-sm font-bold text-slate-900">
+                  Move {pendingReplacement.icon} {pendingReplacement.displayName} to the sideline and take their seat?
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setPendingReplacement(null)}
+                    className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 font-bold text-slate-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void confirmReplacement()}
+                    className="min-h-11 rounded-lg bg-[rgb(var(--cinnabar))] px-3 font-black text-white disabled:opacity-50"
+                  >
+                    Confirm move
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </section>

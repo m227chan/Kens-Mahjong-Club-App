@@ -68,6 +68,8 @@ export default function NetworkGraphModal({
 }) {
   const [games, setGames] = useState<GameDoc[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [seasonFilter, setSeasonFilter] = useState<number | 'all'>(currentSeason)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -81,15 +83,19 @@ export default function NetworkGraphModal({
   useEffect(() => {
     let cancelled = false
     setLoading(true)
+    setLoadError(null)
     loadAllGames(clubId)
       .then((loaded) => {
         if (!cancelled) setGames(loaded)
+      })
+      .catch((error) => {
+        if (!cancelled) setLoadError(error instanceof Error ? error.message : 'Unable to load the player network.')
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [clubId])
+  }, [clubId, loadAttempt])
 
   useEffect(() => {
     setSeasonFilter(currentSeason)
@@ -248,11 +254,11 @@ export default function NetworkGraphModal({
 
   return (
     <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
-      <div data-tour="network-modal" className="responsive-modal-panel flex max-h-[92vh] w-full max-w-6xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
+      <div role="dialog" aria-modal="true" aria-labelledby="network-modal-title" data-tour="network-modal" className="responsive-modal-panel flex max-h-[92vh] w-full max-w-6xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
         <div className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:gap-4 sm:p-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-600">Player Network</p>
-            <h3 className="mt-2 text-xl font-black text-slate-950">Who plays with whom</h3>
+            <h3 id="network-modal-title" className="mt-2 text-xl font-black text-slate-950">Who plays with whom</h3>
             <p className="mt-1 hidden text-sm text-slate-500 sm:block">
               Edges connect players who shared a table. Thickness shows how many games they played together.
               {egoPlayerId ? ' Node color is net points vs the selected player (green/cream = they paid selected more, red = selected paid them more).' : ''}
@@ -293,7 +299,7 @@ export default function NetworkGraphModal({
               data-tour="network-close"
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600"
+              className="min-h-11 rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600"
             >
               Close
             </button>
@@ -428,6 +434,11 @@ export default function NetworkGraphModal({
           {loading ? (
             <div className="flex h-[480px] items-center justify-center rounded-[10px] border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-500">
               Loading network…
+            </div>
+          ) : loadError ? (
+            <div role="alert" className="flex min-h-[320px] flex-col items-center justify-center gap-4 rounded-[10px] border border-rose-200 bg-rose-50 p-6 text-center text-sm font-semibold text-rose-700">
+              <p>{loadError}</p>
+              <button type="button" onClick={() => setLoadAttempt((current) => current + 1)} className="min-h-11 rounded-lg bg-[rgb(var(--bamboo))] px-5 font-black text-white">Try again</button>
             </div>
           ) : viewMode === 'graph' ? (
             <NetworkGraph
