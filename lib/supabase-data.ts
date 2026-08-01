@@ -22,6 +22,11 @@ import type {
   SessionDoc,
   SkillEventDoc,
 } from '@/lib/types'
+import {
+  DEFAULT_SCORING_RULES,
+  scoringRulesFromRow,
+  type ScoringRules,
+} from '@/lib/scoring-rules'
 
 type UserLike = {
   uid: string
@@ -164,6 +169,7 @@ function mapGame(row: Row): GameDoc {
   return {
     id: String(row.id),
     datetime: ts(row.played_at),
+    createdAt: ts(row.created_at),
     createdBy: String(row.created_by),
     seasonNumber: Number(row.season_number),
     tableId: row.table_id as string | null,
@@ -415,6 +421,8 @@ export const updatePlayerName = (
   playerId: string,
   nextName: string,
 ) => serverAction<void>('updatePlayerName', { clubId, playerId, nextName })
+export const updateScoringRules = (clubId: string, rules: ScoringRules) =>
+  serverAction<void>('updateScoringRules', { clubId, rules })
 export const deleteClub = (clubId: string) =>
   serverAction<void>('deleteClub', { clubId })
 export async function createGame(clubId: string, input: Row) {
@@ -444,6 +452,27 @@ export function subscribePlayers(
   return realtime(
     `players:${clubId}`,
     'players',
+    `club_id=eq.${clubId}`,
+    load,
+    callback,
+  )
+}
+export function subscribeScoringRules(
+  clubId: string,
+  callback: (rules: ScoringRules) => void,
+) {
+  const load = async () => {
+    const { data, error } = await client()
+      .from('app_configs')
+      .select('scoring_min_fan,scoring_max_fan,fan_points')
+      .eq('club_id', clubId)
+      .maybeSingle()
+    if (error) throw error
+    return data ? scoringRulesFromRow(data as Row) : DEFAULT_SCORING_RULES
+  }
+  return realtime(
+    `scoring-rules:${clubId}`,
+    'app_configs',
     `club_id=eq.${clubId}`,
     load,
     callback,

@@ -9,6 +9,7 @@ import {
 } from '@/lib/stats-engine'
 import { calculateSkillRound, initialSkillState } from '@/lib/skill-rating'
 import { withTransaction } from '@/lib/postgres-admin'
+import { basePointsForFan, scoringRulesFromRow } from '@/lib/scoring-rules'
 
 type Entry = { playerId: string; score: number }
 type QueryClient = Pick<PoolClient, 'query'>
@@ -27,6 +28,7 @@ type GameInput = {
 type Game = GameInput & {
   id: string
   datetime: Date
+  createdAt: Date
   createdBy: string
   seasonNumber: number
   entries: Entry[]
@@ -36,6 +38,19 @@ type Game = GameInput & {
 type InsertGameResult =
   | { gameId: string; created: false }
   | { gameId: string; created: true; game: Game }
+
+export function canEditGameRecord(
+  role: 'manager' | 'member',
+  callerUid: string,
+  game: Pick<Game, 'createdBy' | 'createdAt'>,
+  now = Date.now(),
+) {
+  return (
+    role === 'manager' ||
+    (game.createdBy === callerUid &&
+      game.createdAt.getTime() >= now - 24 * 60 * 60 * 1000)
+  )
+}
 type Stats = {
   playerId: string
   seasonNumber?: number
@@ -124,6 +139,7 @@ async function requireAccess(
         ? 'Only an active club manager can modify game records.'
         : 'Only an active club member can record games.',
     )
+  return result.rows[0].role as 'manager' | 'member'
 }
 
 function resultType(
@@ -162,7 +178,10 @@ export async function insertGame(
       `select
         (select id from games where club_id=$1 and idempotency_key=$2) existing_game_id,
         (select count(*)::int from players where club_id=$1 and active and id=any($3::text[])) player_count,
-        exists(select 1 from seasons where club_id=$1 and season_number=$4) season_exists`,
+        exists(select 1 from seasons where club_id=$1 and season_number=$4) season_exists,
+        (select scoring_min_fan from app_configs where club_id=$1) scoring_min_fan,
+        (select scoring_max_fan from app_configs where club_id=$1) scoring_max_fan,
+        (select fan_points from app_configs where club_id=$1) fan_points`,
       [
         clubId,
         idempotencyKey,
@@ -189,8 +208,11 @@ export async function insertGame(
       'Discard wins require a different losing player from this game.',
     )
   const fan = winType === 'draw' || input.fan == null ? null : Number(input.fan)
-  if (fan !== null && (!Number.isInteger(fan) || fan < 3 || fan > 13))
-    throw new Error('Winning games require a fan value from 3 to 13.')
+  const scoringRules = scoringRulesFromRow(preflight)
+  if (fan !== null && basePointsForFan(fan, scoringRules) === null)
+    throw new Error(
+      `Winning games require a fan value from ${scoringRules.minFan} to ${scoringRules.maxFan}+ under this club's rules.`,
+    )
   const createdBy = input.createdBy ?? callerUid
   await client.query(
     `insert into games(id,club_id,played_at,created_by,season_number,table_id,win_type,winner_player_id,loser_player_id,fan,notes,is_historical,idempotency_key)
@@ -228,6 +250,7 @@ export async function insertGame(
     ...input,
     id: gameId,
     datetime,
+    createdAt: new Date(),
     createdBy,
     seasonNumber,
     entries,
@@ -255,6 +278,7 @@ async function readGame(
     ? {
         id: row.id,
         datetime: new Date(row.played_at),
+        createdAt: new Date(row.created_at),
         createdBy: row.created_by,
         seasonNumber: row.season_number,
         entries: row.entries,
@@ -758,6 +782,7 @@ export async function rebuild(client: QueryClient, clubId: string) {
   const games: Game[] = gameRows.rows.map((row) => ({
     id: row.id,
     datetime: new Date(row.played_at),
+    createdAt: new Date(row.created_at),
     createdBy: row.created_by,
     seasonNumber: row.season_number,
     entries: row.entries,
@@ -772,6 +797,7 @@ export async function rebuild(client: QueryClient, clubId: string) {
   const skillGames: Game[] = skillGameRows.rows.map((row) => ({
     id: row.id,
     datetime: new Date(row.played_at),
+    createdAt: new Date(row.created_at),
     createdBy: row.created_by,
     seasonNumber: row.season_number,
     entries: row.entries,
@@ -1102,11 +1128,11 @@ export async function mutateSupabaseGames(input: {
     await client.query("select set_config('app.actor_uid', $1, true)", [
       input.callerUid,
     ])
-    await requireAccess(
+    const role = await requireAccess(
       client,
       clubId,
       input.callerUid,
-      input.action !== 'create',
+      ['delete', 'import', 'rebuild'].includes(input.action),
     )
     const incrementalCreate =
       input.action === 'create' &&
@@ -1163,6 +1189,13 @@ export async function mutateSupabaseGames(input: {
         : null
     if ((input.action === 'update' || input.action === 'delete') && !previous)
       throw new Error('Game not found.')
+    if (
+      input.action === 'update' &&
+      !canEditGameRecord(role, input.callerUid, previous!)
+    )
+      throw new Error(
+        'Members can only edit games they created during the first 24 hours.',
+      )
     if (input.action === 'create')
       gameId = (
         await insertGame(
@@ -1187,7 +1220,10 @@ export async function mutateSupabaseGames(input: {
         await client.query(
           `select
             (select count(*)::int from players where club_id=$1 and active and id=any($2::text[])) player_count,
-            exists(select 1 from seasons where club_id=$1 and season_number=$3) season_exists`,
+            exists(select 1 from seasons where club_id=$1 and season_number=$3) season_exists,
+            (select scoring_min_fan from app_configs where club_id=$1) scoring_min_fan,
+            (select scoring_max_fan from app_configs where club_id=$1) scoring_max_fan,
+            (select fan_points from app_configs where club_id=$1) fan_points`,
           [clubId, entries.map((entry) => entry.playerId), nextSeason],
         )
       ).rows[0]
@@ -1214,8 +1250,11 @@ export async function mutateSupabaseGames(input: {
         winType === 'draw' || input.game!.fan == null
           ? null
           : Number(input.game!.fan)
-      if (fan !== null && (!Number.isInteger(fan) || fan < 3 || fan > 13))
-        throw new Error('Winning games require a fan value from 3 to 13.')
+      const scoringRules = scoringRulesFromRow(references)
+      if (fan !== null && basePointsForFan(fan, scoringRules) === null)
+        throw new Error(
+          `Winning games require a fan value from ${scoringRules.minFan} to ${scoringRules.maxFan}+ under this club's rules.`,
+        )
       await client.query(
         'update games set played_at=$1,season_number=$2,notes=$3,win_type=$4,winner_player_id=$5,loser_player_id=$6,fan=$7 where id=$8 and club_id=$9',
         [

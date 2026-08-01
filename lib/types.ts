@@ -79,6 +79,7 @@ interface GameEntryDoc {
 export interface GameDoc {
   id: string
   datetime: Timestamp
+  createdAt?: Timestamp
   createdBy: string
   seasonNumber?: number
   tableId: string | null

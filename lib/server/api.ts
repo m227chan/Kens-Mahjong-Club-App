@@ -53,7 +53,11 @@ export function apiError(error: unknown, fallback: string) {
       { status: 401 },
     )
   const message = error instanceof Error ? error.message : ''
-  if (/^Only an active club (?:manager|member) can do that\.$/.test(message))
+  if (
+    /^Only an active club (?:manager|member) can do that\.$/.test(message) ||
+    /^Only a club manager or the user linked to this player can edit the profile\.$/.test(message) ||
+    /^Members can only edit games they created during the first 24 hours\.$/.test(message)
+  )
     return NextResponse.json({ error: message }, { status: 403 })
   if (typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code)) {
     console.error(fallback, error)

@@ -111,14 +111,14 @@ export default function GameLogsModal({
   seasons,
   currentSeason,
   userId,
-  canDeleteGames,
+  isManager,
   onClose
 }: {
   clubId: string
   seasons: SeasonDoc[]
   currentSeason: number
   userId: string
-  canDeleteGames: boolean
+  isManager: boolean
   onClose: () => void
 }) {
   const [players, setPlayers] = useState<PlayerDoc[]>([])
@@ -147,6 +147,7 @@ export default function GameLogsModal({
   const [loadingGames, setLoadingGames] = useState(true)
   const [loadingOlderGames, setLoadingOlderGames] = useState(false)
   const [hasOlderGames, setHasOlderGames] = useState(true)
+  const [editWindowReference] = useState(() => Date.now())
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => subscribePlayers(clubId, setPlayers), [clubId])
@@ -240,6 +241,11 @@ export default function GameLogsModal({
 
   const sortMark = (column: string) => tableSort === column ? (tableSortDirection === 'asc' ? '▲' : '▼') : '↕'
   const tableFilterCount = [Boolean(tableSearch.trim()), Boolean(scoreFilterPlayerId), Boolean(minimumScore), Boolean(maximumScore)].filter(Boolean).length
+  const canEditGame = (game: GameDoc) => {
+    if (isManager) return true
+    const createdAt = game.createdAt?.toMillis?.() ?? 0
+    return game.createdBy === userId && createdAt >= editWindowReference - 24 * 60 * 60 * 1000
+  }
 
   const buildCsvRows = (sourceGames: GameDoc[], sourcePlayers: PlayerDoc[]) => {
     const headers = ['datetime', 'season', 'tableId', 'winType', 'winner', 'loser', 'fan', 'notes', ...sourcePlayers.map((player) => player.displayName)]
@@ -276,7 +282,7 @@ export default function GameLogsModal({
   }
 
   const openGame = (game: GameDoc) => {
-    if (!canDeleteGames) return
+    if (!canEditGame(game)) return
     const date = game.datetime.toDate()
     const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
     setSelectedGame(game)
@@ -288,7 +294,7 @@ export default function GameLogsModal({
   }
 
   const mutateGame = async (action: 'update' | 'delete') => {
-    if (!selectedGame || !canDeleteGames) return
+    if (!selectedGame || (action === 'delete' ? !isManager : !canEditGame(selectedGame))) return
     if (action === 'delete' && !window.confirm(`Permanently delete the game from ${formatDate(selectedGame)}? All club statistics and Skill history will be rebuilt.`)) return
     const entries = selectedGame.entries.map((entry) => ({ playerId: entry.playerId, score: Number(draftScores[entry.playerId]) }))
     if (action === 'update' && (entries.some((entry) => !Number.isFinite(entry.score)) || entries.reduce((sum, entry) => sum + entry.score, 0) !== 0)) {
@@ -299,7 +305,7 @@ export default function GameLogsModal({
     setImportMessage(null)
     try {
       await mutateGameRecord({ clubId, gameId: selectedGame.id, action, ...(action === 'update' ? {
-        game: { datetime: new Date(draftDate).toISOString(), seasonNumber: draftSeason, entries, notes: draftNotes }
+        game: { datetime: new Date(draftDate).toISOString(), seasonNumber: draftSeason, entries, notes: draftNotes, winType: selectedGame.winType, loserPlayerId: selectedGame.loserPlayerId, fan: selectedGame.fan }
       } : {}) })
       invalidateClubHistoryCache(clubId)
       if (action === 'delete') {
@@ -466,15 +472,15 @@ export default function GameLogsModal({
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-600">Game logs</p>
             <h3 className="mt-2 text-xl font-black text-slate-950">Club game logs</h3>
-            <p className="mt-1 text-sm text-slate-500">One record per game. {canDeleteGames ? 'Select a record to review or edit it.' : ''}</p>
+            <p className="mt-1 text-sm text-slate-500">One record per game. {isManager ? 'Managers can edit or delete any record.' : 'You can edit games you created for 24 hours.'}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={exportCsv} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-500">
               Export CSV
             </button>
-            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={importing} className="rounded-lg bg-sky-600 px-3 py-2 text-sm font-bold text-white hover:bg-sky-500 disabled:opacity-50">
+            {isManager ? <button type="button" onClick={() => fileInputRef.current?.click()} disabled={importing} className="rounded-lg bg-sky-600 px-3 py-2 text-sm font-bold text-white hover:bg-sky-500 disabled:opacity-50">
               {importing ? 'Importing...' : 'Import CSV'}
-            </button>
+            </button> : null}
             <button data-tour="logs-close" type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">
               Close
             </button>
@@ -554,13 +560,13 @@ export default function GameLogsModal({
         <div className="min-h-0 flex-1 overflow-auto p-3 sm:p-4">
           <div className={`grid grid-cols-1 gap-3 ${layoutMode === 'table' ? 'md:hidden' : ''}`}>
             {displayedGames.map((game) => (
-              <button key={game.id} type="button" onClick={() => openGame(game)} disabled={!canDeleteGames} className="group w-full overflow-hidden rounded border border-slate-200 bg-white text-left shadow-sm transition enabled:hover:-translate-y-0.5 enabled:hover:border-[rgb(var(--bamboo))] enabled:hover:shadow-md enabled:active:translate-y-0 disabled:cursor-default">
+              <button key={game.id} type="button" onClick={() => openGame(game)} disabled={!canEditGame(game)} className="group w-full overflow-hidden rounded border border-slate-200 bg-white text-left shadow-sm transition enabled:hover:-translate-y-0.5 enabled:hover:border-[rgb(var(--bamboo))] enabled:hover:shadow-md enabled:active:translate-y-0 disabled:cursor-default">
                 <span className="flex items-center justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-5 sm:py-4">
                   <span className="min-w-0">
                     <strong className="block truncate text-sm text-slate-900 sm:text-base">{formatDate(game)}</strong>
                     <span className="mt-1 inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[.08em] text-slate-500">Season {game.seasonNumber ?? 1}</span>
                   </span>
-                  {canDeleteGames ? <span className="shrink-0 text-xs font-bold text-[rgb(var(--bamboo))] transition-transform group-hover:translate-x-1">Review record →</span> : null}
+                  {canEditGame(game) ? <span className="shrink-0 text-xs font-bold text-[rgb(var(--bamboo))] transition-transform group-hover:translate-x-1">Review record →</span> : null}
                 </span>
                 <span className="grid grid-cols-2 gap-px bg-[rgb(var(--line))] sm:grid-cols-4">
                   {game.entries.map((entry) => {
@@ -594,7 +600,7 @@ export default function GameLogsModal({
               {displayedGames.map((game) => {
                 const scoreByPlayer = new Map(game.entries.map((entry) => [entry.playerId, entry.score]))
                 return (
-                  <tr key={game.id} onClick={() => openGame(game)} onKeyDown={(event) => { if (canDeleteGames && (event.key === 'Enter' || event.key === ' ')) openGame(game) }} tabIndex={canDeleteGames ? 0 : undefined} title={canDeleteGames ? 'Select to review, edit, or delete this game' : undefined} className={`game-log-row ${canDeleteGames ? 'cursor-pointer outline-none hover:ring-2 hover:ring-inset hover:ring-[rgb(var(--bamboo))] focus:ring-2 focus:ring-inset focus:ring-[rgb(var(--bamboo))]' : ''}`}>
+                  <tr key={game.id} onClick={() => openGame(game)} onKeyDown={(event) => { if (canEditGame(game) && (event.key === 'Enter' || event.key === ' ')) openGame(game) }} tabIndex={canEditGame(game) ? 0 : undefined} title={canEditGame(game) ? 'Select to review or edit this game' : undefined} className={`game-log-row ${canEditGame(game) ? 'cursor-pointer outline-none hover:ring-2 hover:ring-inset hover:ring-[rgb(var(--bamboo))] focus:ring-2 focus:ring-inset focus:ring-[rgb(var(--bamboo))]' : ''}`}>
                     <td className="sticky left-0 z-10 whitespace-nowrap border-b border-slate-100 bg-inherit px-3 py-2 font-semibold text-slate-700">{formatDate(game)}</td>
                     <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2 text-slate-600">Season {game.seasonNumber ?? 1}</td>
                     {displayedPlayers.map((player) => {
@@ -644,7 +650,7 @@ export default function GameLogsModal({
             <p className="mt-3 text-xs leading-5 text-slate-500">Saving or deleting rebuilds points, Skill ratings, rankings, win rates, titles, and analytics from the complete game history.</p>
             {importMessage ? <p className="mt-3 rounded border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{importMessage}</p> : null}
             <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-              <button type="button" onClick={() => mutateGame('delete')} disabled={savingGame} className="min-h-11 rounded border border-rose-300 px-4 py-2 text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50">Delete game</button>
+              {isManager ? <button type="button" onClick={() => mutateGame('delete')} disabled={savingGame} className="min-h-11 rounded border border-rose-300 px-4 py-2 text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50">Delete game</button> : <span />}
               <button type="button" onClick={() => mutateGame('update')} disabled={savingGame || !draftDate} className="min-h-11 rounded bg-[rgb(var(--bamboo))] px-5 py-2 text-sm font-bold text-white disabled:opacity-50">{savingGame ? 'Rebuilding statistics…' : 'Save changes'}</button>
             </div>
           </div>

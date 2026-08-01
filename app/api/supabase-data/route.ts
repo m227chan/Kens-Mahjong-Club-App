@@ -9,6 +9,7 @@ import {
   CREATED_CLUB_LIMIT_MESSAGE,
   hasReachedCreatedClubLimit,
 } from '@/lib/club-limits'
+import { validateScoringRules } from '@/lib/scoring-rules'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -85,6 +86,21 @@ export async function POST(request: NextRequest) {
         )
         if (!member.rowCount)
           throw new Error('Only an active club member can do that.')
+      }
+      const requirePlayerEditor = async (club: string, playerId: string) => {
+        const editor = await db.query(
+          `select p.auth_uid,m.role from players p
+          join club_members m on m.club_id=p.club_id and m.firebase_uid=$3 and m.active
+          where p.club_id=$1 and p.id=$2 and p.active`,
+          [club, playerId, caller.uid],
+        )
+        if (!editor.rowCount)
+          throw new Error('Player not found or club access is inactive.')
+        const row = editor.rows[0]
+        if (row.role !== 'manager' && row.auth_uid !== caller.uid)
+          throw new Error(
+            'Only a club manager or the user linked to this player can edit the profile.',
+          )
       }
       if (action === 'getCreatedClubCount') {
         const count = await db.query(
@@ -372,14 +388,14 @@ export async function POST(request: NextRequest) {
         return null
       }
       if (action === 'updatePlayerIcon') {
-        await requireManager(body.clubId)
+        await requirePlayerEditor(body.clubId, body.playerId)
         const icon = String(body.nextIcon ?? '')
           .trim()
           .slice(0, 12)
         if (!icon) throw new Error('Enter an emoji.')
         try {
           await db.query(
-            'update players set icon=$1,icon_key=$2 where id=$3 and club_id=$4',
+            'update players set icon=$1,icon_key=$2 where id=$3 and club_id=$4 and active',
             [
               icon,
               encodeURIComponent(icon.toLocaleLowerCase()),
@@ -395,7 +411,7 @@ export async function POST(request: NextRequest) {
         return null
       }
       if (action === 'updatePlayerName') {
-        await requireManager(body.clubId)
+        await requirePlayerEditor(body.clubId, body.playerId)
         const name = String(body.nextName ?? '')
           .trim()
           .slice(0, 80)
@@ -404,6 +420,24 @@ export async function POST(request: NextRequest) {
           'update players set display_name=$1 where id=$2 and club_id=$3 and active',
           [name, body.playerId, body.clubId],
         )
+        return null
+      }
+      if (action === 'updateScoringRules') {
+        await requireManager(body.clubId)
+        const rules = validateScoringRules(body.rules)
+        const updated = await db.query(
+          `update app_configs
+          set scoring_min_fan=$1,scoring_max_fan=$2,fan_points=$3,updated_at=now()
+          where club_id=$4`,
+          [
+            rules.minFan,
+            rules.maxFan,
+            JSON.stringify(rules.fanPoints),
+            body.clubId,
+          ],
+        )
+        if (!updated.rowCount)
+          throw new Error('Club settings are still initializing. Try again.')
         return null
       }
       if (action === 'deleteClub') {

@@ -8,6 +8,7 @@ import GameLogsModal from '@/components/GameLogsModal'
 import NetworkGraphModal from '@/components/NetworkGraphModal'
 import { LeaderboardPanel } from '@/components/Leaderboard'
 import SessionManager from '@/components/SessionManager'
+import ScoringRulesSettings from '@/components/ScoringRulesSettings'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSound } from '@/contexts/SoundContext'
 import {
@@ -28,10 +29,12 @@ import {
   subscribeClubMembers,
   subscribeJoinRequests,
   subscribePlayers,
+  subscribeScoringRules,
   subscribeSeasons
 } from '@/lib/data'
 import type { ClubDoc, ClubMembershipDoc, JoinRequestDoc, PlayerDoc, SeasonDoc } from '@/lib/types'
 import { PLAYER_EMOJIS, randomUnusedPlayerEmoji } from '@/lib/players'
+import { DEFAULT_SCORING_RULES, type ScoringRules } from '@/lib/scoring-rules'
 
 const iconChoices = PLAYER_EMOJIS
 
@@ -98,6 +101,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [members, setMembers] = useState<ClubMembershipDoc[]>([])
   const [joinRequests, setJoinRequests] = useState<JoinRequestDoc[]>([])
   const [players, setPlayers] = useState<PlayerDoc[]>([])
+  const [scoringRules, setScoringRules] = useState<ScoringRules>(DEFAULT_SCORING_RULES)
   const [playerName, setPlayerName] = useState('')
   const [playerIcon, setPlayerIcon] = useState(() => randomUnusedPlayerEmoji(new Set()))
   const [iconPickerOpen, setIconPickerOpen] = useState(false)
@@ -137,6 +141,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   useEffect(() => subscribeClub(clubId, setClub), [clubId])
   useEffect(() => subscribeClubMembers(clubId, setMembers), [clubId])
   useEffect(() => subscribePlayers(clubId, setPlayers), [clubId])
+  useEffect(() => subscribeScoringRules(clubId, setScoringRules), [clubId])
   useEffect(() => subscribeSeasons(clubId, setSeasons), [clubId])
   useEffect(() => {
     if (!isManager || club?.universal) {
@@ -432,7 +437,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
 
       {settingsOpen ? (
         <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
-          <div data-tour="settings-modal" className="w-full max-w-lg rounded-lg border border-slate-200 bg-white shadow-2xl">
+          <div data-tour="settings-modal" className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-2xl">
             <div className="border-b border-slate-200 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -477,6 +482,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                   </p>
                 )}
               </div>
+              <ScoringRulesSettings clubId={clubId} rules={scoringRules} isManager={isManager} />
               {isManager && !club?.universal ? (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
                   <p className="text-sm font-black text-rose-700">Delete club</p>
@@ -592,7 +598,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         </div>
 
         <aside className={mobileView === 'session' ? 'order-first block md:block xl:order-none xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto' : 'order-first hidden md:block xl:order-none xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto'}>
-          <SessionManager clubId={clubId} seasonNumber={activeSeasonNumber} players={players} isManager={isManager} />
+          <SessionManager clubId={clubId} seasonNumber={activeSeasonNumber} players={players} isManager={isManager} scoringRules={scoringRules} />
         </aside>
       </div>
 
@@ -705,7 +711,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                   {players.map((player) => (
                     <div key={player.id} className="relative rounded-xl border border-slate-200 bg-slate-50 p-3 transition hover:border-slate-300 hover:bg-white">
                       <div className="flex min-w-0 items-center gap-3">
-                        {isManager ? (
+                        {isManager || player.authUid === user?.uid ? (
                           <button
                             type="button"
                             onClick={() => { setEditingPlayerId(editingPlayerId === player.id ? null : player.id); setCustomEmojiValue(player.icon) }}
@@ -737,9 +743,9 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                              )}
                            </button>
                          ) : null}
-                        {isManager ? <div className="ml-auto flex items-center gap-2">
+                        {isManager || player.authUid === user?.uid ? <div className="ml-auto flex items-center gap-2">
                           <button type="button" onClick={() => { setRenamingPlayerId(player.id); setRenamingPlayerValue(player.displayName) }} className="min-h-9 rounded border border-slate-300 px-2 py-1 text-xs font-bold text-slate-700 hover:bg-white">Rename</button>
-                          <button type="button" onClick={() => deleteRosterPlayer(player)} aria-label={`Remove ${player.displayName}`} title="Remove player" className="flex h-9 w-9 items-center justify-center rounded border border-rose-200 text-lg font-bold text-rose-700 hover:bg-rose-50">×</button>
+                          {isManager ? <button type="button" onClick={() => deleteRosterPlayer(player)} aria-label={`Remove ${player.displayName}`} title="Remove player" className="flex h-9 w-9 items-center justify-center rounded border border-rose-200 text-lg font-bold text-rose-700 hover:bg-rose-50">×</button> : null}
                         </div> : null}
                       </div>
                       {renamingPlayerId === player.id ? (
@@ -749,7 +755,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                           <button type="button" onClick={() => setRenamingPlayerId(null)} className="rounded border border-slate-300 px-2 text-xs font-bold">Cancel</button>
                         </form>
                       ) : null}
-                      {isManager && editingPlayerId === player.id ? (
+                      {(isManager || player.authUid === user?.uid) && editingPlayerId === player.id ? (
                         <div className="emoji-menu absolute right-2 top-full z-20 mt-2 w-64 max-w-[calc(100vw-3rem)] rounded border border-slate-200 bg-white p-3 shadow-xl">
                           <div className="emoji-picker grid grid-cols-4 gap-1">{iconChoices.map((choice) => {
                             const used = usedIconKeys.has(choice.toLocaleLowerCase()) && choice !== player.icon
@@ -809,7 +815,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           seasons={seasons}
           currentSeason={activeSeasonNumber}
           userId={user.uid}
-          canDeleteGames={isManager}
+          isManager={isManager}
           onClose={() => setGameLogsOpen(false)}
         />
       ) : null}

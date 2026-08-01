@@ -2,32 +2,28 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
-import { claimMingWelcome } from '@/lib/data'
-
-const FAN_POINTS = [
-  [3, 8], [4, 16], [5, 24], [6, 32], [7, 48], [8, 64],
-  [9, 96], [10, 128], [11, 192], [12, 256], [13, 384], ['13+', 384]
-] as const
+import { claimMingWelcome, subscribeScoringRules } from '@/lib/data'
+import { DEFAULT_SCORING_RULES, fanLabel, fanValues, type ScoringRules } from '@/lib/scoring-rules'
 
 const GUIDE_SECTIONS = [
   { icon: '🏠', title: 'Start on your dashboard', body: 'Your personal dashboard combines your play across every club. Review overall games, win rate, recent Skill movement, memberships, and the player profile linked to your account in each club.' },
   { icon: '🀄', title: 'Clubs', body: 'A club is a shared roster, game history, and set of standings for one mahjong group. Open one of your clubs, create a new club, or join an existing club using its six-character club ID. Creating and joining are separate: the creation limit does not restrict clubs you join or manage.' },
-  { icon: '👥', title: 'Roster and account links', body: 'The roster contains the player profiles used in games. A signed-in member can link their account to one unlinked player profile, and can unlink it later. Managers can add, rename, remove, or change player emojis, and can promote other club members to manager.' },
+  { icon: '👥', title: 'Roster and account links', body: 'The roster contains the player profiles used in games. A signed-in member can link their account to one unlinked player profile, rename it, change its emoji, and unlink it later. Managers can manage every player and promote other club members to manager.' },
   { icon: '📅', title: 'What is a Season?', body: 'A season is a chapter of club standings. Starting a new season closes the current live session and gives the leaderboard a fresh set of season statistics, while keeping earlier seasons and game history available to review.' },
   { icon: '📋', title: 'What is a Session?', body: 'A session is a single mahjong night. You choose which players are attending and how many tables are running. The session tracks who is seated where and records all games played during the night.' },
   { icon: '🔢', title: 'Number of Tables', body: 'Set how many tables will be running simultaneously. Each table seats exactly 4 players. You can have as many tables as you need.' },
   { icon: '🧑‍🤝‍🧑', title: 'Selecting Players', body: 'Choose all players attending tonight. Anyone not selected won’t appear in the session. You need at least 4 players to start. Use the search bar to find players quickly.' },
   { icon: '🪑', title: 'Sideline', body: 'Players who are attending but not currently seated at a table sit on the sideline. Drag them to a table when they’re ready to play, or drag them back to the sideline between rounds.' },
   { icon: '🎴', title: 'Recording a Game', body: 'Once a table has 4 players it shows ✓ Ready. After a game finishes, tap Winner... to record who won, the win type (self-draw or discard), and the fan count. Or tap Draw if no one won.' },
-  { icon: '🧮', title: 'Fan Scoring', body: 'Scores are based on fan count (3–13+). Self-draw: the winner gets 3× base and each loser pays 1× base. Discard win: the winner gets 2× base, the discarder pays 2× base, and the other players pay nothing.', fanMap: true },
+  { icon: '🧮', title: 'Fan Scoring', body: 'Scores use this club’s fan range and base-point mapping. Self-draw: the winner gets 3× base and each loser pays 1× base. Discard win: the winner gets 2× base, the discarder pays 2× base, and the other players pay nothing.', fanMap: true },
   { icon: '⚙️', title: 'Edit / Clear All Tables / Reset', body: 'Edit lets you change which players are in the session or the number of tables. Clear All Tables moves everyone back to the sideline without ending the session. Reset Session wipes everything and starts fresh.' },
   { icon: '🏆', title: 'Standings', body: 'The leaderboard recalculates from the selected season’s game records. Points preserve raw scores, while Skill estimates playing strength with experience and uncertainty built in.' },
   { icon: '📈', title: 'Analytics', body: 'Analytics shows score and Skill movement over time. Its Metric Definitions link explains every number in plain language.' },
-  { icon: '🗂️', title: 'Game logs', body: 'Game logs are the record-level source of truth, with newest games first. Filter by session players, all data, or one player. Managers can select a record to correct or delete it; standings and analytics then recalculate.' },
+  { icon: '🗂️', title: 'Game logs', body: 'Game logs are the record-level source of truth, with newest games first. Members can correct games they created for 24 hours. Managers can correct or delete any record; standings and analytics then recalculate.' },
   { icon: '🕸️', title: 'Player Network', body: 'Network shows who shared a table and how often. Filter by season and date range, focus on one player (ego), and switch between the graph and a sortable table. With a player selected, node color shows net points exchanged with that player.' },
-  { icon: '🔐', title: 'Club settings and managers', body: 'Settings contains season controls, join requests, manager access, navigation, and—where permitted—club deletion. Manager-only actions stay hidden or disabled for regular members.' }
+  { icon: '🔐', title: 'Club settings and managers', body: 'Settings contains season controls, club-specific fan limits and point mappings, join requests, manager access, navigation, and—where permitted—club deletion. Manager-only actions stay hidden or disabled for regular members.' }
 ] as const
 
 type TourAction = 'next' | 'click' | 'responsive' | 'finish'
@@ -58,13 +54,13 @@ const TOUR_STEPS: TourStep[] = [
   { selector: '[data-tour="analytics-modal"]', title: 'Explore club trends', body: 'Use the real filters to focus on session players, clear the selection, choose specific players, and change the game range. The horizontal axis uses game dates.', action: 'next' },
   { selector: '[data-tour="analytics-close"]', title: 'Return to the workspace', body: 'Close analytics when you are finished reviewing trends.', action: 'click', instruction: 'Click Close.' },
   { selector: '[data-tour="logs-open"]', title: 'Open the real game logs', body: 'Game logs provide the detailed history behind standings and analytics.', action: 'click', instruction: 'Click Game logs.' },
-  { selector: '[data-tour="logs-modal"]', title: 'Review the source of truth', body: 'Games appear newest first. Filter the list, switch card or table view on desktop, and load older records when needed. Manager edits and deletes recalculate derived statistics.', action: 'next' },
+  { selector: '[data-tour="logs-modal"]', title: 'Review the source of truth', body: 'Games appear newest first. Members can correct their own records for 24 hours; managers can edit or delete any record. Changes recalculate derived statistics.', action: 'next' },
   { selector: '[data-tour="logs-close"]', title: 'Return to the workspace', body: 'Close the game logs to continue exploring club tools.', action: 'click', instruction: 'Click Close.' },
   { selector: '[data-tour="network-open"]', title: 'Open the player network', body: 'Network shows who played with whom and how points flowed between players.', action: 'click', instruction: 'Click Network.' },
   { selector: '[data-tour="network-modal"]', title: 'Who plays with whom', body: 'Edges connect players who shared a table; thickness is shared games. Filter by season and date, pick an ego player for net points coloring, and switch to the sortable table when you want exact values. Ming will not change any filters for you.', action: 'next' },
   { selector: '[data-tour="network-close"]', title: 'Return to the workspace', body: 'Close the network to finish with club administration.', action: 'click', instruction: 'Click Close.' },
   { selector: '[data-tour="settings-open"]', title: 'Open real club settings', body: 'Club settings contains manager and season controls plus a route back to your dashboard.', action: 'click', instruction: 'Click the highlighted Club settings button.' },
-  { selector: '[data-tour="settings-modal"]', title: 'You know the core workflow', body: 'Settings is where managers start seasons and perform sensitive club actions. Ming never clicks those actions, and this tour has made no data writes.', action: 'finish', instruction: 'Finish returns you safely to your dashboard.' }
+  { selector: '[data-tour="settings-modal"]', title: 'You know the core workflow', body: 'Settings is where managers start seasons, configure club house scoring rules, and perform sensitive club actions. Ming never clicks those actions, and this tour has made no data writes.', action: 'finish', instruction: 'Finish returns you safely to your dashboard.' }
 ]
 
 export const TOUR_STEP_COUNT = TOUR_STEPS.length
@@ -96,7 +92,9 @@ function paddedRect(element: HTMLElement): SpotlightRect {
 
 export default function AppGuide() {
   const router = useRouter()
+  const pathname = usePathname()
   const { user, loading } = useAuth()
+  const [scoringRules, setScoringRules] = useState<ScoringRules>(DEFAULT_SCORING_RULES)
   const [mounted, setMounted] = useState(false)
   const [welcomeOpen, setWelcomeOpen] = useState(false)
   const [welcomeSpotlight, setWelcomeSpotlight] = useState<SpotlightRect | null>(null)
@@ -106,6 +104,12 @@ export default function AppGuide() {
   const [spotlight, setSpotlight] = useState<SpotlightRect | null>(null)
   const targetRef = useRef<HTMLElement | null>(null)
   const helpButtonRef = useRef<HTMLButtonElement | null>(null)
+  const clubId = pathname.match(/^\/club\/([^/]+)/)?.[1]
+
+  useEffect(() => {
+    if (!user || !clubId) return
+    return subscribeScoringRules(decodeURIComponent(clubId), setScoringRules)
+  }, [clubId, user])
   const welcomeClaimRef = useRef<string | null>(null)
   const bubbleRef = useRef<HTMLElement | null>(null)
   const lastScrolledRef = useRef<HTMLElement | null>(null)
@@ -325,7 +329,7 @@ export default function AppGuide() {
                   <li key={section.title}>
                     <span aria-hidden="true">{section.icon}</span>
                     <div><small>{String(index + 1).padStart(2, '0')}</small><h3>{section.title}</h3><p>{section.body}</p>
-                      {'fanMap' in section && section.fanMap ? <div className="app-guide-fan-map"><strong>Fan → Base Points</strong><table aria-label="Fan to base points"><thead><tr><th scope="col">Fan</th><th scope="col">Base points</th></tr></thead><tbody>{FAN_POINTS.map(([fan, points]) => <tr key={String(fan)}><td>{fan}</td><td>{points}</td></tr>)}</tbody></table></div> : null}
+                      {'fanMap' in section && section.fanMap ? <div className="app-guide-fan-map"><strong>Fan → Base Points (this club)</strong><table aria-label="Fan to base points"><thead><tr><th scope="col">Fan</th><th scope="col">Base points</th></tr></thead><tbody>{fanValues(scoringRules).map((fan) => <tr key={fan}><td>{fanLabel(fan, scoringRules)}</td><td>{scoringRules.fanPoints[fan]}</td></tr>)}</tbody></table></div> : null}
                     </div>
                   </li>
                 ))}

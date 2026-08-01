@@ -14,7 +14,14 @@ import {
   updateSession
 } from '@/lib/data'
 import type { PlayerDoc } from '@/lib/types'
-import { calculateTableScores, FAN_POINTS } from '@/lib/table-scoring'
+import { calculateTableScores } from '@/lib/table-scoring'
+import {
+  basePointsForFan,
+  DEFAULT_SCORING_RULES,
+  fanLabel,
+  fanValues,
+  type ScoringRules,
+} from '@/lib/scoring-rules'
 import { getQrEnrollmentSetting, setQrEnrollmentSetting, tableAction, type TableSession } from '@/lib/table-checkin-client'
 
 type WinType = 'self' | 'discard' | 'draw'
@@ -52,7 +59,7 @@ const initialWinState: WinState = {
   fan: null
 }
 
-export default function SessionManager({ clubId, seasonNumber, players: suppliedPlayers, isManager = false }: { clubId: string; seasonNumber: number; players?: PlayerDoc[]; isManager?: boolean }) {
+export default function SessionManager({ clubId, seasonNumber, players: suppliedPlayers, isManager = false, scoringRules = DEFAULT_SCORING_RULES }: { clubId: string; seasonNumber: number; players?: PlayerDoc[]; isManager?: boolean; scoringRules?: ScoringRules }) {
   const { user, loading, isAdmin } = useAuth()
   const { play } = useSound()
   const [subscribedPlayers, setSubscribedPlayers] = useState<PlayerDoc[]>([])
@@ -365,7 +372,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
     if (type === 'discard' && !loser) return null
 
     const playersOnTable = session.tables[tableId] || []
-    return calculateTableScores({ players: playersOnTable, winner, winType: type, loser, fan: fanCount })
+    return calculateTableScores({ players: playersOnTable, winner, winType: type, loser, fan: fanCount, rules: scoringRules })
   }
 
   const submitWin = async (tableId: string) => {
@@ -615,7 +622,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
       )
     })
 
-    const fanChips = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map((fanValue) => {
+    const fanChips = fanValues(scoringRules).map((fanValue) => {
       const selected = winState.fan === fanValue
       return (
         <button
@@ -624,8 +631,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           className={`fan-chip${selected ? ' selected' : ''}`}
           onClick={() => setFan(tableId, fanValue)}
         >
-          {fanValue}
-          {fanValue === 13 ? '+ 🔥' : ''}
+          {fanLabel(fanValue, scoringRules)}
         </button>
       )
     })
@@ -686,8 +692,8 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
             {winState.winType ? (
               <div className="fan-row">
                 <div className="fan-label">
-                  <span>Fan (3–13)</span>
-                  {winState.fan ? <span style={{ color: 'var(--purple)', fontWeight: 700 }}>{FAN_POINTS[winState.fan] ?? 384} pts base</span> : null}
+                  <span>Fan ({scoringRules.minFan}–{scoringRules.maxFan}+)</span>
+                  {winState.fan ? <span style={{ color: 'var(--purple)', fontWeight: 700 }}>{basePointsForFan(winState.fan, scoringRules)} pts base</span> : null}
                 </div>
                 <div className="fan-chips">{fanChips}</div>
               </div>

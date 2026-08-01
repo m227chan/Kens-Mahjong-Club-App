@@ -7,14 +7,15 @@ const push = vi.fn()
 const { claimMingWelcome } = vi.hoisted(() => ({ claimMingWelcome: vi.fn() }))
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push })
+  useRouter: () => ({ push }),
+  usePathname: () => '/',
 }))
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: { uid: 'tour-user' }, loading: false })
 }))
 
-vi.mock('@/lib/data', () => ({ claimMingWelcome }))
+vi.mock('@/lib/data', () => ({ claimMingWelcome, subscribeScoringRules: vi.fn() }))
 
 describe('AppGuide', () => {
   beforeEach(() => {

@@ -247,7 +247,7 @@ The authoritative schema is the ordered SQL in `supabase/migrations`. The follow
 | `join_requests`          | Pending/approved/declined membership requests and resolution audit fields                                       |
 | `players`                | Club-scoped tracked player, display name, emoji, optional Firebase UID link, and soft-active state              |
 | `seasons`                | Club-scoped numbered seasons and active state                                                                   |
-| `app_configs`            | Club-scoped ELO tuning and legacy title-band configuration                                                      |
+| `app_configs`            | Club-scoped scoring rules, ELO tuning, and legacy title-band configuration                                       |
 | `games`                  | Game metadata: time, season, table, result type, winner/loser, fan, notes, creator, and historical flag         |
 | `game_entries`           | One score per game/player; cascade-deleted with the game                                                        |
 | `player_stats`           | Rebuilt all-time aggregates and ranks                                                                           |
@@ -331,7 +331,7 @@ Shared client-facing types live in `lib/types.ts`:
 ### Roster and player identity
 
 - Tracked players exist separately from authenticated accounts, allowing historical and guest play.
-- Managers can add, rename, and deactivate players. Roster deletion controls are never rendered for regular members, and the API repeats the manager check before mutating data.
+- Managers can add, rename, and deactivate players. A regular member can rename or change the emoji only for the active roster player linked to their own account. Roster deletion controls are never rendered for regular members, and the API repeats these ownership checks before mutating data.
 - Managers can update a player emoji by selecting the player icon. The curated picker prevents duplicate active icons, while its custom input (opened directly by right-click on desktop) accepts an emoji outside the automatic default list.
 - New/imported players receive a random emoji from a curated set when one is not supplied.
 - Active emojis are kept unique per club where possible.
@@ -376,7 +376,7 @@ Shared client-facing types live in `lib/types.ts`:
 
 ### Scoring and game recording
 
-The fan lookup in `lib/scoring.ts` maps fan values to base points. For normal results:
+Each club stores its minimum fan, maximum fan cap, and fan-to-base-point mapping in `app_configs`. New clubs default to the original 3–13+ mapping. Managers edit these house rules from the collapsed settings card; live session scoring, focused-table scoring, server validation, and the in-app guide all consume the same club-specific values. Existing stored scores are not rewritten. For normal results:
 
 - **Self draw:** the winner receives three times the base value; each other player loses one base value.
 - **Discard win:** the winner receives twice the base value; the discarder loses twice the base value; uninvolved players receive zero.
@@ -395,7 +395,7 @@ Every stored game must contain two to four distinct players, finite numeric scor
 - Mobile always uses readable game cards rather than compressing the wide table, regardless of the desktop layout selection.
 - Rows/cards expose hover, focus, title, and “Review” cues when editable.
 - Selecting a game opens a viewport-centered record editor.
-- Managers can change date/time, season, scores, and notes or delete the record.
+- Members can change date/time, season, scores, and notes on games they created during the first 24 hours. Managers can edit or delete any record; deletion and CSV import remain manager-only.
 - Update/delete closes the editor after success, invalidates history cache, refreshes the page, and rebuilds dependent statistics.
 - CSV export includes metadata and a player score column for each included player.
 - CSV import supports quoted fields, multiple date formats, score normalization, new player creation, randomized emoji assignment, and player columns even when those players have no scored rows.
@@ -497,7 +497,7 @@ Game creation, editing, deletion, import, and manual rebuild run through `mutate
 
 1. Normalize the club identifier.
 2. Begin a transaction and take a club-scoped PostgreSQL advisory lock.
-3. Verify active membership; editing/deleting/importing/rebuilding requires manager role.
+3. Verify active membership. Managers may edit/delete/import/rebuild; members may edit only their own records during the first 24 hours.
 4. Validate and mutate the authoritative game and entries.
 5. Read aggregate baselines.
 6. Replay current game history in chronological, stable order.
@@ -809,7 +809,7 @@ For production diagnostics, prefer counts, action names, durations, anonymous co
 - New games update statistics incrementally; edits, deletes, imports, and explicit repairs use a full rebuild. The advisory lock serializes history mutations per club.
 - The history cache is in-memory and not shared across tabs or server instances.
 - Realtime helpers often re-query a filtered dataset after a change instead of applying database change payloads locally; this favors correctness and simple mapping.
-- Some club/session operations are intentionally collaborative for all members, while roster, season, game-history correction, and destructive actions are manager-controlled.
+- Some club/session operations are intentionally collaborative for all members. Linked members may edit their own roster identity, and game creators may correct their own record for 24 hours; season, scoring-rule, broad roster, import, rebuild, and destructive actions remain manager-controlled.
 - The default/global membership workflow contains deployment-specific operational configuration in server code. Treat it as sensitive migration/configuration debt and do not duplicate its constants into public material.
 - A legacy historical-stat compatibility rule exists for one migrated season. It must remain isolated and should eventually move to data-driven configuration if more migrations require similar behavior.
 - Firebase Functions, Data Connect, and Hosting starter artifacts are intentionally absent; Vercel runs the app and Supabase/PostgreSQL is the only application database.

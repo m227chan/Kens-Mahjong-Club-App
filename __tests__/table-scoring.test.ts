@@ -28,6 +28,23 @@ describe('focused table scoring', () => {
     expect(calculateTableScores({ players: players.slice(0, 3), winner: 'east', winType: 'self', fan: 6 })).toBeNull()
     expect(calculateTableScores({ players, winner: 'visitor', winType: 'self', fan: 6 })).toBeNull()
   })
+
+  it('uses a club-specific fan range and point mapping', () => {
+    const rules = { minFan: 1, maxFan: 4, fanPoints: { 1: 2, 2: 5, 3: 9, 4: 20 } }
+    expect(calculateTableScores({ players, winner: 'east', winType: 'self', fan: 2, rules })).toEqual({
+      east: 15,
+      south: -5,
+      west: -5,
+      north: -5,
+    })
+    expect(calculateTableScores({ players, winner: 'east', winType: 'self', fan: 8, rules })).toEqual({
+      east: 60,
+      south: -20,
+      west: -20,
+      north: -20,
+    })
+    expect(calculateTableScores({ players, winner: 'east', winType: 'self', fan: 0, rules })).toBeNull()
+  })
 })
 
 describe('table QR signatures', () => {
