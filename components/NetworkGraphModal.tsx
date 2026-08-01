@@ -254,7 +254,7 @@ export default function NetworkGraphModal({
 
   return (
     <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
-      <div role="dialog" aria-modal="true" aria-labelledby="network-modal-title" data-tour="network-modal" className="responsive-modal-panel flex max-h-[92vh] w-full max-w-6xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
+      <div role="dialog" aria-modal="true" aria-labelledby="network-modal-title" data-tour="network-modal" className="responsive-modal-panel flex max-h-[calc(100dvh-3rem)] w-full max-w-6xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
         <div className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:gap-4 sm:p-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-600">Player Network</p>
@@ -306,7 +306,7 @@ export default function NetworkGraphModal({
           </div>
         </div>
 
-        <div className="border-b border-slate-200 bg-slate-50 p-3 sm:p-4">
+        <div className="modal-controls shrink-0 border-b border-slate-200 bg-slate-50 p-3 sm:p-4">
           <button
             type="button"
             className="flex min-h-12 w-full items-center justify-between gap-3 rounded-lg border border-slate-300 bg-white px-3 text-left md:hidden"

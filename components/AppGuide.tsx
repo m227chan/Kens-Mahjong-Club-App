@@ -82,11 +82,13 @@ function paddedRect(element: HTMLElement): SpotlightRect {
   const padding = 8
   const left = Math.max(6, rect.left - padding)
   const top = Math.max(6, rect.top - padding)
+  const viewportWidth = window.visualViewport?.width ?? window.innerWidth
+  const viewportHeight = window.visualViewport?.height ?? window.innerHeight
   return {
     left,
     top,
-    width: Math.min(window.innerWidth - left - 6, rect.width + padding * 2),
-    height: Math.min(window.innerHeight - top - 6, rect.height + padding * 2)
+    width: Math.min(viewportWidth - left - 6, rect.width + padding * 2),
+    height: Math.min(viewportHeight - top - 6, rect.height + padding * 2)
   }
 }
 
@@ -134,7 +136,13 @@ export default function AppGuide() {
     const update = () => { if (helpButtonRef.current) setWelcomeSpotlight(paddedRect(helpButtonRef.current)) }
     update()
     window.addEventListener('resize', update)
-    return () => window.removeEventListener('resize', update)
+    window.visualViewport?.addEventListener('resize', update)
+    window.visualViewport?.addEventListener('scroll', update)
+    return () => {
+      window.removeEventListener('resize', update)
+      window.visualViewport?.removeEventListener('resize', update)
+      window.visualViewport?.removeEventListener('scroll', update)
+    }
   }, [welcomeOpen])
 
   useEffect(() => {
@@ -217,6 +225,8 @@ export default function AppGuide() {
     mutationObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'data-tour'] })
     window.addEventListener('resize', update)
     window.addEventListener('scroll', update, true)
+    window.visualViewport?.addEventListener('resize', update)
+    window.visualViewport?.addEventListener('scroll', update)
     const retry = window.setInterval(update, 500)
     frame = requestAnimationFrame(update)
     return () => {
@@ -225,6 +235,8 @@ export default function AppGuide() {
       mutationObserver.disconnect()
       window.removeEventListener('resize', update)
       window.removeEventListener('scroll', update, true)
+      window.visualViewport?.removeEventListener('resize', update)
+      window.visualViewport?.removeEventListener('scroll', update)
     }
   }, [step, tourOpen])
 
@@ -305,7 +317,9 @@ export default function AppGuide() {
 
   if (!mounted) return <button type="button" className={helpButtonClass} aria-label="Open app guide">?</button>
 
-  const bubbleAbove = spotlight ? spotlight.top > window.innerHeight * (window.innerWidth < 768 ? 0.28 : 0.55) : false
+  const viewportHeight = window.visualViewport?.height ?? window.innerHeight
+  const viewportWidth = window.visualViewport?.width ?? window.innerWidth
+  const bubbleAbove = spotlight ? spotlight.top > viewportHeight * (viewportWidth < 768 ? 0.28 : 0.55) : false
 
   return (
     <>

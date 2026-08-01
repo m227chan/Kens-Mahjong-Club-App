@@ -54,7 +54,9 @@ describe('user settings', () => {
     expect(settingsButton.textContent).toBe('MC')
     fireEvent.click(settingsButton)
 
-    expect(screen.getByRole('dialog').className).toContain('absolute')
+    expect(screen.getByRole('dialog').className).toContain('user-settings-dialog')
+    expect(screen.getByRole('dialog').parentElement?.className).toContain('user-settings-overlay')
+    expect(screen.getByRole('dialog').parentElement?.parentElement).toBe(document.body)
     expect(screen.getByRole('heading', { name: 'Account & app settings' })).toBeTruthy()
     expect(screen.getByText('Preferences')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Sound effects/ })).toBeTruthy()
@@ -63,7 +65,7 @@ describe('user settings', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete my account' }))
     await screen.findByText('Sunday Mahjong')
-    expect(screen.getByRole('dialog').className).toContain('absolute')
+    expect(screen.getByRole('dialog').className).toContain('user-settings-dialog')
 
     const finalButton = screen.getByRole('button', { name: 'Permanently delete account' }) as HTMLButtonElement
     expect(finalButton.disabled).toBe(true)

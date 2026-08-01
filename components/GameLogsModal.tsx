@@ -467,7 +467,7 @@ export default function GameLogsModal({
 
   return (
     <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
-      <div role="dialog" aria-modal="true" aria-labelledby="game-logs-title" data-tour="logs-modal" className="responsive-modal-panel flex max-h-[92vh] w-full max-w-7xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
+      <div role="dialog" aria-modal="true" aria-labelledby="game-logs-title" data-tour="logs-modal" className="responsive-modal-panel flex max-h-[calc(100dvh-3rem)] w-full max-w-7xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
         <div className="flex flex-col gap-4 border-b border-slate-200 p-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-600">Game logs</p>
@@ -488,7 +488,7 @@ export default function GameLogsModal({
           </div>
         </div>
 
-        <div className="border-b border-slate-200 bg-slate-50 p-4">
+        <div className="modal-controls shrink-0 border-b border-slate-200 bg-slate-50 p-4">
           <div className="flex items-center justify-between gap-4 md:hidden">
             <div className="min-w-0">
               <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-700">Filters</p>
@@ -626,7 +626,7 @@ export default function GameLogsModal({
 
       {selectedGame ? (
         <div className="responsive-modal fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/80 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && !savingGame) setSelectedGame(null) }}>
-          <div role="dialog" aria-modal="true" aria-labelledby="game-record-title" className="responsive-modal-panel max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-lg border border-slate-200 bg-white p-5 shadow-2xl sm:p-6">
+          <div role="dialog" aria-modal="true" aria-labelledby="game-record-title" className="responsive-modal-panel modal-panel-scroll max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-y-auto overscroll-contain rounded-lg border border-slate-200 bg-white p-5 shadow-2xl sm:p-6">
             <div className="flex items-start justify-between gap-4">
               <div><p className="text-xs font-bold uppercase tracking-[.16em] text-[rgb(var(--bamboo))]">Game record</p><h4 id="game-record-title" className="mt-2 text-xl font-black text-slate-950">Review and update</h4></div>
               <button type="button" onClick={() => setSelectedGame(null)} disabled={savingGame} className="rounded border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">Close</button>

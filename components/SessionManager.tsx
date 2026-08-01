@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
+import ScoreCelebration, { type ScoreCelebrationResult } from '@/components/ScoreCelebration'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSound } from '@/contexts/SoundContext'
+import { useGameSync } from '@/contexts/GameSyncContext'
 import {
   closeSession,
-  createGame,
   createSession,
   subscribeActiveSession,
   subscribePlayers,
@@ -23,6 +24,12 @@ import {
   type ScoringRules,
 } from '@/lib/scoring-rules'
 import { getQrEnrollmentSetting, setQrEnrollmentSetting, tableAction, type TableSession } from '@/lib/table-checkin-client'
+import {
+  optimisticallyClearAllTables,
+  optimisticallyClearTable,
+  optimisticallyRemovePlayer,
+  optimisticallySeatPlayer,
+} from '@/lib/optimistic-session'
 
 type WinType = 'self' | 'discard' | 'draw'
 
@@ -59,9 +66,19 @@ const initialWinState: WinState = {
   fan: null
 }
 
+const fromTableSession = (next: TableSession): SessionState => ({
+  id: next.id,
+  active: true,
+  tableCount: next.tableCount,
+  participants: next.participants,
+  tables: next.tables,
+  sideline: next.sideline,
+})
+
 export default function SessionManager({ clubId, seasonNumber, players: suppliedPlayers, isManager = false, scoringRules = DEFAULT_SCORING_RULES }: { clubId: string; seasonNumber: number; players?: PlayerDoc[]; isManager?: boolean; scoringRules?: ScoringRules }) {
   const { user, loading, isAdmin } = useAuth()
   const { play } = useSound()
+  const { saveGame } = useGameSync()
   const [subscribedPlayers, setSubscribedPlayers] = useState<PlayerDoc[]>([])
   const players = suppliedPlayers ?? subscribedPlayers
   const [session, setSession] = useState<SessionState>(initialSession)
@@ -79,7 +96,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
   const [savingGameTable, setSavingGameTable] = useState<string | null>(null)
   const [setupError, setSetupError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
-  const [flash, setFlash] = useState<{ scores: Record<string, number>; winner: string | null } | null>(null)
+  const [flash, setFlash] = useState<ScoreCelebrationResult | null>(null)
   const [collapsedTables, setCollapsedTables] = useState<Record<string, boolean>>({})
   const [sidelineCollapsed, setSidelineCollapsed] = useState(false)
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
@@ -90,6 +107,20 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
   const dragPlayerRef = useRef<string | null>(null)
   const dragSourceRef = useRef<string | null>(null)
   const gameRequestRef = useRef(new Map<string, { fingerprint: string; key: string }>())
+  const sessionRef = useRef<SessionState>(initialSession)
+  const confirmedSessionRef = useRef<SessionState>(initialSession)
+  const pendingLayoutMutationsRef = useRef(0)
+  const layoutMutationQueueRef = useRef<Promise<void>>(Promise.resolve())
+
+  const showSession = useCallback((next: SessionState) => {
+    sessionRef.current = next
+    setSession(next)
+  }, [])
+
+  const acceptServerSession = useCallback((next: SessionState) => {
+    confirmedSessionRef.current = next
+    if (pendingLayoutMutationsRef.current === 0) showSession(next)
+  }, [showSession])
 
   const gameRequestKey = (tableId: string, value: unknown) => {
     const fingerprint = JSON.stringify(value)
@@ -129,7 +160,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
       seasonNumber,
       (nextSession) => {
         if (nextSession && nextSession.isActive) {
-          setSession({
+          acceptServerSession({
             id: nextSession.id,
             active: true,
             tableCount: nextSession.tableCount,
@@ -141,7 +172,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           setSetupTableCount(nextSession.tableCount)
           setPage('session')
         } else {
-          setSession(initialSession)
+          acceptServerSession(initialSession)
           setSetupParticipants([])
           setSetupTableCount(1)
           setPage('setup')
@@ -149,7 +180,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
       },
       (error) => {
         console.error('Unable to load active session.', error)
-        setSession(initialSession)
+        acceptServerSession(initialSession)
         setSetupParticipants([])
         setSetupTableCount(1)
           setSetupError('Unable to load sessions for this club.')
@@ -161,7 +192,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
       playerUnsub?.()
       sessionUnsub()
     }
-  }, [clubId, seasonNumber, suppliedPlayers])
+  }, [acceptServerSession, clubId, seasonNumber, suppliedPlayers])
 
   useEffect(() => {
     if (!toast) return
@@ -262,23 +293,63 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
     window.setTimeout(() => setSetupError(null), 3000)
   }
 
-  const persistSession = async (nextSession: SessionState) => {
-    setSession(nextSession)
-    if (!nextSession.id) return
-    try {
-      await updateSession(clubId, nextSession.id, {
-        tableCount: nextSession.tableCount,
-        participants: nextSession.participants,
-        tables: nextSession.tables,
-        sideline: nextSession.sideline
-      })
-    } catch {
-      console.warn('Unable to persist session layout.')
-    }
+  const queueLayoutMutation = (
+    optimistic: SessionState,
+    write: () => Promise<SessionState>,
+    failureMessage: string,
+  ) => {
+    showSession(optimistic)
+    pendingLayoutMutationsRef.current += 1
+    layoutMutationQueueRef.current = layoutMutationQueueRef.current.then(async () => {
+      try {
+        confirmedSessionRef.current = await write()
+      } catch (error) {
+        play('error')
+        showToast(error instanceof Error ? error.message : failureMessage)
+      } finally {
+        pendingLayoutMutationsRef.current -= 1
+        if (pendingLayoutMutationsRef.current === 0) showSession(confirmedSessionRef.current)
+      }
+    })
   }
 
-  const applyTableSession = (next: TableSession) => {
-    setSession({ id: next.id, active: true, tableCount: next.tableCount, participants: next.participants, tables: next.tables, sideline: next.sideline })
+  const persistSession = (nextSession: SessionState) => {
+    if (!nextSession.id) {
+      showSession(nextSession)
+      return
+    }
+    queueLayoutMutation(
+      nextSession,
+      async () => {
+        await updateSession(clubId, nextSession.id!, {
+          tableCount: nextSession.tableCount,
+          participants: nextSession.participants,
+          tables: nextSession.tables,
+          sideline: nextSession.sideline
+        })
+        return nextSession
+      },
+      'Unable to save that table change. It was reverted.',
+    )
+  }
+
+  const queueTableAction = (
+    optimistic: SessionState,
+    request: () => Promise<{ status: 'ok'; session: TableSession } | { status: 'table_full'; session?: TableSession }>,
+    failureMessage: string,
+  ) => {
+    queueLayoutMutation(
+      optimistic,
+      async () => {
+        const result = await request()
+        if (result.status === 'table_full') {
+          if (result.session) confirmedSessionRef.current = fromTableSession(result.session)
+          throw new Error('That table filled up before the change was saved.')
+        }
+        return fromTableSession(result.session)
+      },
+      failureMessage,
+    )
   }
 
   const startSession = async () => {
@@ -320,7 +391,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           tables: nextTables,
           sideline
         })
-        setSession(nextSession)
+        acceptServerSession(nextSession)
       } else {
         const sessionId = await createSession(clubId, {
           createdBy: user?.uid ?? 'anonymous',
@@ -330,7 +401,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           tables: nextTables,
           sideline
         })
-        setSession({ ...nextSession, id: sessionId })
+        acceptServerSession({ ...nextSession, id: sessionId })
       }
       setPage('session')
     } catch (error) {
@@ -388,7 +459,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
     const idempotencyKey = gameRequestKey(tableId, requestValue)
     setSavingGameTable(tableId)
     try {
-      await createGame(clubId, {
+      const result = await saveGame(clubId, {
         entries: Object.entries(scores).map(([playerId, score]) => ({ playerId, score })),
         createdBy: user.uid,
         seasonNumber,
@@ -404,6 +475,11 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
       setFlash({ scores, winner: winState.winner })
       closeAllWinPanels()
       setWinState(initialWinState)
+      showToast(result.status === 'synced'
+        ? 'Game synced.'
+        : result.status === 'queued'
+          ? 'Game saved on this device. It will sync when the connection returns.'
+          : 'Game saved on this device, but syncing needs attention.')
     } catch (error) {
       play('error')
       showToast(error instanceof Error ? error.message : 'Unable to save game.')
@@ -426,7 +502,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
     const idempotencyKey = gameRequestKey(tableId, { scores, seasonNumber, winType: 'draw' })
     setSavingGameTable(tableId)
     try {
-      await createGame(clubId, {
+      const result = await saveGame(clubId, {
         entries: Object.entries(scores).map(([playerId, score]) => ({ playerId, score })),
         createdBy: user.uid,
         seasonNumber,
@@ -440,7 +516,11 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
       gameRequestRef.current.delete(tableId)
       play('draw')
       setFlash({ scores, winner: null })
-      showToast('Draw saved.')
+      showToast(result.status === 'synced'
+        ? 'Draw synced.'
+        : result.status === 'queued'
+          ? 'Draw saved on this device. It will sync when the connection returns.'
+          : 'Draw saved on this device, but syncing needs attention.')
     } catch (error) {
       play('error')
       showToast(error instanceof Error ? error.message : 'Unable to save draw.')
@@ -459,32 +539,43 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         return
       }
     }
-    setSession(initialSession)
+    acceptServerSession(initialSession)
     setSetupParticipants([])
     setSetupTableCount(1)
     setPage('setup')
     showToast('Session cleared!')
   }
 
-  const clearAllTables = async () => {
-    try {
-      const result = await tableAction<{ status: 'ok'; session: TableSession }>({ action: 'clearAll', clubId })
-      applyTableSession(result.session); play('tile'); showToast('All tables cleared.')
-    } catch { showToast('Unable to clear tables.') }
+  const clearAllTables = () => {
+    const optimistic = optimisticallyClearAllTables(sessionRef.current)
+    queueTableAction(
+      optimistic,
+      () => tableAction<{ status: 'ok'; session: TableSession }>({ action: 'clearAll', clubId }),
+      'Unable to clear tables. The previous layout was restored.',
+    )
+    play('tile')
+    showToast('All tables cleared.')
   }
 
-  const clearSingleTable = async (tableId: string) => {
-    try {
-      const result = await tableAction<{ status: 'ok'; session: TableSession }>({ action: 'clear', clubId, tableNumber: Number(tableId) })
-      applyTableSession(result.session); play('tile'); showToast('Table cleared.')
-    } catch { showToast('Unable to clear table.') }
+  const clearSingleTable = (tableId: string) => {
+    const optimistic = optimisticallyClearTable(sessionRef.current, tableId)
+    queueTableAction(
+      optimistic,
+      () => tableAction<{ status: 'ok'; session: TableSession }>({ action: 'clear', clubId, tableNumber: Number(tableId) }),
+      'Unable to clear the table. The previous layout was restored.',
+    )
+    play('tile')
+    showToast('Table cleared.')
   }
 
-  const removeToSideline = async (tableId: string, playerId: string) => {
-    try {
-      const result = await tableAction<{ status: 'ok'; session: TableSession }>({ action: 'remove', clubId, tableNumber: Number(tableId), playerId })
-      applyTableSession(result.session); play('tile')
-    } catch { showToast('Unable to remove player.') }
+  const removeToSideline = (tableId: string, playerId: string) => {
+    const optimistic = optimisticallyRemovePlayer(sessionRef.current, tableId, playerId)
+    queueTableAction(
+      optimistic,
+      () => tableAction<{ status: 'ok'; session: TableSession }>({ action: 'remove', clubId, tableNumber: Number(tableId), playerId }),
+      'Unable to remove that player. The previous layout was restored.',
+    )
+    play('tile')
   }
 
   const toggleTable = (tableId: string) => {
@@ -505,7 +596,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
     setPickerSearch('')
   }
 
-  const pickPlayer = async (playerId: string) => {
+  const pickPlayer = (playerId: string) => {
     if (!pickerTableId) return
     const playersOnTable = session.tables[pickerTableId] || []
     if (playersOnTable.length >= 4) {
@@ -515,12 +606,14 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
     }
     if (playersOnTable.includes(playerId)) return
 
-    try {
-      const result = await tableAction<{ status: 'ok'; session: TableSession } | { status: 'table_full' }>({ action: 'seat', clubId, tableNumber: Number(pickerTableId), playerId })
-      if (result.status === 'table_full') { showToast('Table is full.'); return }
-      applyTableSession(result.session); play('tile')
-      if ((result.session.tables[pickerTableId] ?? []).length >= 4) closePicker()
-    } catch { showToast('Unable to add player.') }
+    const optimistic = optimisticallySeatPlayer(sessionRef.current, pickerTableId, playerId)
+    queueTableAction(
+      optimistic,
+      () => tableAction<{ status: 'ok'; session: TableSession } | { status: 'table_full'; session: TableSession }>({ action: 'seat', clubId, tableNumber: Number(pickerTableId), playerId }),
+      'Unable to add that player. The previous layout was restored.',
+    )
+    play('tile')
+    if ((optimistic.tables[pickerTableId] ?? []).length >= 4) closePicker()
   }
 
   const openSwapPicker = (tableId: string, playerId: string) => {
@@ -1686,7 +1779,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           .session-manager #sessionPage{height:calc(100dvh - 112px)}.session-manager .tables-scroll{padding:10px}.session-manager .sideline-section{margin:10px 10px 0}
           .desktop-table-count { display:none; }
           .mobile-table-stepper { display:flex; align-items:center; gap:10px; }
-          .session-result-dialog { display:block!important; position:fixed!important; left:50%!important; top:50%!important; transform:translate(-50%,-50%)!important; width:min(420px,calc(100vw - 24px))!important; max-height:calc(100dvh - 24px)!important; overflow-y:auto!important; z-index:12000!important; padding:16px!important; border:1px solid rgb(var(--line))!important; border-radius:6px!important; background:rgb(var(--surface))!important; color:rgb(var(--ink))!important; box-shadow:0 0 0 100vmax rgb(0 0 0/.68),0 20px 60px rgb(0 0 0/.35)!important; overscroll-behavior:contain; }
+          .session-result-dialog { display:block!important; position:fixed!important; left:50%!important; top:calc(var(--visual-viewport-top,0px) + var(--visual-viewport-height,100dvh)/2)!important; transform:translate(-50%,-50%)!important; width:min(420px,calc(100vw - 24px))!important; max-height:calc(var(--visual-viewport-height,100dvh) - 24px)!important; overflow-y:auto!important; z-index:12000!important; padding:16px!important; border:1px solid rgb(var(--line))!important; border-radius:6px!important; background:rgb(var(--surface))!important; color:rgb(var(--ink))!important; box-shadow:0 0 0 100vmax rgb(0 0 0/.68),0 20px 60px rgb(0 0 0/.35)!important; overscroll-behavior:contain; }
         }
       `}</style>
 
@@ -1713,6 +1806,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           {headerMenuOpen ? (
             <div
               id="headerMenu"
+              className="session-actions-menu"
               role="dialog"
               aria-label="Session actions"
               style={{
@@ -1887,31 +1981,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
       </div>
 
       {toast ? <div className="toast active" role="status" aria-live="polite">{toast}</div> : null}
-      {flash && typeof document !== 'undefined' ? createPortal(
-        <div className="score-flash" role="status" aria-live="polite">
-          <div className="celebration-confetti" aria-hidden="true">
-            {['🀄', '🎉', '✨', '🎊', '🌸', '⭐', '🧧', '🍀'].map((symbol, index) => <span key={index} style={{ '--burst-index': index } as React.CSSProperties}>{symbol}</span>)}
-          </div>
-          <div className="score-flash-card">
-            {flash.winner ? (
-              <>
-                <p className="celebration-kicker">Game recorded</p>
-                <div className="celebration-winner-icon">{playerInfo(flash.winner).icon || '🏆'}</div>
-                <div className="flash-title">{playerInfo(flash.winner).displayName} wins!</div>
-                <p className="celebration-subtitle">A winning hand for the table</p>
-              </>
-            ) : <div className="flash-title">🤝 Draw recorded</div>}
-            <div className="flash-scores">
-              {Object.entries(flash.scores).map(([playerId, score]) => {
-                const info = playerInfo(playerId)
-                const cls = score > 0 ? 'pos' : score < 0 ? 'neg' : ''
-                return <div key={playerId} className={`flash-row ${playerId === flash.winner ? 'winner-row' : ''}`}><span>{info.icon || '👤'} {shortName(info.displayName)}</span><span className={`flash-score-val ${cls}`}>{score > 0 ? `+${score}` : score}</span></div>
-              })}
-            </div>
-          </div>
-        </div>,
-        document.body
-      ) : null}
+      <ScoreCelebration result={flash} player={playerInfo} />
       {pickerTableId && typeof document !== 'undefined' ? createPortal(<div id="pickerOverlay" role="dialog" aria-modal="true" aria-labelledby="add-player-title" style={{ display: 'flex', position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.68)', zIndex: 20010, padding: 16, alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ background: 'white', borderRadius: 14, overflow: 'hidden', width: '100%', maxWidth: 340, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
           <div style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

@@ -4,8 +4,12 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSound } from "@/contexts/SoundContext";
+import { useGameSync } from "@/contexts/GameSyncContext";
+import ScoreCelebration, {
+  type ScoreCelebrationResult,
+} from "@/components/ScoreCelebration";
 import {
-  createGame,
   subscribeActiveSession,
   subscribePlayers,
   subscribeScoringRules,
@@ -26,6 +30,11 @@ import {
   type TableQr,
   type TableSession,
 } from "@/lib/table-checkin-client";
+import {
+  optimisticallyClearTable,
+  optimisticallyRemovePlayer,
+  optimisticallySeatPlayer,
+} from "@/lib/optimistic-session";
 
 type MutationResult =
   | { status: "ok"; session: TableSession }
@@ -40,6 +49,8 @@ export default function FocusedTableView({
 }) {
   const router = useRouter();
   const { user, loading } = useAuth();
+  const { play } = useSound();
+  const { saveGame: saveGameWithOfflineSupport } = useGameSync();
   const [context, setContext] = useState<TableContext | null>(null);
   const [session, setSession] = useState<TableSession | null>(null);
   const [players, setPlayers] = useState<TablePlayer[]>([]);
@@ -50,6 +61,7 @@ export default function FocusedTableView({
   const [search, setSearch] = useState("");
   const [qr, setQr] = useState<TableQr | null>(null);
   const [resultOpen, setResultOpen] = useState(false);
+  const [flash, setFlash] = useState<ScoreCelebrationResult | null>(null);
   const [winner, setWinner] = useState("");
   const [winType, setWinType] = useState<TableWinType | "">("");
   const [loser, setLoser] = useState("");
@@ -58,6 +70,20 @@ export default function FocusedTableView({
   );
   const [fan, setFan] = useState(DEFAULT_SCORING_RULES.minFan);
   const requestKey = useRef("");
+  const sessionRef = useRef<TableSession | null>(null);
+  const confirmedSessionRef = useRef<TableSession | null>(null);
+  const pendingTableMutationsRef = useRef(0);
+  const tableMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
+
+  const showSession = useCallback((next: TableSession | null) => {
+    sessionRef.current = next;
+    setSession(next);
+  }, []);
+
+  const acceptServerSession = useCallback((next: TableSession | null) => {
+    confirmedSessionRef.current = next;
+    if (pendingTableMutationsRef.current === 0) showSession(next);
+  }, [showSession]);
 
   const loadContext = useCallback(async () => {
     const next = await tableAction<TableContext>({
@@ -66,9 +92,9 @@ export default function FocusedTableView({
       tableNumber,
     });
     setContext(next);
-    setSession(next.session);
+    acceptServerSession(next.session);
     setPlayers(next.players);
-  }, [clubId, tableNumber]);
+  }, [acceptServerSession, clubId, tableNumber]);
 
   useEffect(() => {
     document.body.classList.add("table-focus-mode");
@@ -107,7 +133,7 @@ export default function FocusedTableView({
       clubId,
       context.seasonNumber,
       (next) =>
-        setSession(
+        acceptServerSession(
           next
             ? {
                 id: next.id,
@@ -135,7 +161,7 @@ export default function FocusedTableView({
       unsubscribeSession();
       unsubscribePlayers();
     };
-  }, [clubId, context]);
+  }, [acceptServerSession, clubId, context]);
   useEffect(() => {
     if (!user) return;
     return subscribeScoringRules(clubId, setScoringRules);
@@ -149,6 +175,11 @@ export default function FocusedTableView({
     const timer = window.setTimeout(() => setToast(null), 2600);
     return () => window.clearTimeout(timer);
   }, [toast]);
+  useEffect(() => {
+    if (!flash) return;
+    const timer = window.setTimeout(() => setFlash(null), 2200);
+    return () => window.clearTimeout(timer);
+  }, [flash]);
 
   const occupants = useMemo(
     () => session?.tables[String(tableNumber)] ?? [],
@@ -187,35 +218,46 @@ export default function FocusedTableView({
     });
   }, [fan, loser, occupants, scoringRules, winType, winner]);
 
-  const mutate = async (
+  const mutate = (
     action: string,
     values: Record<string, unknown> = {},
   ) => {
-    setBusy(true);
-    setError(null);
-    try {
-      const result = await tableAction<MutationResult>({
-        action,
-        clubId,
-        tableNumber,
-        ...values,
-      });
-      if (result.status === "table_full")
-        throw new Error(
-          "This table filled up. Refresh and choose a player to replace.",
-        );
-      setSession(result.session);
-      return true;
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Unable to update the table.",
-      );
+    const current = sessionRef.current;
+    if (!current) return false;
+    const playerId = typeof values.playerId === "string" ? values.playerId : "";
+    const optimistic = action === "seat" && playerId
+      ? optimisticallySeatPlayer(current, String(tableNumber), playerId)
+      : action === "remove" && playerId
+        ? optimisticallyRemovePlayer(current, String(tableNumber), playerId)
+        : action === "clear"
+          ? optimisticallyClearTable(current, String(tableNumber))
+          : current;
+    if (action === "seat" && optimistic === current) {
+      setError("This table is already full.");
+      play("error");
       return false;
-    } finally {
-      setBusy(false);
     }
+
+    setError(null);
+    showSession(optimistic);
+    play("tile");
+    pendingTableMutationsRef.current += 1;
+    tableMutationQueueRef.current = tableMutationQueueRef.current.then(async () => {
+      try {
+        const result = await tableAction<MutationResult>({ action, clubId, tableNumber, ...values });
+        confirmedSessionRef.current = result.session;
+        if (result.status === "table_full") {
+          throw new Error("This table filled up before the change was saved.");
+        }
+      } catch (nextError) {
+        play("error");
+        setError(nextError instanceof Error ? nextError.message : "Unable to update the table. Your last change was reverted.");
+      } finally {
+        pendingTableMutationsRef.current -= 1;
+        if (pendingTableMutationsRef.current === 0) showSession(confirmedSessionRef.current);
+      }
+    });
+    return true;
   };
 
   const openResults = () => {
@@ -248,7 +290,7 @@ export default function FocusedTableView({
     setBusy(true);
     setError(null);
     try {
-      await createGame(clubId, {
+      const result = await saveGameWithOfflineSupport(clubId, {
         entries: Object.entries(scores).map(([playerId, score]) => ({
           playerId,
           score,
@@ -264,7 +306,13 @@ export default function FocusedTableView({
       });
       setResultOpen(false);
       requestKey.current = "";
-      setToast(draw ? "Draw recorded." : "Game recorded!");
+      play(draw ? "draw" : "win");
+      setFlash({ scores, winner: draw ? null : winner });
+      setToast(result.status === "synced"
+        ? draw ? "Draw synced." : "Game synced!"
+        : result.status === "queued"
+          ? `${draw ? "Draw" : "Game"} saved on this device. It will sync when the connection returns.`
+          : `${draw ? "Draw" : "Game"} saved on this device, but syncing needs attention.`);
     } catch (nextError) {
       setError(
         nextError instanceof Error
@@ -440,7 +488,7 @@ export default function FocusedTableView({
         )}
       </div>
 
-      <footer className="fixed inset-x-0 bottom-0 z-20 mx-auto flex max-w-xl gap-2 border-t border-[rgb(var(--line))] bg-[rgb(var(--surface))] p-3 pb-[max(.75rem,env(safe-area-inset-bottom))]">
+      <footer className="focused-table-actions fixed inset-x-0 z-20 mx-auto flex max-w-xl gap-2 border-t border-[rgb(var(--line))] bg-[rgb(var(--surface))] p-3 pb-[max(.75rem,env(safe-area-inset-bottom))]">
         <button
           type="button"
           disabled={occupants.length !== 4 || busy}
@@ -464,7 +512,7 @@ export default function FocusedTableView({
 
       {pickerOpen ? (
         <div
-          className="fixed inset-0 z-50 flex items-end bg-black/60"
+          className="viewport-overlay fixed inset-0 z-50 flex items-end bg-black/60"
           onMouseDown={(event) =>
             event.target === event.currentTarget && setPickerOpen(false)
           }
@@ -533,7 +581,6 @@ export default function FocusedTableView({
 
                 {/* Search */}
                 <input
-                  autoFocus
                   aria-label="Search the club roster"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
@@ -544,7 +591,7 @@ export default function FocusedTableView({
             </div>
 
             {/* Scrollable player list */}
-            <div className="flex-1 overflow-y-auto p-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
               <div className="mx-auto max-w-xl space-y-2">
                 {occupants.length === 4 ? (
                   <p className="py-6 text-center text-sm font-bold text-[rgb(var(--muted))]">
@@ -622,14 +669,14 @@ export default function FocusedTableView({
       ) : null}
 
       {resultOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 sm:items-center">
+        <div className="viewport-overlay fixed inset-0 z-50 flex items-end justify-center bg-black/65 sm:items-center">
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="focused-result-title"
-            className="playful-sheet max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-[rgb(var(--surface))] p-4 sm:rounded-xl"
+            className="playful-sheet focused-result-sheet flex max-h-[92dvh] min-h-0 w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-[rgb(var(--surface))] sm:rounded-xl"
           >
-            <div className="flex items-center justify-between">
+            <div className="z-10 flex shrink-0 items-center justify-between border-b border-[rgb(var(--line))] bg-[rgb(var(--surface))] px-4 pb-3 pt-4">
               <h2 id="focused-result-title" className="text-xl font-black">Record winner</h2>
               <button
                 type="button"
@@ -640,6 +687,7 @@ export default function FocusedTableView({
                 ×
               </button>
             </div>
+            <div className="focused-result-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
             <p className="mt-4 text-xs font-black uppercase tracking-widest text-[rgb(var(--muted))]">
               Who won?
             </p>
@@ -757,20 +805,25 @@ export default function FocusedTableView({
                 })}
               </div>
             ) : null}
-            <button
-              type="button"
-              disabled={busy || !scorePreview}
-              onClick={() => void saveGame(false)}
-              className="mt-5 min-h-12 w-full rounded-lg bg-[rgb(var(--bamboo))] font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {busy ? "Saving…" : "Save result"}
-            </button>
+            </div>
+            <div className="focused-result-actions shrink-0 border-t border-[rgb(var(--line))] bg-[rgb(var(--surface))] p-3 pb-[max(.75rem,env(safe-area-inset-bottom))]">
+              <button
+                type="button"
+                disabled={busy || !scorePreview}
+                onClick={() => void saveGame(false)}
+                className="min-h-12 w-full rounded-lg bg-[rgb(var(--bamboo))] font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {busy ? "Saving…" : "Save result"}
+              </button>
+            </div>
           </section>
         </div>
       ) : null}
 
+      <ScoreCelebration result={flash} player={player} />
+
       {qr ? (
-        <div className="qr-single-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4">
+        <div className="viewport-overlay qr-single-overlay fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/65 p-4">
           <section role="dialog" aria-modal="true" aria-labelledby="focused-qr-title" className="qr-single-card w-full max-w-sm rounded-xl bg-white p-5 text-center text-slate-950">
             <h2 id="focused-qr-title" className="text-2xl font-black">Table {tableNumber}</h2>
             <div

@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import Link from 'next/link'
 import './globals.css'
 import { Manrope, JetBrains_Mono } from 'next/font/google'
@@ -6,6 +6,8 @@ import { AuthProvider } from '@/contexts/AuthContext'
 import UserSettings from '@/components/UserSettings'
 import AppGuide from '@/components/AppGuide'
 import { SoundProvider } from '@/contexts/SoundContext'
+import { GameSyncProvider } from '@/contexts/GameSyncContext'
+import ViewportMetrics from '@/components/ViewportMetrics'
 
 const manrope = Manrope({ subsets: ['latin'], variable: '--font-sans' })
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' })
@@ -16,12 +18,20 @@ export const metadata: Metadata = {
   icons: { icon: '/icon.svg', shortcut: '/icon.svg', apple: '/icon.svg' }
 }
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+}
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning className={`${manrope.variable} ${jetbrainsMono.variable}`}>
       <body className="club-atmosphere min-h-screen">
+        <ViewportMetrics />
         <AuthProvider>
           <SoundProvider>
+          <GameSyncProvider>
           <div className="relative mx-auto flex min-h-screen max-w-[1500px] flex-col">
             <a
               href="#main-content"
@@ -34,9 +44,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <Link
                   href="/"
                   aria-label="Go to your personal dashboard"
-                  className="group flex min-h-11 min-w-0 cursor-pointer items-center gap-2.5 rounded-sm focus-visible:outline-none"
+                  className="group flex min-h-11 min-w-0 cursor-pointer items-center rounded-sm focus-visible:outline-none"
                 >
-                  <span aria-hidden="true" className="grid h-9 w-8 shrink-0 place-items-center rounded border border-[rgb(var(--line))] bg-[rgb(var(--surface))] text-lg shadow-[2px_3px_0_rgb(var(--gold)/0.2)]">🀄</span>
                   <span className="min-w-0">
                     <span className="brand-kicker hidden text-[9px] font-bold uppercase tracking-[0.3em] transition-opacity group-hover:opacity-75 sm:block">Ken&apos;s Mahjong Club</span>
                     <span className="font-display block truncate text-base font-black leading-none text-[rgb(var(--ink))] transition-colors group-hover:text-[rgb(var(--bamboo))] sm:text-lg">Score tracker</span>
@@ -47,6 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </header>
             <main id="main-content" tabIndex={-1} className="min-w-0 flex-1">{children}</main>
           </div>
+          </GameSyncProvider>
           </SoundProvider>
         </AuthProvider>
       </body>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSound } from '@/contexts/SoundContext'
@@ -28,7 +29,8 @@ export default function UserSettings() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
-  const settingsRootRef = useRef<HTMLDivElement | null>(null)
+  const overlayRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
   const accountInitials = useMemo(() => {
     const displayName = user?.displayName?.trim()
     if (displayName) {
@@ -61,15 +63,26 @@ export default function UserSettings() {
 
   useEffect(() => {
     if (!open) return
-    const closeDropdown = (event: PointerEvent) => {
-      if (!busy && !deletingMode && !settingsRootRef.current?.contains(event.target as Node)) {
-        setOpen(false)
-        setError(null)
-      }
+    const previousOverflow = document.body.style.overflow
+    const syncVisualViewport = () => {
+      const overlay = overlayRef.current
+      if (!overlay) return
+      const viewport = window.visualViewport
+      overlay.style.setProperty('--settings-viewport-height', `${Math.round(viewport?.height ?? window.innerHeight)}px`)
+      overlay.style.setProperty('--settings-viewport-top', `${Math.round(viewport?.offsetTop ?? 0)}px`)
     }
-    document.addEventListener('pointerdown', closeDropdown)
-    return () => document.removeEventListener('pointerdown', closeDropdown)
-  }, [busy, deletingMode, open])
+    document.body.style.overflow = 'hidden'
+    syncVisualViewport()
+    window.addEventListener('resize', syncVisualViewport)
+    window.visualViewport?.addEventListener('resize', syncVisualViewport)
+    window.visualViewport?.addEventListener('scroll', syncVisualViewport)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('resize', syncVisualViewport)
+      window.visualViewport?.removeEventListener('resize', syncVisualViewport)
+      window.visualViewport?.removeEventListener('scroll', syncVisualViewport)
+    }
+  }, [open])
 
   const toggleTheme = () => {
     const next = !darkMode
@@ -137,11 +150,13 @@ export default function UserSettings() {
     setOpen(false)
     setDeletingMode(false)
     setError(null)
+    window.requestAnimationFrame(() => triggerRef.current?.focus())
   }
 
   return (
-    <div ref={settingsRootRef} className="relative">
+    <div className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => { if (open) close(); else { setOpen(true); setDeletingMode(false); setError(null) } }}
         aria-label="Account and app settings"
@@ -153,9 +168,20 @@ export default function UserSettings() {
         <span aria-hidden="true">{accountInitials}</span>
       </button>
 
-      {open ? (
-        <div className="absolute right-0 top-[calc(100%+0.75rem)] z-[100]" role="dialog" aria-labelledby="user-settings-title">
-          <section className={`flex max-h-[calc(100dvh-6rem)] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl ${deletingMode ? 'w-[min(32rem,calc(100vw-2.5rem))]' : 'w-[min(24rem,calc(100vw-2.5rem))]'}`}>
+      {open && typeof document !== 'undefined' ? createPortal(
+        <div
+          ref={overlayRef}
+          className="user-settings-overlay"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !busy && !deletingMode) close()
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="user-settings-title"
+            className={`user-settings-dialog flex min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl ${deletingMode ? 'w-[min(32rem,calc(100vw-2.5rem))]' : 'w-[min(24rem,calc(100vw-2.5rem))]'}`}
+          >
             <header className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-[rgb(var(--bamboo))]">Account</p>
@@ -165,7 +191,7 @@ export default function UserSettings() {
             </header>
 
             {!deletingMode ? (
-              <div ref={contentRef} className="grid flex-1 gap-4 overflow-y-auto p-5">
+              <div ref={contentRef} className="grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain p-5">
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                   <p className="font-black text-slate-950">Preferences</p>
                   <div className="mt-3 grid gap-2">
@@ -195,7 +221,7 @@ export default function UserSettings() {
                 {error ? <p role="alert" className="rounded border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-700">{error}</p> : null}
               </div>
             ) : plan ? (
-              <div ref={contentRef} className="grid flex-1 gap-5 overflow-y-auto p-5">
+              <div ref={contentRef} className="grid min-h-0 flex-1 gap-5 overflow-y-auto overscroll-contain p-5">
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
                   <strong className="block">Your player records and games will not be deleted.</strong>
                   Player profiles are unlinked so you can join again and relink after signing in with a new account. Your memberships and personal account profile are removed.
@@ -245,7 +271,8 @@ export default function UserSettings() {
               </div>
             ) : null}
           </section>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </div>
   )

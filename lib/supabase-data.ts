@@ -41,6 +41,20 @@ type UserLike = {
   getIdToken?: () => Promise<string>
 }
 type Row = Record<string, unknown>
+
+export class DataActionError extends Error {
+  readonly retryable: boolean
+
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message)
+    this.name = 'DataActionError'
+    this.retryable = status === 408 || status === 425 || status === 429 || status >= 500
+  }
+}
+
 const ts = (value: unknown) =>
   Timestamp.fromDate(value ? new Date(String(value)) : new Date())
 const nullableTs = (value: unknown) => (value ? ts(value) : null)
@@ -57,9 +71,15 @@ async function serverAction<T>(action: string, payload: Row): Promise<T> {
     },
     body: JSON.stringify({ action, ...payload }),
   })
-  const body = (await response.json()) as { result?: T; error?: string }
+  const body = (await response.json().catch(() => ({}))) as {
+    result?: T
+    error?: string
+  }
   if (!response.ok)
-    throw new Error(body.error ?? 'The database operation failed.')
+    throw new DataActionError(
+      body.error ?? 'The database operation failed.',
+      response.status,
+    )
   return body.result as T
 }
 

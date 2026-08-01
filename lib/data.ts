@@ -5,6 +5,8 @@ import { auth } from '@/lib/firebase'
 
 const backend = supabase
 
+export { DataActionError } from '@/lib/supabase-data'
+
 export const createClub = backend.createClub
 export const getCreatedClubCount = backend.getCreatedClubCount
 export const getAccountDeletionPlan = backend.getAccountDeletionPlan
