@@ -59,6 +59,7 @@ export default function FocusedTableView({
   const [toast, setToast] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [qr, setQr] = useState<TableQr | null>(null);
   const [resultOpen, setResultOpen] = useState(false);
   const [flash, setFlash] = useState<ScoreCelebrationResult | null>(null);
@@ -512,7 +513,7 @@ export default function FocusedTableView({
 
       {pickerOpen ? (
         <div
-          className="viewport-overlay fixed inset-0 z-50 flex items-end bg-black/60"
+          className="viewport-overlay fixed inset-x-0 bottom-0 top-0 z-50 flex items-end bg-black/60"
           onMouseDown={(event) =>
             event.target === event.currentTarget && setPickerOpen(false)
           }
@@ -521,7 +522,7 @@ export default function FocusedTableView({
             role="dialog"
             aria-modal="true"
             aria-labelledby="focused-player-picker-title"
-            className="playful-sheet max-h-[88dvh] w-full flex flex-col rounded-t-2xl bg-[rgb(var(--surface))]"
+            className="playful-sheet max-h-[90dvh] w-full flex flex-col rounded-t-2xl bg-[rgb(var(--surface))]"
           >
             <div className="flex-shrink-0 p-4 pb-0">
               <div className="mx-auto max-w-xl">
@@ -581,10 +582,15 @@ export default function FocusedTableView({
 
                 {/* Search */}
                 <input
+                  ref={searchInputRef}
                   aria-label="Search the club roster"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Search roster…"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
                   className="mt-2 min-h-12 w-full rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface-2))] px-3"
                 />
               </div>
@@ -627,10 +633,17 @@ export default function FocusedTableView({
                           const ok = await mutate("seat", {
                             playerId: item.id,
                           });
-                          // Auto-close only when table is now full
-                          if (ok && occupants.length + 1 >= 4) {
-                            setPickerOpen(false);
-                            setSearch("");
+                          if (ok) {
+                            if (occupants.length + 1 >= 4) {
+                              // Table is now full — close the picker
+                              setPickerOpen(false);
+                              setSearch("");
+                            } else {
+                              // Clear search and re-focus so the keyboard resets
+                              // and the user can quickly find the next player
+                              setSearch("");
+                              setTimeout(() => searchInputRef.current?.focus(), 50);
+                            }
                           }
                         }}
                         className="flex min-h-14 w-full items-center gap-3 rounded-lg border border-[rgb(var(--line))] px-3 text-left disabled:opacity-40"
