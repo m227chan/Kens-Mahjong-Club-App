@@ -548,23 +548,56 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
   top: calc(8rem + 1rem);
   left: -24px;
   z-index: 20;
-  width: 48px;
-  height: 48px;
+  width: 52px;
+  height: 52px;
   border-radius: 0 999px 999px 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: .5rem;
+  padding: .35rem;
   background: rgb(var(--surface-2));
   border: 1px solid rgb(var(--line));
   box-shadow: 0 12px 28px rgb(var(--shadow)/.1);
   color: rgb(var(--ink));
-  font-size: 1.1rem;
-  font-weight: 700;
   cursor: pointer;
+  transition: background .2s ease, box-shadow .2s ease;
+  transform: none !important;
 }
-.wiki-toc-side-tab {
-  display: inline-flex;
+.wiki-toc-side-tab:hover,
+.wiki-toc-side-tab:focus-visible {
+  background: rgb(var(--surface));
+  transform: none !important;
+}
+.wiki-toc-side-tab .wiki-toc-side-icon {
+  display: inline-block;
+  width: 18px;
+  height: 14px;
+  position: relative;
+}
+.wiki-toc-side-tab .wiki-toc-side-icon::before,
+.wiki-toc-side-tab .wiki-toc-side-icon::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 8px;
+  height: 2px;
+  background: currentColor;
+  border-radius: 1px;
+  transform-origin: right center;
+  transition: transform .2s ease;
+}
+.wiki-toc-side-tab .wiki-toc-side-icon::before {
+  transform: translateY(-50%) rotate(-45deg);
+}
+.wiki-toc-side-tab .wiki-toc-side-icon::after {
+  transform: translateY(-50%) rotate(45deg);
+}
+.wiki-toc-side-tab.open .wiki-toc-side-icon::before {
+  transform: translateY(-50%) rotate(45deg);
+}
+.wiki-toc-side-tab.open .wiki-toc-side-icon::after {
+  transform: translateY(-50%) rotate(-45deg);
 }
 .wiki-toc-side-tab.open {
   opacity: 0;
@@ -821,13 +854,14 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
   }
   .wiki-toc-side-tab {
     position: fixed;
-    top: 7rem;
-    left: 0;
+    top: 50%;
+    left: -6px;
+    transform: translateY(-50%);
     z-index: 50;
-    width: 38px;
-    height: 42px;
-    border-radius: 0 18px 18px 0;
-    padding: .35rem;
+    width: 32px;
+    height: 60px;
+    border-radius: 0 30px 30px 0;
+    padding: .5rem .25rem .5rem 0;
     align-items: center;
     justify-content: center;
     background: rgb(var(--surface-2));
@@ -836,10 +870,14 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
     box-shadow: 0 12px 24px rgb(var(--shadow)/.12);
     font-size: 1rem;
     line-height: 1;
-    transition: left .25s ease, box-shadow .25s ease, background .25s ease;
+    transition: left .25s ease, box-shadow .25s ease, background .25s ease, transform .25s ease;
+  }
+  .wiki-toc-side-tab .wiki-toc-side-icon {
+    width: 12px;
+    height: 20px;
   }
   .wiki-page-shell.sidebar-open .wiki-toc-side-tab {
-    left: calc(min(84vw, 320px) - 19px);
+    left: calc(min(84vw, 320px) - 16px);
     box-shadow: none;
     background: rgb(var(--surface-2));
   }

@@ -229,12 +229,18 @@ export default function WikiPage() {
   useEffect(() => {
     const handleTouchStart = (event: TouchEvent) => {
       if (event.touches.length !== 1) return
+      if (window.innerWidth > 1024) return
       const touch = event.touches[0]
       if (touch.clientY < 100) return
+
       touchStartX.current = touch.clientX
       touchStartY.current = touch.clientY
       touchActive.current = true
-      touchStartedInSidebar.current = touch.clientX < Math.min(window.innerWidth, 320)
+
+      const sidebarWidth = Math.min(window.innerWidth * 0.84, 320)
+      const edgeStart = !sidebarOpen && touch.clientX < 24
+      const sidebarStart = sidebarOpen && touch.clientX < sidebarWidth
+      touchStartedInSidebar.current = edgeStart || sidebarStart
     }
 
     const handleTouchMove = (event: TouchEvent) => {
@@ -242,16 +248,17 @@ export default function WikiPage() {
       const touch = event.touches[0]
       const deltaX = touch.clientX - touchStartX.current
       const deltaY = touch.clientY - touchStartY.current
+
       if (Math.abs(deltaY) > Math.abs(deltaX)) {
         touchActive.current = false
         return
       }
 
       if (Math.abs(deltaX) > 40) {
-        if (deltaX > 0 && !sidebarOpen && touchStartX.current < window.innerWidth / 2 && !touchStartedInSidebar.current) {
+        if (deltaX > 0 && !sidebarOpen && touchStartedInSidebar.current) {
           setSidebarOpen(true)
           touchActive.current = false
-        } else if (deltaX < 0 && sidebarOpen) {
+        } else if (deltaX < 0 && sidebarOpen && touchStartedInSidebar.current) {
           setSidebarOpen(false)
           touchActive.current = false
         }
@@ -307,7 +314,7 @@ export default function WikiPage() {
         aria-label={sidebarOpen ? 'Tuck away contents' : 'Open table of contents'}
         onClick={() => setSidebarOpen((current) => !current)}
       >
-        {sidebarOpen ? '◀' : '▶'}
+        <span className="wiki-toc-side-icon" aria-hidden="true" />
       </button>
 
       <main className="wiki-page-content">
