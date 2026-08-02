@@ -5,6 +5,7 @@ import { Manrope, JetBrains_Mono } from 'next/font/google'
 import { AuthProvider } from '@/contexts/AuthContext'
 import UserSettings from '@/components/UserSettings'
 import AppGuide from '@/components/AppGuide'
+import WikiHeaderLink from '@/components/WikiHeaderLink'
 import { SoundProvider } from '@/contexts/SoundContext'
 import { GameSyncProvider } from '@/contexts/GameSyncContext'
 import ViewportMetrics from '@/components/ViewportMetrics'
@@ -58,14 +59,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <BrandLockup className="brand-lockup-header" showDescriptor />
                 </Link>
                 <div className="flex items-center gap-2">
-                  <Link
-                    href="/wiki"
-                    aria-label="Open Mahjong hand wiki"
-                    title="Wiki"
-                    className="group flex h-11 w-11 items-center justify-center rounded-full border border-[rgb(var(--line))] bg-[rgb(var(--surface))] text-lg font-black text-[rgb(var(--ink))] shadow-[3px_3px_0_rgb(var(--shadow)/0.08)] hover:border-[rgb(var(--gold))]"
-                  >
-                    📖
-                  </Link>
+                  <WikiHeaderLink />
                   <AppGuide />
                   <UserSettings />
                 </div>

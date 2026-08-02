@@ -1,7 +1,9 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import { useAuth } from '@/contexts/AuthContext'
 import {
   StaticMahjongTile,
   mahjongTiles,
@@ -166,6 +168,9 @@ export default function WikiPage() {
   const touchStartX = useRef<number | null>(null)
   const touchStartY = useRef<number | null>(null)
   const touchActive = useRef(false)
+  const touchStartedInSidebar = useRef(false)
+  const { user, loading } = useAuth()
+  const router = useRouter()
 
   const sectionIds = useMemo(() => sections.map((section) => section.id), [])
 
@@ -176,8 +181,19 @@ export default function WikiPage() {
     if (target) {
       target.scrollIntoView({ behavior: 'smooth', block: 'start' })
       window.history.replaceState(null, '', `#${id}`)
+      window.setTimeout(() => setActiveSection(id), 250)
+    }
+
+    if (window.matchMedia('(max-width: 1024px)').matches) {
+      setSidebarOpen(false)
     }
   }
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace('/login')
+    }
+  }, [loading, router, user])
 
   useEffect(() => {
     if (typeof IntersectionObserver === 'undefined') {
@@ -218,6 +234,7 @@ export default function WikiPage() {
       touchStartX.current = touch.clientX
       touchStartY.current = touch.clientY
       touchActive.current = true
+      touchStartedInSidebar.current = touch.clientX < Math.min(window.innerWidth, 320)
     }
 
     const handleTouchMove = (event: TouchEvent) => {
@@ -231,7 +248,7 @@ export default function WikiPage() {
       }
 
       if (Math.abs(deltaX) > 40) {
-        if (deltaX > 0 && touchStartX.current < window.innerWidth / 2) {
+        if (deltaX > 0 && !sidebarOpen && touchStartX.current < window.innerWidth / 2 && !touchStartedInSidebar.current) {
           setSidebarOpen(true)
           touchActive.current = false
         } else if (deltaX < 0 && sidebarOpen) {

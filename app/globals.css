@@ -656,6 +656,7 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
 }
 .wiki-section {
   margin-bottom: 2.5rem;
+  scroll-margin-top: calc(6rem + 1rem);
 }
 .wiki-section-heading h2 {
   margin: 0;
