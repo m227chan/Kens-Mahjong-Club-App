@@ -313,6 +313,8 @@ export default function AppGuide() {
     setGuideOpen(true)
   }
 
+  if (!user) return null
+
   const helpButtonClass = 'group flex h-11 w-11 items-center justify-center rounded-full border border-[rgb(var(--line))] bg-[rgb(var(--surface))] text-lg font-black text-[rgb(var(--ink))] shadow-[3px_3px_0_rgb(var(--shadow)/0.08)] hover:border-[rgb(var(--gold))]'
 
   if (!mounted) return <button type="button" className={helpButtonClass} aria-label="Open app guide">?</button>

@@ -1983,21 +1983,21 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
       {toast ? <div className="toast active" role="status" aria-live="polite">{toast}</div> : null}
       <ScoreCelebration result={flash} player={playerInfo} />
       {pickerTableId && typeof document !== 'undefined' ? createPortal(<div id="pickerOverlay" role="dialog" aria-modal="true" aria-labelledby="add-player-title" style={{ display: 'flex', position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.68)', zIndex: 20010, padding: 16, alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ background: 'white', borderRadius: 14, overflow: 'hidden', width: '100%', maxWidth: 340, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ background: 'rgb(var(--surface))', color: 'rgb(var(--ink))', borderRadius: 14, overflow: 'hidden', width: '100%', maxWidth: 340, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
           <div style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div id="add-player-title" style={{ fontSize: 14, fontWeight: 800, color: 'white' }}>Add Player to Table {pickerTableId}</div>
             <button type="button" onClick={closePicker} aria-label="Close player picker" style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, color: 'white', fontSize: 18, width: 30, height: 30, cursor: 'pointer' }}>×</button>
           </div>
-          <div style={{ padding: '10px 12px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
-            <div style={{ marginBottom: 7, fontSize: 11, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Selected ({(session.tables[pickerTableId] || []).length}/4)</div>
+          <div className="picker-selected-summary" style={{ padding: '10px 12px', borderBottom: '1px solid rgb(var(--line))', background: 'rgb(var(--surface-2))' }}>
+            <div style={{ marginBottom: 7, fontSize: 11, fontWeight: 800, color: 'rgb(var(--ink))', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Selected ({(session.tables[pickerTableId] || []).length}/4)</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {(session.tables[pickerTableId] || []).length === 0 ? <span style={{ fontSize: 12, color: '#64748b' }}>No players selected yet.</span> : (session.tables[pickerTableId] || []).map((playerId) => {
+              {(session.tables[pickerTableId] || []).length === 0 ? <span style={{ fontSize: 12, color: 'rgb(var(--muted))' }}>No players selected yet.</span> : (session.tables[pickerTableId] || []).map((playerId) => {
                 const info = playerInfo(playerId)
-                return <button key={playerId} type="button" onClick={() => removeToSideline(pickerTableId, playerId)} title={`Remove ${info.displayName} from this table`} style={{ display: 'inline-flex', minHeight: 36, alignItems: 'center', gap: 6, border: '1px solid #94a3b8', borderRadius: 6, background: 'white', padding: '5px 8px', color: '#1e293b', fontSize: 12, fontWeight: 700 }}><span>{info.icon}</span><span>{shortName(info.displayName)}</span><span aria-hidden="true">×</span></button>
+                return <button key={playerId} type="button" onClick={() => removeToSideline(pickerTableId, playerId)} title={`Remove ${info.displayName} from this table`} style={{ display: 'inline-flex', minHeight: 36, alignItems: 'center', gap: 6, border: '1px solid rgb(var(--line))', borderRadius: 6, background: 'rgb(var(--surface))', padding: '5px 8px', color: 'rgb(var(--ink))', fontSize: 12, fontWeight: 700 }}><span>{info.icon}</span><span>{shortName(info.displayName)}</span><span aria-hidden="true">×</span></button>
               })}
             </div>
           </div>
-          <div style={{ padding: '10px 12px', borderBottom: '1px solid #e2e8f0' }}>
+          <div style={{ padding: '10px 12px', borderBottom: '1px solid rgb(var(--line))' }}>
             <input
               type="text"
               aria-label="Search players on the sideline"
@@ -2018,12 +2018,12 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
                   style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 60, cursor: 'pointer', padding: '6px 4px', borderRadius: 8, border: '2px solid #e2e8f0', background: 'white', transition: 'all 0.15s' }}
                 >
                   <div style={{ width: 36, height: 36, background: 'linear-gradient(135deg,#ebf4ff,#e9d8fd)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>{info.icon || '👤'}</div>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: '#4a5568', marginTop: 4, textAlign: 'center', maxWidth: 56, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortName(info.displayName)}</div>
+                  <div className="picker-player-name" style={{ fontSize: 9, fontWeight: 700, color: 'rgb(var(--ink))', marginTop: 4, textAlign: 'center', maxWidth: 56, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortName(info.displayName)}</div>
                 </button>
               )
             })}
           </div>
-          <div style={{ padding: '10px 12px', borderTop: '1px solid #e2e8f0', fontSize: 11, color: '#a0aec0', textAlign: 'center' }} id="pickerEmpty">
+          <div style={{ padding: '10px 12px', borderTop: '1px solid rgb(var(--line))', fontSize: 11, color: 'rgb(var(--muted))', textAlign: 'center' }} id="pickerEmpty">
             {pickerAvailable.length === 0 ? (pickerSearch ? 'No players match your search.' : 'No players on sideline.') : ''}
           </div>
         </div>

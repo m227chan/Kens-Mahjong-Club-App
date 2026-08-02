@@ -153,6 +153,8 @@ export default function UserSettings() {
     window.requestAnimationFrame(() => triggerRef.current?.focus())
   }
 
+  if (!user) return null
+
   return (
     <div className="relative">
       <button
