@@ -45,7 +45,7 @@ export default function ScoreCelebration({
             const scoreClass = score > 0 ? 'pos' : score < 0 ? 'neg' : ''
             return (
               <div key={playerId} className={`flash-row ${playerId === result.winner ? 'winner-row' : ''}`}>
-                <span>{info.icon || '👤'} {shortName(info.displayName)}</span>
+                <span className="flash-player-name">{info.icon || '👤'} {shortName(info.displayName)}</span>
                 <span className={`flash-score-val ${scoreClass}`}>{score > 0 ? `+${score}` : score}</span>
               </div>
             )

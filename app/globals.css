@@ -416,8 +416,10 @@ html.dark .game-log-row td.text-slate-300 { color:rgb(var(--muted)/.45)!importan
 .celebration-winner-icon { display:flex; width:76px; height:88px; margin:16px auto 12px; align-items:center; justify-content:center; border:1px solid rgb(var(--line)); border-radius:7px; background:linear-gradient(145deg,rgb(var(--surface)),rgb(var(--surface-2))); font-size:2.4rem; box-shadow:4px 6px 0 rgb(var(--gold)/.2); animation:winner-tile .72s cubic-bezier(.2,.9,.25,1) .08s both; }
 .score-flash .flash-title { margin:0!important; color:#17201b!important; font-size:clamp(1.7rem,7vw,2.35rem); font-weight:800; letter-spacing:-.04em; }
 .celebration-subtitle { margin-top:5px; color:#526058!important; font-size:.82rem; }
-.score-flash .flash-scores { width:100%!important; margin-top:20px; gap:6px!important; }
-.score-flash .flash-row { padding:9px 12px!important; border:1px solid #d8ddd9; border-radius:4px!important; background:#f6f8f6!important; color:#17201b!important; font-size:.78rem!important; animation:score-row-in .32s ease-out both; }
+.score-flash .flash-scores { display:flex!important; flex-direction:column!important; width:100%!important; margin-top:20px; gap:6px!important; }
+.score-flash .flash-row { display:grid!important; grid-template-columns:minmax(0,1fr) auto!important; align-items:center!important; column-gap:clamp(1.5rem,8vw,4rem)!important; padding:9px 12px!important; border:1px solid #d8ddd9; border-radius:4px!important; background:#f6f8f6!important; color:#17201b!important; font-size:.78rem!important; text-align:left!important; animation:score-row-in .32s ease-out both; }
+.score-flash .flash-player-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.score-flash .flash-score-val { min-width:3ch; text-align:right; font-variant-numeric:tabular-nums; }
 .score-flash .flash-row:nth-child(2){animation-delay:.05s}.score-flash .flash-row:nth-child(3){animation-delay:.1s}.score-flash .flash-row:nth-child(4){animation-delay:.15s}
 .score-flash .winner-row { border-color:rgb(var(--bamboo))!important; background:rgb(var(--bamboo)/.1)!important; font-weight:800; }
 .score-flash .flash-score-val.pos { color:rgb(var(--bamboo-bright))!important; }.score-flash .flash-score-val.neg { color:rgb(var(--cinnabar))!important; }
@@ -709,22 +711,39 @@ html { scroll-behavior: smooth; }
 body { min-width: 320px; text-rendering: optimizeLegibility; }
 
 .club-header {
+  border-bottom-color: rgb(var(--line) / .8) !important;
+  background:
+    linear-gradient(90deg, rgb(var(--canvas-top) / .97), rgb(var(--surface-1) / .95) 55%, rgb(var(--canvas-top) / .97)) !important;
+  box-shadow: 0 12px 38px rgb(var(--shadow) / .1) !important;
+}
+.club-header .brand-kicker { color: rgb(var(--cinnabar)) !important; }
+.club-header a[aria-label="Go to your personal dashboard"] > span:last-child > span:last-child { color: rgb(var(--ink)) !important; }
+.club-header [aria-label="Open app guide"] {
+  border-color: rgb(var(--line)) !important;
+  background: rgb(var(--surface-2)) !important;
+  color: rgb(var(--ink)) !important;
+}
+.club-header [aria-label="Account and app settings"] {
+  border-color: rgb(var(--bamboo) / .55) !important;
+  background: rgb(var(--bamboo)) !important;
+  color: white !important;
+}
+html.dark .club-header {
   border-bottom-color: rgb(255 255 255 / .11) !important;
   background:
     linear-gradient(90deg, rgb(var(--felt-deep) / .98), rgb(var(--felt) / .96) 55%, rgb(var(--felt-deep) / .98)) !important;
   box-shadow: 0 12px 38px rgb(0 18 13 / .22) !important;
 }
-.club-header .brand-kicker { color: rgb(246 124 95) !important; }
-.club-header a[aria-label="Go to your personal dashboard"] > span:last-child > span:last-child { color: rgb(255 249 226) !important; }
-.club-header [aria-label="Open app guide"] {
+html.dark .club-header .brand-kicker { color: rgb(246 124 95) !important; }
+html.dark .club-header a[aria-label="Go to your personal dashboard"] > span:last-child > span:last-child { color: rgb(255 249 226) !important; }
+html.dark .club-header [aria-label="Open app guide"] {
   border-color: rgb(255 255 255 / .2) !important;
   background: rgb(255 255 255 / .08) !important;
   color: rgb(255 249 226) !important;
 }
-.club-header [aria-label="Account and app settings"] {
+html.dark .club-header [aria-label="Account and app settings"] {
   border-color: rgb(112 222 169 / .5) !important;
   background: rgb(32 143 99) !important;
-  color: white !important;
 }
 
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
