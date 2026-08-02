@@ -30,7 +30,11 @@ export type QueuedGame = {
 
 const storage = () => {
   if (typeof window === 'undefined') return null
-  return window.localStorage
+  try {
+    return window.localStorage
+  } catch {
+    return null
+  }
 }
 
 const isQueuedGame = (value: unknown): value is QueuedGame => {
@@ -96,7 +100,7 @@ export function enqueueGame(
     throw new Error('This device already has 100 unsynced games. Reconnect before recording more.')
 
   const item: QueuedGame = {
-    id: `${clubId}:${input.idempotencyKey}`,
+    id: `${ownerUid}:${clubId}:${input.idempotencyKey}`,
     ownerUid,
     clubId,
     input,

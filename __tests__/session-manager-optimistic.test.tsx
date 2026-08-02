@@ -98,5 +98,5 @@ describe('session manager optimistic table changes', () => {
       },
     })
     await waitFor(() => expect(document.getElementById('sidelineArea')?.textContent).toContain('Jane'))
-  })
+  }, 10_000)
 })

@@ -792,11 +792,11 @@ export default function FocusedTableView({
                       key={id}
                       className="focused-score-preview-item rounded-lg px-3 py-2"
                     >
-                      <div className="truncate text-xs font-bold text-white/80">
+                      <div className="truncate text-xs font-bold text-[rgb(var(--muted))]">
                         {info.icon} {info.displayName}
                       </div>
                       <div
-                        className={`mt-1 text-lg font-black ${score > 0 ? "text-emerald-300" : score < 0 ? "text-rose-300" : "text-slate-300"}`}
+                        className={`mt-1 text-lg font-black ${score > 0 ? "text-[rgb(var(--bamboo))]" : score < 0 ? "text-[rgb(var(--cinnabar))]" : "text-[rgb(var(--muted))]"}`}
                       >
                         {score > 0 ? `+${score}` : score}
                       </div>

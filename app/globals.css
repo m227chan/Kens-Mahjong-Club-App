@@ -620,8 +620,10 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
 
 body.table-focus-mode .club-header{display:none!important}
 body.table-focus-mode>div,body.table-focus-mode main{max-width:none!important}
-.focused-score-preview{background:#020806!important;border-color:#355047!important}
-.focused-score-preview-item{background:#10231c!important}
+.focused-score-preview{background:rgb(var(--surface-2))!important;border-color:rgb(var(--line))!important}
+.focused-score-preview-item{background:rgb(var(--surface-1))!important}
+html.dark .focused-score-preview{background:#020806!important;border-color:#355047!important}
+html.dark .focused-score-preview-item{background:#10231c!important}
 @media print{
   body:has(.qr-single-overlay) .club-header,
   body:has(.qr-single-overlay) .focused-table>*:not(.qr-single-overlay){display:none!important}
@@ -870,32 +872,49 @@ div.rounded-lg.border.bg-white {
 }
 .fan-choice-grid { grid-template-columns: repeat(auto-fit, minmax(3.1rem, 1fr)) !important; }
 
-/* The focused table is the signature moment: deep felt plus physical seat tiles. */
+/* The focused table follows the saved app theme while retaining its felt-table identity. */
 .focused-table {
+  color: rgb(var(--ink));
+  background-color: rgb(var(--canvas-bottom)) !important;
+  background-image:
+    radial-gradient(circle at 18% 0%, rgb(var(--bamboo) / .12), transparent 28rem),
+    linear-gradient(140deg, rgb(var(--canvas-top)), rgb(var(--canvas-bottom))) !important;
+}
+.focused-table > header,
+.focused-table > footer {
+  background: rgb(var(--surface) / .94) !important;
+  box-shadow: 0 8px 26px rgb(var(--shadow) / .12);
+}
+.focused-table article,
+.focused-table section[aria-label*="seats"] > button {
+  border-color: rgb(var(--line)) !important;
+  background: linear-gradient(145deg, rgb(var(--surface-1)), rgb(var(--surface-2))) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .45), 3px 4px 0 rgb(var(--shadow) / .12) !important;
+}
+.focused-table article:hover { transform: translateY(-2px); }
+html.dark .focused-table {
   --ink: 248 242 217;
   --muted: 184 190 168;
   --surface: 15 52 40;
   --surface-1: 15 52 40;
   --surface-2: 24 69 53;
   --line: 54 91 75;
-  color: rgb(var(--ink));
   background-color: rgb(var(--felt-deep)) !important;
   background-image:
     radial-gradient(circle at 18% 0%, rgb(54 142 101 / .22), transparent 28rem),
     linear-gradient(140deg, rgb(var(--felt)), rgb(var(--felt-deep))) !important;
 }
-.focused-table > header,
-.focused-table > footer {
+html.dark .focused-table > header,
+html.dark .focused-table > footer {
   background: rgb(var(--felt-deep) / .92) !important;
   box-shadow: 0 8px 26px rgb(0 0 0 / .22);
 }
-.focused-table article,
-.focused-table section[aria-label*="seats"] > button {
+html.dark .focused-table article,
+html.dark .focused-table section[aria-label*="seats"] > button {
   border-color: rgb(100 128 110 / .65) !important;
   background: linear-gradient(145deg, rgb(24 69 53), rgb(13 49 37)) !important;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / .07), 3px 4px 0 rgb(0 0 0 / .18) !important;
 }
-.focused-table article:hover { transform: translateY(-2px); }
 .focused-table .qr-single-card {
   --ink: 23 31 27;
   --muted: 82 96 88;
@@ -1141,9 +1160,9 @@ html.dark [class*="bg-[rgb(var(--bamboo))]"] {
 /* Durable game-sync status */
 .game-sync-banner {
   position: fixed;
-  z-index: 45000;
+  z-index: 19000;
   right: max(1rem, env(safe-area-inset-right));
-  bottom: max(1rem, env(safe-area-inset-bottom));
+  top: calc(var(--visual-viewport-top, 0px) + 5rem);
   display: flex;
   max-width: min(30rem, calc(100vw - 2rem));
   align-items: center;
@@ -1200,8 +1219,11 @@ html.dark [class*="bg-[rgb(var(--bamboo))]"] {
 }
 
 body.table-focus-mode .game-sync-banner {
+  top: auto;
   bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 4.5rem);
 }
+
+body:has([role="dialog"][aria-modal="true"]) .game-sync-banner { display: none; }
 
 @keyframes game-sync-enter {
   from { opacity: 0; transform: translateY(.6rem) scale(.98); }
@@ -1216,7 +1238,6 @@ body.table-focus-mode .game-sync-banner {
 @media (max-width: 640px) {
   .game-sync-banner {
     right: .75rem;
-    bottom: max(.75rem, env(safe-area-inset-bottom));
     left: .75rem;
     max-width: none;
   }

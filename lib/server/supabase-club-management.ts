@@ -10,8 +10,8 @@ export async function ensureSupabaseUniversalMembership(uid: string) {
   if (tokenRefreshRequired) await adminAuth.setCustomUserClaims(uid, { ...(user.customClaims ?? {}), role: 'authenticated' })
   await withTransaction(async (db) => {
     await db.query(`insert into clubs(id,name,manager_uid,manager_email,manager_display_name,active_season_number,active,universal)
-      values('KEN',$1,'universal',null,null,2,true,true) on conflict(id) do update set universal=true,active=true
-      where clubs.universal is distinct from true or clubs.active is distinct from true`, ["Kendall's Mahjong Club"])
+      values('KEN',$1,'universal',null,null,2,true,true) on conflict(id) do update set name=excluded.name,universal=true,active=true
+      where (clubs.name,clubs.universal,clubs.active) is distinct from (excluded.name,true,true)`, ['Mahjong Messiah Score Tracker'])
     await db.query("insert into seasons(club_id,season_number,name,created_by,active) values('KEN',2,'Season 2','historical-migration',true) on conflict do nothing")
     await db.query(`insert into user_profiles(firebase_uid,email,display_name,photo_url) values($1,$2,$3,$4)
       on conflict(firebase_uid) do update set email=excluded.email,display_name=excluded.display_name,photo_url=excluded.photo_url,updated_at=now()

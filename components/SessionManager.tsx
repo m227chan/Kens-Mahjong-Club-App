@@ -2063,7 +2063,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
                 >
                   <div style={{ width: 36, height: 36, background: 'linear-gradient(135deg,#ebf4ff,#e9d8fd)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{info.icon || '👤'}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#2d3748' }}>{info.displayName}</div>
+                    <div className="swap-player-name" style={{ fontSize: 12, fontWeight: 700, color: 'rgb(var(--ink))' }}>{info.displayName}</div>
                     <div style={{ fontSize: 10, fontWeight: 600, color: locationColor }}>{locationLabel}</div>
                   </div>
                   <div style={{ fontSize: 11, color: '#a0aec0' }}>⇄</div>

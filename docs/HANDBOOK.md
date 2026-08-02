@@ -1,4 +1,4 @@
-# Mahjong Club Score Tracker: Codebase Handbook
+# Mahjong Messiah Score Tracker: Codebase Handbook
 
 This document is the primary technical guide for developers and AI coding agents working in this repository. It describes the current production architecture, domain model, user-facing features, data flows, algorithms, design principles, operational requirements, and safe modification practices.
 

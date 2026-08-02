@@ -33,13 +33,13 @@ describe('AppGuide', () => {
     claimMingWelcome.mockResolvedValueOnce(true)
     render(<AppGuide />)
 
-    expect(await screen.findByRole('heading', { name: "Welcome to Ken's Mahjong Club" })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Welcome to Mahjong Messiah Score Tracker' })).toBeInTheDocument()
     await waitFor(() => expect(document.querySelector('.real-tour-spotlight')).toBeInTheDocument())
     expect(claimMingWelcome).toHaveBeenCalledOnce()
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Open app guide' })[0])
     expect(screen.getByRole('heading', { name: 'How the score tracker works' })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: "Welcome to Ken's Mahjong Club" })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Welcome to Mahjong Messiah Score Tracker' })).not.toBeInTheDocument()
   })
 
   it('presents the signed-in workflow in order', () => {

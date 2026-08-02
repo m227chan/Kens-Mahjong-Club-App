@@ -150,7 +150,7 @@ export default function LoginPage(){
     <FloatingTiles/>
     <div className="login-welcome-grid">
       <section className="login-intro" aria-labelledby="login-title">
-        <p className="login-eyebrow"><span>🀄</span> Ken&apos;s Mahjong Club</p>
+        <p className="login-eyebrow"><span>🀄</span> Mahjong Messiah Score Tracker</p>
         <h1 id="login-title">Every game, every rivalry, every rating—remembered.</h1>
         <p className="login-lede">A shared scorebook for the people you play with. Run sessions, record results, and see the standings take shape over time.</p>
         <ul className="login-feature-list" aria-label="Score tracker features">

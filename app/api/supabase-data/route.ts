@@ -263,7 +263,7 @@ export async function POST(request: NextRequest) {
       if (action === 'leaveClub') {
         if (body.clubId === 'KEN')
           throw new Error(
-            "Kendall's Mahjong Club is available to every user and cannot be left.",
+            'Mahjong Messiah Score Tracker is available to every user and cannot be left.',
           )
         const member = await db.query(
           'select role from club_members where club_id=$1 and firebase_uid=$2 and active',

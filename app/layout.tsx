@@ -13,7 +13,7 @@ const manrope = Manrope({ subsets: ['latin'], variable: '--font-sans' })
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' })
 
 export const metadata: Metadata = {
-  title: 'Ken\'s Mahjong Club Score Tracker',
+  title: 'Mahjong Messiah Score Tracker',
   description: 'A modern Mahjong club scorekeeper with experience-aware Skill ratings and analytics.',
   icons: { icon: '/icon.svg', shortcut: '/icon.svg', apple: '/icon.svg' }
 }
@@ -47,8 +47,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   className="group flex min-h-11 min-w-0 cursor-pointer items-center rounded-sm focus-visible:outline-none"
                 >
                   <span className="min-w-0">
-                    <span className="brand-kicker hidden text-[9px] font-bold uppercase tracking-[0.3em] transition-opacity group-hover:opacity-75 sm:block">Ken&apos;s Mahjong Club</span>
-                    <span className="font-display block truncate text-base font-black leading-none text-[rgb(var(--ink))] transition-colors group-hover:text-[rgb(var(--bamboo))] sm:text-lg">Score tracker</span>
+                    <span className="brand-kicker block truncate text-[9px] font-bold uppercase tracking-[0.24em] transition-opacity group-hover:opacity-75 sm:tracking-[0.3em]">Mahjong Messiah</span>
+                    <span className="font-display block truncate text-base font-black leading-none text-[rgb(var(--ink))] transition-colors group-hover:text-[rgb(var(--bamboo))] sm:text-lg">Score Tracker</span>
                   </span>
                 </Link>
                 <div className="flex items-center gap-2"><AppGuide /><UserSettings /></div>

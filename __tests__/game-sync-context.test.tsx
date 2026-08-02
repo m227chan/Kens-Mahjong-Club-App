@@ -2,10 +2,13 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { listQueuedGames, type OfflineGameInput } from '@/lib/offline-game-queue'
 
-const { createGameMock } = vi.hoisted(() => ({ createGameMock: vi.fn() }))
+const { createGameMock, user } = vi.hoisted(() => ({
+  createGameMock: vi.fn(),
+  user: { uid: 'user-1' },
+}))
 
 vi.mock('@/contexts/AuthContext', () => ({
-  useAuth: () => ({ user: { uid: 'user-1' }, loading: false }),
+  useAuth: () => ({ user, loading: false }),
 }))
 vi.mock('@/lib/data', () => ({ createGame: createGameMock }))
 
@@ -68,7 +71,7 @@ describe('GameSyncProvider', () => {
     await waitFor(() => expect(document.body.dataset.saveStatus).toBe('queued'))
     expect(createGameMock).not.toHaveBeenCalled()
     expect(listQueuedGames('user-1')).toHaveLength(1)
-    expect(screen.getByRole('status').textContent).toContain('safely stored on this device')
+    expect(screen.getByRole('status').textContent).toContain('safely stored here')
 
     Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: true })
     fireEvent(window, new Event('online'))
@@ -82,5 +85,28 @@ describe('GameSyncProvider', () => {
     ))
     await waitFor(() => expect(listQueuedGames('user-1')).toEqual([]))
     expect(await screen.findByText('1 saved game synced.')).toBeTruthy()
+  })
+
+  it('keeps a game when the connection drops during the save request', async () => {
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: true })
+    createGameMock
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValue('game-1')
+    render(
+      <GameSyncProvider>
+        <Harness />
+      </GameSyncProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save game' }))
+
+    await waitFor(() => expect(document.body.dataset.saveStatus).toBe('queued'))
+    expect(listQueuedGames('user-1')).toHaveLength(1)
+    expect(screen.getByRole('status').textContent).toContain('waiting to sync')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+
+    await waitFor(() => expect(createGameMock).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(listQueuedGames('user-1')).toEqual([]))
   })
 })

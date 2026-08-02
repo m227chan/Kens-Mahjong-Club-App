@@ -328,7 +328,7 @@ export default function AppGuide() {
         <div className="real-tour-layer" aria-live="polite">
           {welcomeSpotlight ? <div className="real-tour-spotlight" style={{ top: welcomeSpotlight.top, left: welcomeSpotlight.left, width: welcomeSpotlight.width, height: welcomeSpotlight.height }} aria-hidden="true" /> : <div className="real-tour-dimmer" aria-hidden="true" />}
           <aside className="real-tour-bubble is-below" role="dialog" aria-label="Welcome to the score tracker">
-            <div className="real-tour-heading"><span className="app-guide-avatar" aria-hidden="true">🀄</span><div><p className="app-guide-kicker">Ming says · Welcome!</p><h2>Welcome to Ken&apos;s Mahjong Club</h2></div><button type="button" onClick={() => setWelcomeOpen(false)} aria-label="Dismiss welcome">×</button></div>
+            <div className="real-tour-heading"><span className="app-guide-avatar" aria-hidden="true">🀄</span><div><p className="app-guide-kicker">Ming says · Welcome!</p><h2>Welcome to Mahjong Messiah Score Tracker</h2></div><button type="button" onClick={() => setWelcomeOpen(false)} aria-label="Dismiss welcome">×</button></div>
             <p>I&apos;m Ming, your guide. Start with the highlighted <strong>?</strong> button to learn how the app works and take a guided tour of the real controls.</p>
             <strong>Tap the highlighted ? to start learning.</strong>
             <div className="real-tour-actions"><button type="button" onClick={() => setWelcomeOpen(false)}>Got it</button><button type="button" onClick={openGuide}>Open app guide</button></div>

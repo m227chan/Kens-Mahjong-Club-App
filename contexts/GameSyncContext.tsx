@@ -231,15 +231,15 @@ export function GameSyncProvider({ children }: { children: React.ReactNode }) {
   const showBanner = !online || pendingCount > 0 || attentionCount > 0 || lastSyncedCount > 0
   const tone = attentionCount > 0 ? 'attention' : !online ? 'offline' : pendingCount > 0 ? 'pending' : 'synced'
   const message = attentionCount > 0
-    ? `${attentionCount} saved game${attentionCount === 1 ? '' : 's'} need${attentionCount === 1 ? 's' : ''} attention.`
+    ? `${online ? '' : 'Offline · '}${attentionCount} saved game${attentionCount === 1 ? '' : 's'} need${attentionCount === 1 ? 's' : ''} attention and remain${attentionCount === 1 ? 's' : ''} on this device.`
     : !online
       ? pendingCount > 0
-        ? `Offline · ${pendingCount} game${pendingCount === 1 ? '' : 's'} safely stored on this device.`
-        : 'You’re offline. New games will be saved on this device.'
+        ? `Offline · ${pendingCount} game${pendingCount === 1 ? '' : 's'} safely stored here. Standings aren’t live.`
+        : 'You’re offline. Standings aren’t live; new games will be saved on this device.'
       : pendingCount > 0
         ? syncing
           ? `Syncing ${pendingCount} saved game${pendingCount === 1 ? '' : 's'}…`
-          : `${pendingCount} saved game${pendingCount === 1 ? '' : 's'} waiting to sync.`
+          : `${pendingCount} saved game${pendingCount === 1 ? '' : 's'} waiting to sync. Live updates may be delayed.`
         : `${lastSyncedCount} saved game${lastSyncedCount === 1 ? '' : 's'} synced.`
 
   return (

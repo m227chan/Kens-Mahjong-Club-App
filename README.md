@@ -1,4 +1,4 @@
-# Mahjong Club Score Tracker
+# Mahjong Messiah Score Tracker
 
 A responsive web application for organizing Mahjong clubs, running live sessions, recording game results, and following player performance over time.
 
