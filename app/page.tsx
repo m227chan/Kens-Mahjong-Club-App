@@ -17,6 +17,7 @@ import {
 } from '@/lib/data'
 import type { ClubMembershipDoc, PlayerDoc, PlayerStatsDoc } from '@/lib/types'
 import { CREATED_CLUB_LIMIT_MESSAGE, MAX_CREATED_CLUBS, hasReachedCreatedClubLimit } from '@/lib/club-limits'
+import { RedDragonMark } from '@/components/BrandMark'
 
 function CountUp({ value, suffix = '' }: { value: number; suffix?: string }) {
   const roundedValue = Math.round(value)
@@ -492,7 +493,7 @@ export default function HomePage() {
           </div>
         ) : (
           <div className="home-first-step mt-5 rounded-lg border border-slate-200 bg-white p-7 sm:p-9">
-            <span className="flex h-14 w-12 items-center justify-center rounded border border-slate-200 bg-slate-50 text-2xl">🀄</span>
+            <span className="brand-empty-mark" aria-hidden="true"><RedDragonMark /></span>
             <h3 className="mt-5 text-2xl font-extrabold text-slate-950">Start with your first club</h3>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Create a club to manage a roster and record games, or join an existing club using the six-character ID shared by its manager.</p>
             <a href="#club-actions" className="mt-5 inline-flex rounded bg-[rgb(var(--bamboo))] px-4 py-2.5 text-sm font-bold text-white">Create or join a club</a>

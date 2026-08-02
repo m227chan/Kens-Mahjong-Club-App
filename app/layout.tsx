@@ -8,20 +8,29 @@ import AppGuide from '@/components/AppGuide'
 import { SoundProvider } from '@/contexts/SoundContext'
 import { GameSyncProvider } from '@/contexts/GameSyncContext'
 import ViewportMetrics from '@/components/ViewportMetrics'
+import { BrandLockup } from '@/components/BrandMark'
 
 const manrope = Manrope({ subsets: ['latin'], variable: '--font-sans' })
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' })
 
 export const metadata: Metadata = {
   title: 'Mahjong Messiah Score Tracker',
+  applicationName: 'Mahjong Messiah',
   description: 'A modern Mahjong club scorekeeper with experience-aware Skill ratings and analytics.',
-  icons: { icon: '/icon.svg', shortcut: '/icon.svg', apple: '/icon.svg' }
+  icons: { icon: '/icon.svg', shortcut: '/icon.svg', apple: '/icon.svg' },
+  appleWebApp: { title: 'Mahjong Messiah', capable: true },
+  manifest: '/manifest.webmanifest',
 }
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
+  colorScheme: 'light dark',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#fffaf0' },
+    { media: '(prefers-color-scheme: dark)', color: '#071c15' },
+  ],
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -43,13 +52,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <div className="flex items-center justify-between">
                 <Link
                   href="/"
-                  aria-label="Go to your personal dashboard"
-                  className="group flex min-h-11 min-w-0 cursor-pointer items-center rounded-sm focus-visible:outline-none"
+                  aria-label="Mahjong Messiah — personal dashboard"
+                  className="brand-home-link group flex min-h-11 min-w-0 cursor-pointer items-center rounded-sm focus-visible:outline-none"
                 >
-                  <span className="min-w-0">
-                    <span className="brand-kicker block truncate text-[9px] font-bold uppercase tracking-[0.24em] transition-opacity group-hover:opacity-75 sm:tracking-[0.3em]">Mahjong Messiah</span>
-                    <span className="font-display block truncate text-base font-black leading-none text-[rgb(var(--ink))] transition-colors group-hover:text-[rgb(var(--bamboo))] sm:text-lg">Score Tracker</span>
-                  </span>
+                  <BrandLockup className="brand-lockup-header" showDescriptor />
                 </Link>
                 <div className="flex items-center gap-2"><AppGuide /><UserSettings /></div>
               </div>

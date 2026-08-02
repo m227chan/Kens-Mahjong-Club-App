@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { claimMingWelcome, subscribeScoringRules } from '@/lib/data'
 import { DEFAULT_SCORING_RULES, fanLabel, fanValues, type ScoringRules } from '@/lib/scoring-rules'
+import { RedDragonMark } from '@/components/BrandMark'
 
 const GUIDE_SECTIONS = [
   { icon: '🏠', title: 'Start on your dashboard', body: 'Your personal dashboard combines your play across every club. Review overall games, win rate, recent Skill movement, memberships, and the player profile linked to your account in each club.' },
@@ -329,8 +330,8 @@ export default function AppGuide() {
       {welcomeOpen ? createPortal(
         <div className="real-tour-layer" aria-live="polite">
           {welcomeSpotlight ? <div className="real-tour-spotlight" style={{ top: welcomeSpotlight.top, left: welcomeSpotlight.left, width: welcomeSpotlight.width, height: welcomeSpotlight.height }} aria-hidden="true" /> : <div className="real-tour-dimmer" aria-hidden="true" />}
-          <aside className="real-tour-bubble is-below" role="dialog" aria-label="Welcome to the score tracker">
-            <div className="real-tour-heading"><span className="app-guide-avatar" aria-hidden="true">🀄</span><div><p className="app-guide-kicker">Ming says · Welcome!</p><h2>Welcome to Mahjong Messiah Score Tracker</h2></div><button type="button" onClick={() => setWelcomeOpen(false)} aria-label="Dismiss welcome">×</button></div>
+          <aside className="real-tour-bubble is-below" role="dialog" aria-label="Welcome to Mahjong Messiah">
+            <div className="real-tour-heading"><span className="app-guide-avatar" aria-hidden="true"><RedDragonMark /></span><div><p className="app-guide-kicker">Ming says · Welcome!</p><h2>Welcome to Mahjong Messiah</h2></div><button type="button" onClick={() => setWelcomeOpen(false)} aria-label="Dismiss welcome">×</button></div>
             <p>I&apos;m Ming, your guide. Start with the highlighted <strong>?</strong> button to learn how the app works and take a guided tour of the real controls.</p>
             <strong>Tap the highlighted ? to start learning.</strong>
             <div className="real-tour-actions"><button type="button" onClick={() => setWelcomeOpen(false)}>Got it</button><button type="button" onClick={openGuide}>Open app guide</button></div>
@@ -342,7 +343,7 @@ export default function AppGuide() {
           <section className="app-guide-panel">
             <header><div><p className="app-guide-kicker">App guide</p><h2 id="app-guide-title">How the score tracker works</h2><p>Everything you need after signing in, in the order you will use it.</p></div><button type="button" onClick={() => setGuideOpen(false)} aria-label="Close app guide">×</button></header>
             <div className="app-guide-scroll">
-              <div className="app-guide-intro"><span className="app-guide-avatar" aria-hidden="true">🀄</span><div><strong>Meet Ming, your guide</strong><p>Read the complete reference below, or let Ming point out the real controls in a no-write tour.</p></div></div>
+              <div className="app-guide-intro"><span className="app-guide-avatar" aria-hidden="true"><RedDragonMark /></span><div><strong>Meet Ming, your guide</strong><p>Read the complete reference below, or let Ming point out the real controls in a no-write tour.</p></div></div>
               <ol className="app-guide-list">
                 {GUIDE_SECTIONS.map((section, index) => (
                   <li key={section.title}>
@@ -362,7 +363,7 @@ export default function AppGuide() {
         <div className="real-tour-layer" aria-live="polite">
           {spotlight ? <div className="real-tour-spotlight" style={{ top: spotlight.top, left: spotlight.left, width: spotlight.width, height: spotlight.height }} aria-hidden="true" /> : <div className="real-tour-dimmer" aria-hidden="true" />}
           <aside ref={bubbleRef} className={`real-tour-bubble ${bubbleAbove ? 'is-above' : 'is-below'}`} role="status">
-            <div className="real-tour-heading"><span className="app-guide-avatar" aria-hidden="true">🀄</span><div><p className="app-guide-kicker">Ming says · {stepIndex + 1}/{TOUR_STEPS.length}</p><h2>{step.title}</h2></div><button type="button" onClick={exitTour} aria-label="Exit tour">×</button></div>
+            <div className="real-tour-heading"><span className="app-guide-avatar" aria-hidden="true"><RedDragonMark /></span><div><p className="app-guide-kicker">Ming says · {stepIndex + 1}/{TOUR_STEPS.length}</p><h2>{step.title}</h2></div><button type="button" onClick={exitTour} aria-label="Exit tour">×</button></div>
             <p>{step.body}</p>
             {!spotlight ? <p className="real-tour-searching">Finding this part of the page…</p> : null}
             {step.instruction ? <strong>{step.instruction}</strong> : null}

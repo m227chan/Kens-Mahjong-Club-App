@@ -6,129 +6,340 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSound } from '@/contexts/SoundContext'
+import { BrandLockup, RedDragonMark } from '@/components/BrandMark'
+import {
+  stepTilePhysics,
+  type TilePhysicsBody,
+  type TilePhysicsBounds,
+} from '@/lib/login-tile-physics'
 
-const tiles = [
-  ['中',7,14,64,.2,.82],['發',25,7,48,1.4,1.08],['萬',45,17,58,2.6,.91],
-  ['●',68,9,46,3.1,1.16],['竹',88,19,62,4.4,.76],['三',12,61,44,5.2,1.18],
-  ['九',30,78,60,.8,.88],['南',53,69,50,2.1,1.04],['北',75,83,66,3.7,.8],['東',92,64,46,4.9,1.12],
-] as const
+type TileDefinition = {
+  name: string
+  x: number
+  y: number
+  size: number
+  vx: number
+  vy: number
+} & (
+  | { kind: 'honor'; glyph: string; color: string }
+  | { kind: 'character'; rankGlyph: string }
+  | { kind: 'bamboo'; rank: 3 | 6 }
+  | { kind: 'circle'; rank: 2 | 5 }
+)
+
+const tiles: readonly TileDefinition[] = [
+  { kind: 'honor', glyph: '中', color: '#c9362b', name: 'Red dragon', x: 8, y: 15, size: 64, vx: 28, vy: 17 },
+  { kind: 'honor', glyph: '發', color: '#13734f', name: 'Green dragon', x: 24, y: 8, size: 52, vx: -22, vy: 25 },
+  { kind: 'honor', glyph: '東', color: '#1f568c', name: 'East wind', x: 43, y: 18, size: 58, vx: 19, vy: -24 },
+  { kind: 'honor', glyph: '南', color: '#1f568c', name: 'South wind', x: 69, y: 10, size: 50, vx: -27, vy: 18 },
+  { kind: 'character', rankGlyph: '一', name: 'One of characters', x: 88, y: 20, size: 62, vx: -31, vy: -16 },
+  { kind: 'character', rankGlyph: '五', name: 'Five of characters', x: 11, y: 62, size: 50, vx: 25, vy: -21 },
+  { kind: 'bamboo', rank: 3, name: 'Three of bamboo', x: 31, y: 80, size: 60, vx: 23, vy: 19 },
+  { kind: 'bamboo', rank: 6, name: 'Six of bamboo', x: 53, y: 70, size: 54, vx: -20, vy: -27 },
+  { kind: 'circle', rank: 2, name: 'Two of circles', x: 76, y: 84, size: 66, vx: 29, vy: -18 },
+  { kind: 'circle', rank: 5, name: 'Five of circles', x: 91, y: 65, size: 52, vx: -25, vy: 23 },
+]
+
+const bambooLayouts = {
+  3: [[32, 14], [21, 43], [43, 43]],
+  6: [[21, 13], [43, 13], [21, 34], [43, 34], [21, 55], [43, 55]],
+} as const
+
+const circleLayouts = {
+  2: [[22, 22], [42, 50]],
+  5: [[18, 16], [46, 16], [32, 36], [18, 56], [46, 56]],
+} as const
+
+function MahjongTileSymbol({ tile }: { tile: TileDefinition }) {
+  if (tile.kind === 'honor') {
+    return <svg className="mahjong-tile-symbol" viewBox="0 0 64 72" aria-hidden="true"><text x="32" y="52" textAnchor="middle" fill={tile.color} className="mahjong-honor-glyph">{tile.glyph}</text></svg>
+  }
+  if (tile.kind === 'character') {
+    return <svg className="mahjong-tile-symbol" viewBox="0 0 64 72" aria-hidden="true"><text x="32" y="32" textAnchor="middle" fill="#1f568c" className="mahjong-character-rank">{tile.rankGlyph}</text><text x="32" y="59" textAnchor="middle" fill="#c9362b" className="mahjong-character-suit">萬</text></svg>
+  }
+  if (tile.kind === 'bamboo') {
+    return <svg className="mahjong-tile-symbol" viewBox="0 0 64 72" aria-hidden="true">{bambooLayouts[tile.rank].map(([x, y], index) => <g key={`${x}-${y}`} transform={`translate(${x} ${y})`}><rect x="-2.6" y="-8" width="5.2" height="16" rx="2.6" fill={index % 3 === 1 ? '#1f568c' : '#13734f'} /><path d="M0-3L-7-8M0-1L7-6M0 3L-7 8M0 2L7 7" stroke={index % 3 === 2 ? '#c9362b' : '#13734f'} strokeWidth="2" strokeLinecap="round" /></g>)}</svg>
+  }
+  return <svg className="mahjong-tile-symbol" viewBox="0 0 64 72" aria-hidden="true">{circleLayouts[tile.rank].map(([x, y], index) => { const color = ['#1f568c', '#c9362b', '#13734f'][index % 3]; return <g key={`${x}-${y}`}><circle cx={x} cy={y} r="8" fill="none" stroke={color} strokeWidth="3" /><circle cx={x} cy={y} r="3.25" fill={color} /></g> })}</svg>
+}
+
+type ActiveTileDrag = {
+  index: number
+  pointerId: number
+  offsetX: number
+  offsetY: number
+  x: number
+  y: number
+  vx: number
+  vy: number
+  lastX: number
+  lastY: number
+  lastTime: number
+}
+
+const clamp = (value: number, minimum: number, maximum: number) =>
+  Math.min(maximum, Math.max(minimum, value))
 
 function FloatingTiles() {
   const { play } = useSound()
   const field = useRef<HTMLDivElement>(null)
   const nodes = useRef<Array<HTMLDivElement | null>>([])
+  const bodies = useRef<TilePhysicsBody[]>([])
+  const bounds = useRef<TilePhysicsBounds>({ width: 0, height: 0 })
+  const rotations = useRef<number[]>(tiles.map((_, index) => (index % 2 ? 7 : -7)))
+  const spins = useRef<number[]>(tiles.map((_, index) => (index % 2 ? 5 : -5)))
+  const activeDrag = useRef<ActiveTileDrag | null>(null)
+  const lastClack = useRef(0)
+  const [grabbedIndex, setGrabbedIndex] = useState<number | null>(null)
 
   useEffect(() => {
     if (!field.current) return
 
-    let bounds = field.current.getBoundingClientRect()
     let frame = 0
-    const pointer = { x: -1000, y: -1000, active: false }
-    const motion = tiles.map(() => ({ x: 0, y: 0, vx: 0, vy: 0, lastClack: 0 }))
-    const physicsEnabled = () => !document.hidden
-    const resize = () => { if (field.current) bounds = field.current.getBoundingClientRect() }
-    const move = (event: PointerEvent) => {
-      if (!physicsEnabled()) return
-      pointer.x = event.clientX - bounds.left
-      pointer.y = event.clientY - bounds.top
-      pointer.active = true
+    let previousTime = 0
+    const previousRootCursor = document.documentElement.style.cursor
+    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
+    const deviceHints = navigator as Navigator & {
+      deviceMemory?: number
+      connection?: { saveData?: boolean }
     }
-    const leave = () => { pointer.active = false }
+    const lowPowerDevice =
+      (navigator.hardwareConcurrency || 4) <= 4 ||
+      (deviceHints.deviceMemory !== undefined && deviceHints.deviceMemory <= 4) ||
+      deviceHints.connection?.saveData === true
+    const targetFrameMilliseconds = 1000 / (lowPowerDevice ? 24 : 30)
+    const minimumDriftSpeed = lowPowerDevice ? 11 : 14
+    bodies.current = []
 
-    const tick = () => {
-      if (!physicsEnabled()) {
+    const paint = () => {
+      bodies.current.forEach((body, index) => {
+        const node = nodes.current[index]
+        if (!node) return
+        const tile = tiles[index]
+        const top = body.y - tile.size * .59
+        const left = body.x - tile.size / 2
+        node.style.left = '0'
+        node.style.top = '0'
+        node.style.transform = `translate3d(${left}px,${top}px,0) rotate(${rotations.current[index]}deg)`
+      })
+    }
+
+    const resize = () => {
+      if (!field.current) return
+      const rect = field.current.getBoundingClientRect()
+      const previousBounds = bounds.current
+      const nextBounds = { width: rect.width, height: rect.height }
+      if (bodies.current.length === 0) {
+        bodies.current = tiles.map((tile) => {
+          const radius = tile.size * .59
+          return {
+            x: clamp(nextBounds.width * tile.x / 100, radius, nextBounds.width - radius),
+            y: clamp(nextBounds.height * tile.y / 100, radius, nextBounds.height - radius),
+            vx: tile.vx,
+            vy: tile.vy,
+            radius,
+          }
+        })
+      } else if (previousBounds.width > 0 && previousBounds.height > 0) {
+        bodies.current = bodies.current.map((body) => ({
+          ...body,
+          x: clamp(body.x * nextBounds.width / previousBounds.width, body.radius, nextBounds.width - body.radius),
+          y: clamp(body.y * nextBounds.height / previousBounds.height, body.radius, nextBounds.height - body.radius),
+        }))
+      }
+      bounds.current = nextBounds
+      paint()
+    }
+
+    const pointFromEvent = (event: PointerEvent) => {
+      const rect = field.current?.getBoundingClientRect()
+      return rect ? { x: event.clientX - rect.left, y: event.clientY - rect.top } : null
+    }
+
+    const isProtectedContent = (event: PointerEvent) => {
+      const target = event.target
+      return target instanceof Element && Boolean(target.closest('.club-header,.login-intro,.login-card,.login-feature-list,button,a,input,select,textarea'))
+    }
+
+    const hitTest = (point: { x: number; y: number }) => {
+      let match = -1
+      let nearestDistance = Number.POSITIVE_INFINITY
+      bodies.current.forEach((body, index) => {
+        const distance = Math.hypot(point.x - body.x, point.y - body.y)
+        if (distance <= body.radius * 1.08 && distance < nearestDistance) {
+          match = index
+          nearestDistance = distance
+        }
+      })
+      return match
+    }
+
+    const beginPointerDrag = (event: PointerEvent) => {
+      if (activeDrag.current || isProtectedContent(event)) return
+      const point = pointFromEvent(event)
+      if (!point) return
+      const index = hitTest(point)
+      if (index < 0) return
+      const body = bodies.current[index]
+      event.preventDefault()
+      activeDrag.current = {
+        index,
+        pointerId: event.pointerId,
+        offsetX: point.x - body.x,
+        offsetY: point.y - body.y,
+        x: body.x,
+        y: body.y,
+        vx: 0,
+        vy: 0,
+        lastX: point.x,
+        lastY: point.y,
+        lastTime: event.timeStamp,
+      }
+      body.vx = 0
+      body.vy = 0
+      setGrabbedIndex(index)
+      document.documentElement.style.cursor = 'grabbing'
+      play('tile')
+    }
+
+    const movePointerDrag = (event: PointerEvent) => {
+      const drag = activeDrag.current
+      const point = pointFromEvent(event)
+      if (!point) return
+      if (!drag) {
+        document.documentElement.style.cursor = !isProtectedContent(event) && hitTest(point) >= 0 ? 'grab' : previousRootCursor
+        return
+      }
+      if (drag.pointerId !== event.pointerId) return
+      event.preventDefault()
+      const body = bodies.current[drag.index]
+      const elapsedSeconds = Math.max((event.timeStamp - drag.lastTime) / 1000, 1 / 240)
+      drag.vx = clamp((point.x - drag.lastX) / elapsedSeconds, -1800, 1800)
+      drag.vy = clamp((point.y - drag.lastY) / elapsedSeconds, -1800, 1800)
+      drag.x = clamp(point.x - drag.offsetX, body.radius, bounds.current.width - body.radius)
+      drag.y = clamp(point.y - drag.offsetY, body.radius, bounds.current.height - body.radius)
+      drag.lastX = point.x
+      drag.lastY = point.y
+      drag.lastTime = event.timeStamp
+      spins.current[drag.index] = clamp(drag.vx * .025, -36, 36)
+    }
+
+    const endPointerDrag = (event: PointerEvent) => {
+      const drag = activeDrag.current
+      if (!drag || drag.pointerId !== event.pointerId) return
+      const body = bodies.current[drag.index]
+      if (body) {
+        body.vx = drag.vx
+        body.vy = drag.vy
+      }
+      activeDrag.current = null
+      setGrabbedIndex(null)
+      document.documentElement.style.cursor = previousRootCursor
+      play('tile')
+    }
+
+    const tick = (time: number) => {
+      if (document.hidden) {
         frame = 0
         return
       }
-      tiles.forEach((tile, index) => {
-        const node = nodes.current[index]
-        if (!node) return
-        const [, x, y] = tile
-        const state = motion[index]
-        const dx = bounds.width * x / 100 + state.x - pointer.x
-        const dy = bounds.height * y / 100 + state.y - pointer.y
-        const distance = Math.hypot(dx, dy)
-
-        if (pointer.active && distance < 135 && distance > 0.1) {
-          const force = (1 - distance / 135) * 1.7
-          state.vx += dx / distance * force
-          state.vy += dy / distance * force
-          if (force > 0.8 && performance.now() - state.lastClack > 750) {
-            state.lastClack = performance.now()
-            play('tile')
-          }
-        }
-
-        state.vx = (-state.x * 0.005 + state.vx) * 0.93
-        state.vy = (-state.y * 0.005 + state.vy) * 0.93
-        state.x += state.vx
-        state.y += state.vy
-        node.style.transform = 'translate3d(' + state.x + 'px,' + state.y + 'px,0)'
+      if (previousTime !== 0 && time - previousTime < targetFrameMilliseconds) {
+        frame = requestAnimationFrame(tick)
+        return
+      }
+      const elapsedSeconds = previousTime === 0 ? 0 : Math.max(0, (time - previousTime) / 1000)
+      previousTime = time
+      const previousBodies = bodies.current
+      const drag = activeDrag.current
+      const nextBodies = stepTilePhysics(previousBodies, bounds.current, elapsedSeconds, {
+        restitution: .9,
+        wallRestitution: .82,
+        linearDamping: .055,
+        collisionPasses: lowPowerDevice ? 1 : 2,
+        dragged: drag ? { index: drag.index, x: drag.x, y: drag.y, vx: drag.vx, vy: drag.vy } : null,
       })
+      nextBodies.forEach((body, index) => {
+        if (drag?.index === index) return
+        const speed = Math.hypot(body.vx, body.vy)
+        if (speed >= minimumDriftSpeed) return
+        const angle = speed > .01 ? Math.atan2(body.vy, body.vx) : index * 2.39996
+        body.vx = Math.cos(angle) * minimumDriftSpeed
+        body.vy = Math.sin(angle) * minimumDriftSpeed
+      })
+      const collisionImpulse = nextBodies.some((body, index) => {
+        const previous = previousBodies[index]
+        return previous && Math.abs(body.vx - previous.vx) + Math.abs(body.vy - previous.vy) > 140
+      })
+      if (collisionImpulse && time - lastClack.current > 180) {
+        lastClack.current = time
+        play('tile')
+      }
+      bodies.current = nextBodies
+      nextBodies.forEach((body, index) => {
+        spins.current[index] = spins.current[index] * Math.exp(-.5 * elapsedSeconds) + body.vx * .002
+        rotations.current[index] += spins.current[index] * elapsedSeconds
+      })
+      paint()
       frame = requestAnimationFrame(tick)
     }
 
     const syncPhysics = () => {
-      pointer.active = false
-      if (!physicsEnabled()) {
+      if (document.hidden) {
         if (frame) cancelAnimationFrame(frame)
         frame = 0
         return
       }
-      if (!frame) frame = requestAnimationFrame(tick)
+      if (!frame) {
+        previousTime = 0
+        frame = requestAnimationFrame(tick)
+      }
     }
 
+    resize()
+    if (reducedMotion) return
+    const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(resize)
+    resizeObserver?.observe(field.current)
     addEventListener('resize', resize)
-    addEventListener('pointerdown', move, { passive: true })
-    addEventListener('pointermove', move, { passive: true })
-    addEventListener('pointerup', leave, { passive: true })
-    addEventListener('pointercancel', leave)
-    document.addEventListener('mouseleave', leave)
+    addEventListener('pointerdown', beginPointerDrag, { capture: true, passive: false })
+    addEventListener('pointermove', movePointerDrag, { capture: true, passive: false })
+    addEventListener('pointerup', endPointerDrag, { capture: true, passive: true })
+    addEventListener('pointercancel', endPointerDrag, { capture: true, passive: true })
     document.addEventListener('visibilitychange', syncPhysics)
     syncPhysics()
 
     return () => {
       if (frame) cancelAnimationFrame(frame)
+      resizeObserver?.disconnect()
       removeEventListener('resize', resize)
-      removeEventListener('pointerdown', move)
-      removeEventListener('pointermove', move)
-      removeEventListener('pointerup', leave)
-      removeEventListener('pointercancel', leave)
-      document.removeEventListener('mouseleave', leave)
+      removeEventListener('pointerdown', beginPointerDrag, { capture: true })
+      removeEventListener('pointermove', movePointerDrag, { capture: true })
+      removeEventListener('pointerup', endPointerDrag, { capture: true })
+      removeEventListener('pointercancel', endPointerDrag, { capture: true })
       document.removeEventListener('visibilitychange', syncPhysics)
+      document.documentElement.style.cursor = previousRootCursor
     }
   }, [play])
 
   return (
     <div ref={field} className="login-tile-field" aria-hidden="true">
-      {tiles.map(([glyph, x, y, size], index) => {
-        const duration = 18 + (index * 7) % 13
-        const driftX = 70 + (index * 37) % 130
-        const driftY = 55 + (index * 29) % 105
-        return (
-          <div
-            key={index}
-            ref={node => { nodes.current[index] = node }}
-            className="login-tile-anchor"
-            style={{
-              left: x + '%',
-              top: y + '%',
-              '--tile-size': size + 'px',
-              '--tile-duration': duration + 's',
-              '--tile-delay': -(index * 2.35) + 's',
-              '--drift-x': (index % 2 ? -driftX : driftX) + 'px',
-              '--drift-y': (index % 3 ? driftY : -driftY) + 'px',
-              '--return-x': (index % 2 ? driftX * 0.55 : -driftX * 0.55) + 'px',
-              '--return-y': (index % 3 ? -driftY * 0.7 : driftY * 0.7) + 'px',
-              '--tile-rotation': (index % 2 ? 14 : -14) + 'deg',
-            } as CSSProperties}
-          >
-            <div className="login-animated-tile">
-              <span className={glyph === '中' ? 'tile-red' : glyph === '發' || glyph === '竹' ? 'tile-green' : ''}>{glyph}</span>
-            </div>
+      {tiles.map((tile, index) => (
+        <div
+          key={tile.name}
+          ref={node => { nodes.current[index] = node }}
+          className={`login-tile-anchor${grabbedIndex === index ? ' is-grabbed' : ''}`}
+          data-tile-name={tile.name}
+          style={{
+            '--tile-size': `${tile.size}px`,
+            left: `${tile.x}%`,
+            top: `${tile.y}%`,
+            transform: `translate(-50%,-50%) rotate(${index % 2 ? 7 : -7}deg)`,
+          } as CSSProperties}
+        >
+          <div className="login-animated-tile">
+            <MahjongTileSymbol tile={tile} />
           </div>
-        )
-      })}
+        </div>
+      ))}
     </div>
   )
 }
@@ -148,7 +359,7 @@ export default function LoginPage(){
     <FloatingTiles/>
     <div className="login-welcome-grid">
       <section className="login-intro" aria-labelledby="login-title">
-        <p className="login-eyebrow"><span>🀄</span> Mahjong Messiah Score Tracker</p>
+        <div className="login-eyebrow"><BrandLockup className="brand-lockup-signature" /></div>
         <h1 id="login-title">
           <span>Mahjong scoring,</span>
           <span className="login-title-accent">simplified.</span>
@@ -162,7 +373,7 @@ export default function LoginPage(){
       </section>
       <section className="login-card" aria-label="Sign in">
         <div className="login-card-heading">
-          <div className="login-card-mark" aria-hidden="true">中</div>
+          <div className="login-card-mark" aria-hidden="true"><RedDragonMark /></div>
           <div>
             <p className="login-card-kicker">Your table is waiting</p>
             <h2>Welcome back</h2>
