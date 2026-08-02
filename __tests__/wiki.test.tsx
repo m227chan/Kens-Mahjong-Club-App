@@ -9,7 +9,7 @@ describe('Mahjong hand wiki', () => {
   it('renders the wiki page with hand examples', () => {
     render(<WikiPage />)
 
-    expect(screen.getByRole('heading', { name: 'Hong Kong Mahjong winning hands' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Hong Kong Mahjong Wiki' })).toBeInTheDocument()
     expect(screen.getByText('Bonus flowers')).toBeInTheDocument()
     expect(screen.getByText('Winning methods')).toBeInTheDocument()
     expect(screen.getAllByRole('img', { name: 'One of characters' }).length).toBeGreaterThan(0)
