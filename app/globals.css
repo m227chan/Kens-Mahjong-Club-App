@@ -966,9 +966,10 @@ html.dark .focused-table section[aria-label*="seats"] > button {
 }
 .session-manager .table-header,
 .session-manager .table-name,
-.session-manager .table-status,
 .session-manager .player-chip,
 .session-manager .chip-name { color: rgb(var(--ink)) !important; }
+.session-manager .table-status.valid { color: white !important; }
+.session-manager .table-status.waiting { color: rgb(var(--muted)) !important; }
 .session-manager .table-name { min-height: 44px; }
 .session-manager .player-chip { transition: transform 160ms ease, border-color 160ms ease, background-color 160ms ease; }
 .session-manager .player-chip:hover { transform: translateY(-2px); }
