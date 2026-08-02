@@ -1,7 +1,23 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import WikiPage from '@/app/wiki/page'
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: vi.fn() }),
+}))
+
+vi.mock('@/contexts/AuthContext', () => ({
+  useAuth: () => ({
+    user: { uid: 'wiki-test-user' },
+    loading: false,
+    signingIn: false,
+    authError: null,
+    signInWithGoogle: vi.fn(),
+    signOut: vi.fn(),
+    isAdmin: false,
+  }),
+}))
 
 describe('Mahjong hand wiki', () => {
   afterEach(() => cleanup())
