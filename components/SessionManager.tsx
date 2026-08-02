@@ -987,9 +987,15 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
                 <polyline points="7 7 17 7 17 17"></polyline>
               </svg>
             </Link>
-            <span id={`tableChevron-${tableId}`} aria-hidden="true" style={{ fontSize: 10, color: 'var(--gray)' }}>
+            <button
+              type="button"
+              id={`tableChevron-${tableId}`}
+              onClick={() => toggleTable(tableId)}
+              aria-label={collapsedTables[tableId] ? `Expand ${tableName}` : `Collapse ${tableName}`}
+              style={{ fontSize: 10, color: 'var(--gray)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
+            >
               {collapsedTables[tableId] ? '▼' : '▲'}
-            </span>
+            </button>
           </div>
           <div id={`tableBody-${tableId}`} style={{ display: collapsedTables[tableId] ? 'none' : undefined }}>
             <div
