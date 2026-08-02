@@ -180,6 +180,10 @@ export default function WikiPage() {
   }
 
   useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') {
+      return
+    }
+
     const observer = new IntersectionObserver(
       (entries) => {
         const activeEntry = entries
