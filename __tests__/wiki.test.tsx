@@ -10,8 +10,8 @@ describe('Mahjong hand wiki', () => {
     render(<WikiPage />)
 
     expect(screen.getByRole('heading', { name: 'Hong Kong Mahjong Wiki' })).toBeInTheDocument()
-    expect(screen.getByText('Bonus flowers')).toBeInTheDocument()
-    expect(screen.getByText('Winning methods')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Bonus flowers' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Winning methods' })).toBeInTheDocument()
     expect(screen.getAllByRole('img', { name: 'One of characters' }).length).toBeGreaterThan(0)
     expect(screen.getByRole('link', { name: 'Back to dashboard' })).toBeInTheDocument()
   })
