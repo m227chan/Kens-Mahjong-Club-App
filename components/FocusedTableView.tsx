@@ -392,9 +392,9 @@ export default function FocusedTableView({
             void mutate("clear")
           }
           aria-label="Clear table"
-          className="h-11 w-11 rounded-lg border border-[rgb(var(--line))] text-lg font-black"
+          className="min-h-11 rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface-2))] px-3.5 text-xs sm:text-sm font-bold text-[rgb(var(--cinnabar))] hover:bg-rose-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
         >
-          ×
+          Clear Table
         </button>
       </header>
 
