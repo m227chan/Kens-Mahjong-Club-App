@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import {
   StaticMahjongTile,
   mahjongTiles,
@@ -45,6 +45,7 @@ const HAND_SECTIONS = [
   {
     heading: 'Bonus flowers',
     description: 'Floral bonus hands are one fan each and are represented here for reference and club rule variations.',
+    id: 'bonus-flowers',
     hands: [
       { title: 'No Flowers', value: '1 fan', description: 'Have no flowers.', tiles: [] },
       { title: 'Seat Flower', value: '1 fan', description: 'Have a flower matching your seat.', tiles: ['f1'] as MahjongTileId[] },
@@ -55,18 +56,20 @@ const HAND_SECTIONS = [
   },
   {
     heading: 'Winning methods',
+    id: 'winning-methods',
     description: 'These methods are worth one fan each unless otherwise noted.',
     hands: [
-      { title: 'Self Draw', value: '1 fan', description: 'Draw the winning tile yourself.', tiles: ['o2', 'o2', 'o2', 'o3', 'o3', 'o3', 'o5', 'o5', 'o5', 'o7', 'o7', 'o7', 'o9', 'o9'] as MahjongTileId[] },
-      { title: 'Concealed Hand', value: '1 fan', description: 'Win without calling chow, pong, or kong.', tiles: ['c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'east', 'east', 'east', 'red', 'red', 'red'] as MahjongTileId[] },
-      { title: 'Win on Final Tile', value: '1 fan', description: 'Win by drawing the final tile in the wall or on another player&apos;s discard.', tiles: ['b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'o4', 'o5', 'o6', 'south', 'south', 'south', 'c1', 'c1'] as MahjongTileId[] },
-      { title: 'After a Kong', value: '1 fan', description: 'Win with the replacement tile after calling kong.', tiles: ['c1', 'c1', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'south', 'south', 'south', 'north', 'north'] as MahjongTileId[] },
-      { title: 'After Multiple Kongs', value: '8 fan', description: 'Call kong multiple times in a row and win with the replacement tile.', tiles: ['b1', 'b1', 'b1', 'b2', 'b2', 'b2', 'b3', 'b3', 'b3', 'o1', 'o1', 'o1', 'north', 'north'] as MahjongTileId[] },
-      { title: 'Robbing a Kong', value: '1 fan', description: 'When a player calls kong to add a tile to an open triplet, win by taking that tile.', tiles: ['c3', 'c3', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'o3', 'o3', 'o3', 'red', 'red'] as MahjongTileId[] },
+      { title: 'Self Draw', value: '1 fan', description: 'Draw the winning tile yourself.' },
+      { title: 'Concealed Hand', value: '1 fan', description: 'Win without calling chow, pong, or kong.' },
+      { title: 'Win on Final Tile', value: '1 fan', description: 'Win by drawing the final tile in the wall or on another player&rsquo;s discard.' },
+      { title: 'After a Kong', value: '1 fan', description: 'Win with the replacement tile after calling kong.' },
+      { title: 'After Multiple Kongs', value: '8 fan', description: 'Call kong multiple times in a row and win with the replacement tile.' },
+      { title: 'Robbing a Kong', value: '1 fan', description: 'When a player calls kong to add a tile to an open triplet, win by taking that tile.' },
     ],
   },
   {
     heading: 'Suit-based hands',
+    id: 'suit-based-hands',
     description: 'Suit-based hands are scored by the tiles they contain.',
     hands: [
       { title: 'Mixed Flush', value: '3 fan', description: 'Only tiles from a single suit plus honor tiles.', tiles: ['c2', 'c3', 'c4', 'c6', 'c7', 'c8', 'red', 'red', 'green', 'green', 'east', 'east', 'east', 'east'] as MahjongTileId[] },
@@ -75,6 +78,7 @@ const HAND_SECTIONS = [
   },
   {
     heading: 'Honor hands',
+    id: 'honor-hands',
     description: 'Honor hands rely on wind and dragon triplets or all honors.',
     hands: [
       { title: 'Dragon Triplet', value: '1 fan', description: 'Have a triplet of dragon tiles, like red dragon.', tiles: ['red', 'red', 'red', 'c2', 'c3', 'c4', 'b5', 'b6', 'b7', 'o1', 'o2', 'o3', 'c1', 'c1'] as MahjongTileId[] },
@@ -89,6 +93,7 @@ const HAND_SECTIONS = [
   },
   {
     heading: 'Triplet hands',
+    id: 'triplet-hands',
     description: 'Triplet-based hands score strongly when the whole hand contains sets of triplets.',
     hands: [
       { title: 'All Triplets', value: '3 fan', description: 'Hand only contains triplets.', tiles: ['c1', 'c1', 'c1', 'c2', 'c2', 'c2', 'c3', 'c3', 'c3', 'red', 'red', 'red', 'b5', 'b5'] as MahjongTileId[] },
@@ -100,6 +105,7 @@ const HAND_SECTIONS = [
   },
   {
     heading: 'Sequence and special hands',
+    id: 'sequence-special-hands',
     description: 'Common sequence-based hands and special patterns from the manual.',
     hands: [
       { title: 'All Sequences', value: '1 fan', description: 'Only sequences and a pair.', tiles: ['c2', 'c3', 'c4', 'b2', 'b3', 'b4', 'o2', 'o3', 'o4', 'c7', 'c8', 'c9', 'south', 'south'] as MahjongTileId[] },
@@ -112,6 +118,7 @@ const HAND_SECTIONS = [
   },
   {
     heading: 'Non-traditional hands',
+    id: 'non-traditional-hands',
     description: 'Optional house-rule hands; include them for club reference.',
     hands: [
       { title: 'Seven Pairs', value: '3 fan', description: 'Hand contains 7 pairs.', tiles: ['c1', 'c1', 'c2', 'c2', 'c3', 'c3', 'b4', 'b4', 'b5', 'b5', 'o6', 'o6', 'south', 'south'] as MahjongTileId[] },
@@ -125,7 +132,7 @@ const HAND_SECTIONS = [
   },
 ]
 
-function HandExample({ title, value, description, tiles }: { title: string; value: string; description: string; tiles: MahjongTileId[] }) {
+function HandExample({ title, value, description, tiles }: { title: string; value: string; description: string; tiles?: MahjongTileId[] }) {
   return (
     <article className="wiki-hand-card">
       <div className="wiki-hand-card-header">
@@ -135,61 +142,199 @@ function HandExample({ title, value, description, tiles }: { title: string; valu
         </div>
         <span className="wiki-hand-value">{value}</span>
       </div>
-      <div className="wiki-hand-tile-row">
-        {tiles.length ? tiles.map((tile, index) => <StaticMahjongTile key={`${tile}-${index}`} id={tile} />) : <span className="wiki-hand-empty">No tiles required</span>}
-      </div>
+      {tiles ? (
+        <div className="wiki-hand-tile-row">
+          {tiles.length ? (
+            tiles.map((tile, index) => <StaticMahjongTile key={`${tile}-${index}`} id={tile} />)
+          ) : (
+            <span className="wiki-hand-empty">No tiles required</span>
+          )}
+        </div>
+      ) : null}
     </article>
   )
 }
 
+const sections = [
+  { id: 'complete-tile-reference', label: 'Tile reference' },
+  ...HAND_SECTIONS.map((section) => ({ id: section.id, label: section.heading })),
+]
+
 export default function WikiPage() {
+  const [activeSection, setActiveSection] = useState('complete-tile-reference')
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const touchStartX = useRef<number | null>(null)
+  const touchStartY = useRef<number | null>(null)
+  const touchActive = useRef(false)
+
+  const sectionIds = useMemo(() => sections.map((section) => section.id), [])
+
+  const handleTocClick = (id: string) => (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault()
+    setActiveSection(id)
+    const target = document.getElementById(id)
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      window.history.replaceState(null, '', `#${id}`)
+    }
+  }
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const activeEntry = entries
+          .filter((entry) => sectionIds.includes(entry.target.id))
+          .sort((a, b) => {
+            const aRatio = a.isIntersecting ? a.intersectionRatio : 0
+            const bRatio = b.isIntersecting ? b.intersectionRatio : 0
+            if (aRatio !== bRatio) return bRatio - aRatio
+            return a.boundingClientRect.top - b.boundingClientRect.top
+          })[0]
+
+        if (activeEntry) {
+          setActiveSection(activeEntry.target.id)
+        }
+      },
+      { rootMargin: '-28% 0px -55% 0px', threshold: [0.15, 0.5] }
+    )
+
+    sectionIds.forEach((id) => {
+      const element = document.getElementById(id)
+      if (element) observer.observe(element)
+    })
+
+    return () => observer.disconnect()
+  }, [sectionIds])
+
+  useEffect(() => {
+    const handleTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) return
+      const touch = event.touches[0]
+      if (touch.clientY < 100) return
+      touchStartX.current = touch.clientX
+      touchStartY.current = touch.clientY
+      touchActive.current = true
+    }
+
+    const handleTouchMove = (event: TouchEvent) => {
+      if (!touchActive.current || touchStartX.current === null || touchStartY.current === null) return
+      const touch = event.touches[0]
+      const deltaX = touch.clientX - touchStartX.current
+      const deltaY = touch.clientY - touchStartY.current
+      if (Math.abs(deltaY) > Math.abs(deltaX)) {
+        touchActive.current = false
+        return
+      }
+
+      if (Math.abs(deltaX) > 40) {
+        if (deltaX > 0 && touchStartX.current < window.innerWidth / 2) {
+          setSidebarOpen(true)
+          touchActive.current = false
+        } else if (deltaX < 0 && sidebarOpen) {
+          setSidebarOpen(false)
+          touchActive.current = false
+        }
+      }
+    }
+
+    const handleTouchEnd = () => {
+      touchStartX.current = null
+      touchStartY.current = null
+      touchActive.current = false
+    }
+
+    document.addEventListener('touchstart', handleTouchStart, { passive: true })
+    document.addEventListener('touchmove', handleTouchMove, { passive: true })
+    document.addEventListener('touchend', handleTouchEnd)
+    document.addEventListener('touchcancel', handleTouchEnd)
+
+    return () => {
+      document.removeEventListener('touchstart', handleTouchStart)
+      document.removeEventListener('touchmove', handleTouchMove)
+      document.removeEventListener('touchend', handleTouchEnd)
+      document.removeEventListener('touchcancel', handleTouchEnd)
+    }
+  }, [sidebarOpen])
+
   return (
-    <div className="wiki-page-shell">
-      <div className="wiki-page-header">
-        <div className="wiki-page-hero">
-          <p className="wiki-page-kicker">Mahjong hand guide</p>
-          <h1>Hong Kong Mahjong winning hands</h1>
-          <p className="wiki-page-intro">This reference uses the same static tile style as the app homepage, showing each example hand with all tiles needed to illustrate the win.</p>
+    <div className={`wiki-page-shell ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
+      <aside className="wiki-toc-sidebar" data-open={sidebarOpen ? 'true' : 'false'}>
+        <div className="wiki-toc-aside-top">
+          <Link href="/" className="wiki-back-link" aria-label="Back to dashboard">
+            <span aria-hidden="true">←</span>
+            Back to dashboard
+          </Link>
         </div>
-        <Link href="/" className="wiki-back-link">Back to dashboard</Link>
-      </div>
-
-      <section className="wiki-section wiki-tile-chart-section">
-        <div className="wiki-section-heading">
-          <h2>Complete tile reference</h2>
-          <p>All Mahjong tiles in order, grouped by category. Use this chart to identify the static tile art used across the app.</p>
-        </div>
-        <div className="wiki-tile-chart">
-          {TILE_CATEGORIES.map((category) => (
-            <div key={category.heading} className="wiki-tile-chart-group">
-              <h3>{category.heading}</h3>
-              <p>{category.description}</p>
-              <div className="wiki-tile-chart-row">
-                {category.ids.map((id) => (
-                  <div key={id} className="wiki-tile-chart-item">
-                    <StaticMahjongTile id={id} size={48} />
-                    <span>{mahjongTiles[id].name}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+        <p className="wiki-toc-title">Contents</p>
+        <nav className="wiki-toc-list" aria-label="Wiki table of contents">
+          {sections.map((section) => (
+            <a
+              key={section.id}
+              href={`#${section.id}`}
+              onClick={handleTocClick(section.id)}
+              className={`wiki-toc-link ${activeSection === section.id ? 'active' : ''}`}
+            >
+              {section.label}
+            </a>
           ))}
-        </div>
-      </section>
+        </nav>
+      </aside>
 
-      {HAND_SECTIONS.map((section) => (
-        <section key={section.heading} className="wiki-section">
-          <div className="wiki-section-heading">
-            <h2>{section.heading}</h2>
-            <p>{section.description}</p>
+      <button
+        type="button"
+        className={`wiki-toc-side-tab ${sidebarOpen ? 'open' : 'closed'}`}
+        aria-label={sidebarOpen ? 'Tuck away contents' : 'Open table of contents'}
+        onClick={() => setSidebarOpen((current) => !current)}
+      >
+        {sidebarOpen ? '◀' : '▶'}
+      </button>
+
+      <main className="wiki-page-content">
+        <div className="wiki-page-header">
+          <div className="wiki-page-hero">
+            <p className="wiki-page-kicker">Mahjong hand guide</p>
+            <h1>Hong Kong Mahjong Wiki</h1>
+            <p className="wiki-page-intro">Explore the rules, scoring patterns, and example hands used in this app so you can quickly identify winning combinations and understand how the score tracker represents each win.</p>
           </div>
-          <div className="wiki-hand-grid">
-            {section.hands.map((hand) => (
-              <HandExample key={hand.title} {...hand} />
+        </div>
+
+        <section id="complete-tile-reference" className="wiki-section wiki-tile-chart-section">
+          <div className="wiki-section-heading">
+            <h2>Complete tile reference</h2>
+            <p>All Mahjong tiles in order, grouped by category. Use this chart to identify the static tile art used across the app.</p>
+          </div>
+          <div className="wiki-tile-chart">
+            {TILE_CATEGORIES.map((category) => (
+              <div key={category.heading} className="wiki-tile-chart-group">
+                <h3>{category.heading}</h3>
+                <p>{category.description}</p>
+                <div className="wiki-tile-chart-row compact">
+                  {category.ids.map((id) => (
+                    <div key={id} className="wiki-tile-chart-item compact">
+                      <StaticMahjongTile id={id} size={52} />
+                      <span>{mahjongTiles[id].name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </section>
-      ))}
+
+        {HAND_SECTIONS.map((section) => (
+          <section key={section.heading} id={section.id} className="wiki-section">
+            <div className="wiki-section-heading">
+              <h2>{section.heading}</h2>
+              <p>{section.description}</p>
+            </div>
+            <div className="wiki-hand-grid">
+              {section.hands.map((hand) => (
+                <HandExample key={hand.title} {...hand} />
+              ))}
+            </div>
+          </section>
+        ))}
+      </main>
     </div>
   )
 }

@@ -61,6 +61,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <Link
                     href="/wiki"
                     aria-label="Open Mahjong hand wiki"
+                    title="Wiki"
                     className="group flex h-11 w-11 items-center justify-center rounded-full border border-[rgb(var(--line))] bg-[rgb(var(--surface))] text-lg font-black text-[rgb(var(--ink))] shadow-[3px_3px_0_rgb(var(--shadow)/0.08)] hover:border-[rgb(var(--gold))]"
                   >
                     📖
