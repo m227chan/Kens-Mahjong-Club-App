@@ -18,7 +18,6 @@ import {
 import type { ClubMembershipDoc, PlayerDoc, PlayerStatsDoc } from '@/lib/types'
 import { CREATED_CLUB_LIMIT_MESSAGE, MAX_CREATED_CLUBS, hasReachedCreatedClubLimit } from '@/lib/club-limits'
 import { RedDragonMark } from '@/components/BrandMark'
-import { FloatingTiles } from '@/components/FloatingTiles'
 
 function CountUp({ value, suffix = '' }: { value: number; suffix?: string }) {
   const roundedValue = Math.round(value)
@@ -381,8 +380,7 @@ export default function HomePage() {
   if (loading || !user) return <LoadingHome />
 
   return (
-    <main className="home-dashboard relative px-4 py-7 sm:px-6 lg:px-8">
-      <FloatingTiles />
+    <main className="home-dashboard px-4 py-7 sm:px-6 lg:px-8">
       <header data-tour="dashboard-intro" className="home-enter home-greeting flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-extrabold uppercase tracking-[0.24em] text-[rgb(var(--cinnabar))]">Personal dashboard</p>
