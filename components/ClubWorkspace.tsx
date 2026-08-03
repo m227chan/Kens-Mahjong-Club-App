@@ -668,8 +668,9 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                   {managerMessage ? <p role="status" aria-live="polite" className="mt-3 text-sm font-semibold text-slate-700">{managerMessage}</p> : null}
                 </section>
               ) : null}
-              {isManager ? <section className="rounded-lg border border-teal-200 bg-teal-50 p-4">
+              <section className="rounded-lg border border-teal-200 bg-teal-50 p-4">
                 <h4 className="text-sm font-black uppercase tracking-[0.16em] text-teal-800">Add player</h4>
+                <p className="mt-1 text-sm leading-6 text-slate-600">Any active club member can add a player to the roster.</p>
                 <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_140px_auto]">
                   <label className="text-sm font-bold text-slate-700">
                     Player name
@@ -726,7 +727,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                     </label>
                   ) : null}
                 </div>
-              </section> : null}
+              </section>
               {playerMessage ? <p role="status" aria-live="polite" className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">{playerMessage}</p> : null}
 
               <section className="mt-5">

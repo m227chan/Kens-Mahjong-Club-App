@@ -322,7 +322,9 @@ export async function POST(request: NextRequest) {
         }
       }
       if (action === 'createPlayer') {
-        await requireManager(body.clubId)
+        // Growing the shared roster is a club-member action. Sensitive roster
+        // actions below remain manager-only or limited to a linked player.
+        await requireMember(body.clubId)
         const input = body.input ?? {},
           name = String(input.displayName ?? '').trim().slice(0, 80)
         if (!name) throw new Error('Enter a player name.')
