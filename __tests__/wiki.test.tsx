@@ -3,13 +3,21 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import WikiPage from '@/app/wiki/page'
 
+const dataMocks = vi.hoisted(() => ({
+  subscribeScoringRules: vi.fn(),
+  subscribeUserClubs: vi.fn(),
+}))
+const authMocks = vi.hoisted(() => ({
+  user: { uid: 'wiki-test-user' },
+}))
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn() }),
 }))
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
-    user: { uid: 'wiki-test-user' },
+    user: authMocks.user,
     loading: false,
     signingIn: false,
     authError: null,
@@ -20,12 +28,17 @@ vi.mock('@/contexts/AuthContext', () => ({
 }))
 
 vi.mock('@/lib/data', () => ({
-  subscribeScoringRules: vi.fn(() => () => undefined),
-  subscribeUserClubs: vi.fn(() => () => undefined),
+  subscribeScoringRules: dataMocks.subscribeScoringRules,
+  subscribeUserClubs: dataMocks.subscribeUserClubs,
 }))
 
 describe('Mahjong hand wiki', () => {
-  afterEach(() => cleanup())
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+    dataMocks.subscribeScoringRules.mockReset()
+    dataMocks.subscribeUserClubs.mockReset()
+  })
 
   it('renders the wiki page with hand examples', () => {
     render(<WikiPage />)
@@ -54,6 +67,46 @@ describe('Mahjong hand wiki', () => {
     expect(screen.getByRole('button', { name: 'Open table of contents' })).toBeInTheDocument()
   })
 
+  it('highlights the section that has crossed the reading line while scrolling', () => {
+    const topBySection: Record<string, number> = {
+      'scoring-guide': 0,
+      'complete-tile-reference': 420,
+      'bonus-flowers': 780,
+      'winning-methods': 1120,
+      'suit-based-hands': 1460,
+    }
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
+      const top = topBySection[(this as HTMLElement).id] ?? 2_000
+      return {
+        top,
+        bottom: top + 320,
+        left: 0,
+        right: 320,
+        width: 320,
+        height: 320,
+        x: 0,
+        y: top,
+        toJSON: () => ({}),
+      } as DOMRect
+    })
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callback(0)
+      return 1
+    })
+
+    render(<WikiPage />)
+    expect(screen.getByRole('link', { name: /Scoring guide/ })).toHaveAttribute('aria-current', 'location')
+
+    topBySection['scoring-guide'] = -800
+    topBySection['complete-tile-reference'] = -440
+    topBySection['bonus-flowers'] = -120
+    topBySection['winning-methods'] = 110
+
+    fireEvent.scroll(window)
+
+    expect(screen.getByRole('link', { name: /Winning methods/ })).toHaveAttribute('aria-current', 'location')
+  })
+
   it('shows Small Three Dragons as a full 14-tile hand with two dragon triplets plus a pair of the last dragon', () => {
     render(<WikiPage />)
 
@@ -72,5 +125,25 @@ describe('Mahjong hand wiki', () => {
     expect(withinCard.getAllByRole('img', { name: 'Five of bamboo' })).toHaveLength(1)
     expect(withinCard.getAllByRole('img', { name: 'Six of bamboo' })).toHaveLength(1)
     expect(withinCard.getAllByRole('img', { name: 'Seven of bamboo' })).toHaveLength(1)
+  })
+
+  it('updates payment examples to match the selected club fan-to-point mapping', async () => {
+    dataMocks.subscribeUserClubs.mockImplementation((_uid, callback) => {
+      callback([{ clubId: 'HOUSE01', clubName: 'House Rules', role: 'member' }])
+      return () => undefined
+    })
+    dataMocks.subscribeScoringRules.mockImplementation((_clubId, callback) => {
+      callback({
+        minFan: 3,
+        maxFan: 13,
+        fanPoints: { 3: 100, 4: 200, 5: 24, 6: 32, 7: 60, 8: 64, 9: 96, 10: 128, 11: 192, 12: 256, 13: 384 },
+      })
+      return () => undefined
+    })
+
+    render(<WikiPage />)
+
+    expect(await screen.findByText('4 fan = 200 base points. Each of the other 3 players pays 200.')).toBeInTheDocument()
+    expect(screen.getByText('7 fan = 60 base points. The discarder pays 120.')).toBeInTheDocument()
   })
 })

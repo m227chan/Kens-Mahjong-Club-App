@@ -184,7 +184,7 @@ const sections = [
 ]
 
 export default function WikiPage() {
-  const [activeSection, setActiveSection] = useState('complete-tile-reference')
+  const [activeSection, setActiveSection] = useState('scoring-guide')
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [clubOptions, setClubOptions] = useState<ClubMembershipDoc[]>([])
   const [selectedClubId, setSelectedClubId] = useState<string | null>(null)
@@ -198,6 +198,24 @@ export default function WikiPage() {
   const router = useRouter()
   const selectedClub = clubOptions.find((club) => club.clubId === selectedClubId) ?? null
   const displayedFanValues = selectedClubId ? fanValues(scoringRules) : FAN_POINTS.map(([fan]) => fan)
+  const exampleFan = (preferredFan: number) =>
+    displayedFanValues.reduce(
+      (closestFan, fan) =>
+        Math.abs(fan - preferredFan) < Math.abs(closestFan - preferredFan)
+          ? fan
+          : closestFan,
+      displayedFanValues[0] ?? preferredFan,
+    )
+  const pointValueForFan = (fan: number) =>
+    selectedClub
+      ? scoringRules.fanPoints[fan]
+      : FAN_POINTS.find(([referenceFan]) => referenceFan === fan)?.[1]
+  const exampleFanLabel = (fan: number) =>
+    selectedClub ? fanLabel(fan, scoringRules) : String(fan)
+  const selfDrawExampleFan = exampleFan(4)
+  const selfDrawExamplePoints = pointValueForFan(selfDrawExampleFan) ?? 0
+  const discardExampleFan = exampleFan(7)
+  const discardExamplePoints = pointValueForFan(discardExampleFan) ?? 0
 
   const sectionIds = useMemo(() => sections.map((section) => section.id), [])
 
@@ -266,34 +284,42 @@ export default function WikiPage() {
   }
 
   useEffect(() => {
-    if (typeof IntersectionObserver === 'undefined') {
-      return
+    let animationFrame: number | null = null
+
+    const updateActiveSection = () => {
+      animationFrame = null
+      // A fixed reading line makes the highlight stable for sections of very
+      // different heights. Intersection ratios made the tallest section win
+      // long after the reader had entered the next one.
+      const readingLine = Math.min(220, Math.max(96, window.innerHeight * 0.28))
+      const nextActiveSection =
+        [...sectionIds]
+          .reverse()
+          .find((id) => {
+            const section = document.getElementById(id)
+            return section !== null && section.getBoundingClientRect().top <= readingLine
+          }) ??
+        sectionIds[0]
+
+      setActiveSection((current) =>
+        current === nextActiveSection ? current : nextActiveSection,
+      )
     }
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const activeEntry = entries
-          .filter((entry) => sectionIds.includes(entry.target.id))
-          .sort((a, b) => {
-            const aRatio = a.isIntersecting ? a.intersectionRatio : 0
-            const bRatio = b.isIntersecting ? b.intersectionRatio : 0
-            if (aRatio !== bRatio) return bRatio - aRatio
-            return a.boundingClientRect.top - b.boundingClientRect.top
-          })[0]
+    const queueActiveSectionUpdate = () => {
+      if (animationFrame !== null) return
+      animationFrame = window.requestAnimationFrame(updateActiveSection)
+    }
 
-        if (activeEntry) {
-          setActiveSection(activeEntry.target.id)
-        }
-      },
-      { rootMargin: '-28% 0px -55% 0px', threshold: [0.15, 0.5] }
-    )
+    updateActiveSection()
+    window.addEventListener('scroll', queueActiveSectionUpdate, { passive: true })
+    window.addEventListener('resize', queueActiveSectionUpdate)
 
-    sectionIds.forEach((id) => {
-      const element = document.getElementById(id)
-      if (element) observer.observe(element)
-    })
-
-    return () => observer.disconnect()
+    return () => {
+      window.removeEventListener('scroll', queueActiveSectionUpdate)
+      window.removeEventListener('resize', queueActiveSectionUpdate)
+      if (animationFrame !== null) window.cancelAnimationFrame(animationFrame)
+    }
   }, [sectionIds])
 
   useEffect(() => {
@@ -442,12 +468,12 @@ export default function WikiPage() {
               <div className="wiki-card-heading"><div><p className="wiki-section-kicker">Fan → base points</p><h3>The reference table</h3></div><span className="wiki-card-mark" aria-hidden="true">中</span></div>
               <p>{selectedClub ? 'These values are live for the selected club. Managers can change the range and mapping in Club settings.' : 'Each fan doubles the points through 4 fan. After that, every 2 additional fan doubles the value. 13+ uses the cap.'}</p>
               <div className="wiki-table-wrap">
-                <table className="wiki-scoring-table"><caption className="sr-only">Hong Kong Mahjong fan to base points reference</caption><thead><tr><th scope="col">Fan</th><th scope="col">Base points</th></tr></thead><tbody>{displayedFanValues.map((fan) => <tr key={fan}><th scope="row">{selectedClub ? fanLabel(fan, scoringRules) : fan === 13 ? '13+ (limit)' : fan}</th><td>{selectedClub ? scoringRules.fanPoints[fan] : FAN_POINTS.find(([referenceFan]) => referenceFan === fan)?.[1]}</td></tr>)}</tbody></table>
+                <table className="wiki-scoring-table"><caption className="sr-only">Hong Kong Mahjong fan to base points reference</caption><thead><tr><th scope="col">Fan</th><th scope="col">Base points</th></tr></thead><tbody>{displayedFanValues.map((fan) => <tr key={fan}><th scope="row">{selectedClub ? fanLabel(fan, scoringRules) : fan === 13 ? '13+ (limit)' : fan}</th><td>{pointValueForFan(fan)}</td></tr>)}</tbody></table>
               </div>
             </article>
             <div className="wiki-scoring-side">
-              <article className="wiki-scoring-card"><p className="wiki-section-kicker">Self draw</p><h3>Everyone pays the hand value</h3><p>The winner receives 3× the base value. Each other player pays 1× the base value.</p><div className="wiki-example"><strong>Example</strong><span>4 fan = 16 base points. Each of the other 3 players pays 16.</span></div></article>
-              <article className="wiki-scoring-card"><p className="wiki-section-kicker">Win by discard</p><h3>The discarder pays the full penalty</h3><p>Under this app&apos;s default all-paid rule, the discarder pays 2× the base value and the other players pay nothing.</p><div className="wiki-example"><strong>Example</strong><span>7 fan = 48 base points. The discarder pays 96.</span></div></article>
+              <article className="wiki-scoring-card"><p className="wiki-section-kicker">Self draw</p><h3>Everyone pays the hand value</h3><p>The winner receives 3× the base value. Each other player pays 1× the base value.</p><div className="wiki-example"><strong>Example</strong><span>{exampleFanLabel(selfDrawExampleFan)} fan = {selfDrawExamplePoints} base points. Each of the other 3 players pays {selfDrawExamplePoints}.</span></div></article>
+              <article className="wiki-scoring-card"><p className="wiki-section-kicker">Win by discard</p><h3>The discarder pays the full penalty</h3><p>Under this app&apos;s default all-paid rule, the discarder pays 2× the base value and the other players pay nothing.</p><div className="wiki-example"><strong>Example</strong><span>{exampleFanLabel(discardExampleFan)} fan = {discardExamplePoints} base points. The discarder pays {discardExamplePoints * 2}.</span></div></article>
             </div>
           </div>
           <div className="wiki-scoring-footnote"><strong>Minimum fan:</strong> 3 fan is common, but beginners may play without a minimum. An alternative table rule is for a self-draw to collect 2× from everyone, while a discard win collects 2× from the discarder and 1× from each other player.</div>

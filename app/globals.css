@@ -1740,6 +1740,19 @@ body:has([role="dialog"][aria-modal="true"]) .game-sync-banner { display: none; 
 .brand-home-link:hover .red-dragon-mark,
 .brand-home-link:hover .brand-wordmark { color: rgb(var(--cinnabar) / .78); }
 .brand-home-link:hover .brand-descriptor { color: rgb(var(--bamboo)); }
+.header-action-button {
+  transition: transform 160ms ease, border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease !important;
+}
+@media (hover:hover) and (pointer:fine) {
+  .header-action-button:hover {
+    transform: translateY(-2px) rotate(.5deg) scale(1.04) !important;
+    border-color: rgb(var(--gold)) !important;
+    background-color: rgb(var(--gold) / .12) !important;
+    box-shadow: 0 0 0 3px rgb(var(--gold) / .12), 4px 5px 0 rgb(var(--shadow) / .12) !important;
+  }
+}
+.header-action-button:active { transform: translateY(0) scale(.97) !important; }
+.header-action-button:focus-visible { outline: 2px solid rgb(var(--gold)); outline-offset: 3px; }
 html.dark .brand-lockup,
 html.dark .brand-lockup .red-dragon-mark,
 html.dark .brand-wordmark { color: rgb(246 124 95); }

@@ -165,7 +165,7 @@ export default function UserSettings() {
         aria-haspopup="dialog"
         aria-expanded={open}
         title="Account & app settings"
-        className="group flex h-11 w-11 items-center justify-center rounded-full border border-[rgb(var(--bamboo-bright))] bg-[rgb(var(--bamboo))] text-sm font-black tracking-[0.04em] text-white shadow-[3px_3px_0_rgb(var(--shadow)/0.08)] transition hover:bg-[rgb(var(--bamboo-bright))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--gold))] focus-visible:ring-offset-2"
+        className="header-action-button group flex h-11 w-11 items-center justify-center rounded-full border border-[rgb(var(--bamboo-bright))] bg-[rgb(var(--bamboo))] text-sm font-black tracking-[0.04em] text-white shadow-[3px_3px_0_rgb(var(--shadow)/0.08)] transition hover:bg-[rgb(var(--bamboo-bright))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--gold))] focus-visible:ring-offset-2"
       >
         <span aria-hidden="true">{accountInitials}</span>
       </button>
