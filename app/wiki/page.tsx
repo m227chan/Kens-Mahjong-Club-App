@@ -14,6 +14,9 @@ import {
   circleTileIds,
   bambooTileIds,
 } from '@/components/MahjongTile'
+import { subscribeScoringRules, subscribeUserClubs } from '@/lib/data'
+import { DEFAULT_SCORING_RULES, fanLabel, fanValues, type ScoringRules } from '@/lib/scoring-rules'
+import type { ClubMembershipDoc } from '@/lib/types'
 
 const TILE_CATEGORIES = [
   {
@@ -43,17 +46,34 @@ const TILE_CATEGORIES = [
   },
 ]
 
+const FAN_POINTS = [
+  [0, 1],
+  [1, 2],
+  [2, 4],
+  [3, 8],
+  [4, 16],
+  [5, 24],
+  [6, 32],
+  [7, 48],
+  [8, 64],
+  [9, 96],
+  [10, 128],
+  [11, 192],
+  [12, 256],
+  [13, 384],
+] as const
+
 const HAND_SECTIONS = [
   {
     heading: 'Bonus flowers',
-    description: 'Floral bonus hands are one fan each and are represented here for reference and club rule variations.',
+    description: 'Flower bonuses have different values, shown on each card below. Clubs may include them as house rules.',
     id: 'bonus-flowers',
     hands: [
       { title: 'No Flowers', value: '1 fan', description: 'Have no flowers.', tiles: [] },
       { title: 'Seat Flower', value: '1 fan', description: 'Have a flower matching your seat.', tiles: ['f1'] as MahjongTileId[] },
       { title: 'Set of Flowers', value: '2 fan', description: 'Have 4 flowers of the same series.', tiles: ['f1', 'f2', 'f3', 'f4'] as MahjongTileId[] },
       { title: '7 Flowers', value: '3 fan', description: 'Draw 7 flowers and optionally win immediately.', tiles: ['f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7'] as MahjongTileId[] },
-      { title: '8 Flowers', value: 'Limit', description: 'Draw 8 flowers and optionally win immediately.', tiles: ['f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8'] as MahjongTileId[] },
+      { title: '8 Flowers', value: '8 fan', description: 'Draw 8 flowers and optionally win immediately.', tiles: ['f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8'] as MahjongTileId[] },
     ],
   },
   {
@@ -86,9 +106,9 @@ const HAND_SECTIONS = [
       { title: 'Dragon Triplet', value: '1 fan', description: 'Have a triplet of dragon tiles, like red dragon.', tiles: ['red', 'red', 'red', 'c2', 'c3', 'c4', 'b5', 'b6', 'b7', 'o1', 'o2', 'o3', 'c1', 'c1'] as MahjongTileId[] },
       { title: 'Round Wind', value: '1 fan', description: 'Have a triplet of the wind matching the round.', tiles: ['east', 'east', 'east', 'c4', 'c5', 'c6', 'b3', 'b4', 'b5', 'o2', 'o3', 'o4', 'c1', 'c1'] as MahjongTileId[] },
       { title: 'Seat Wind', value: '1 fan', description: 'Have a triplet of the wind matching your seat.', tiles: ['south', 'south', 'south', 'c4', 'c5', 'c6', 'b3', 'b4', 'b5', 'o2', 'o3', 'o4', 'c1', 'c1'] as MahjongTileId[] },
-      { title: 'Small Three Dragons', value: '5 fan', description: 'Have 2 dragon triplets and a pair of the third.', tiles: ['red', 'red', 'red', 'green', 'green', 'green', 'white', 'white', 'c2', 'c3', 'c4', 'b5', 'b6', 'b7'] as MahjongTileId[] },
-      { title: 'Big Three Dragons', value: '8 fan', description: 'Have triplets of all 3 dragons.', tiles: ['red', 'red', 'red', 'green', 'green', 'green', 'white', 'white', 'white', 'c2', 'c2'] as MahjongTileId[] },
-      { title: 'Small Four Winds', value: '6 fan', description: 'Have triplets of 3 winds and a pair of the 4th.', tiles: ['east', 'east', 'east', 'south', 'south', 'south', 'west', 'west', 'west', 'north', 'north'] as MahjongTileId[] },
+      { title: 'Small Three Dragons', value: '5 fan', description: 'Have 2 dragon triplets and a pair of the third. Do not add separate dragon-triplet points.', tiles: ['red', 'red', 'red', 'green', 'green', 'green', 'white', 'white', 'c2', 'c3', 'c4', 'b5', 'b6', 'b7'] as MahjongTileId[] },
+      { title: 'Big Three Dragons', value: '8 fan', description: 'Have triplets of all 3 dragons. Do not add separate dragon-triplet points.', tiles: ['red', 'red', 'red', 'green', 'green', 'green', 'white', 'white', 'white', 'c2', 'c2'] as MahjongTileId[] },
+      { title: 'Small Four Winds', value: '6 fan', description: 'Have triplets of 3 winds and a pair of the 4th. Do not add separate wind-triplet points or combine with half flush.', tiles: ['east', 'east', 'east', 'south', 'south', 'south', 'west', 'west', 'west', 'north', 'north'] as MahjongTileId[] },
       { title: 'Big Four Winds', value: 'Limit', description: 'Have triplets of all 4 winds.', tiles: ['east', 'east', 'east', 'south', 'south', 'south', 'west', 'west', 'west', 'north', 'north', 'north', 'c1', 'c1'] as MahjongTileId[] },
       { title: 'All Honors', value: '10 fan', description: 'Only honor tiles in the hand.', tiles: ['east', 'east', 'east', 'south', 'south', 'south', 'red', 'red', 'red', 'white', 'white', 'white', 'green', 'green'] as MahjongTileId[] },
     ],
@@ -101,7 +121,7 @@ const HAND_SECTIONS = [
       { title: 'All Triplets', value: '3 fan', description: 'Hand only contains triplets.', tiles: ['c1', 'c1', 'c1', 'c2', 'c2', 'c2', 'c3', 'c3', 'c3', 'red', 'red', 'red', 'b5', 'b5'] as MahjongTileId[] },
       { title: 'Four Concealed Triplets', value: '8 fan', description: 'Hand only contains triplets, all self-drawn.', tiles: ['b2', 'b2', 'b2', 'b3', 'b3', 'b3', 'b4', 'b4', 'b4', 'o5', 'o5', 'o5', 'c7', 'c7'] as MahjongTileId[] },
       { title: 'Mixed Terminals', value: '4 fan', description: 'Hand only contains terminals and honors.', tiles: ['c1', 'c1', 'c1', 'c9', 'c9', 'c9', 'red', 'red', 'red', 'east', 'east', 'east', 'b1', 'b1'] as MahjongTileId[] },
-      { title: 'All Terminals', value: 'Limit', description: 'Hand contains only terminals and honors.', tiles: ['c1', 'c1', 'c1', 'c9', 'c9', 'c9', 'b1', 'b1', 'b1', 'b9', 'b9', 'b9', 'east', 'east'] as MahjongTileId[] },
+      { title: 'All Terminals', value: 'Limit', description: 'Hand contains only terminal tiles: 1s and 9s.', tiles: ['c1', 'c1', 'c1', 'c9', 'c9', 'c9', 'b1', 'b1', 'b1', 'b9', 'b9', 'b9', 'o1', 'o1'] as MahjongTileId[] },
       { title: 'Four Kongs', value: 'Limit', description: 'Hand contains 4 kongs.', tiles: ['red', 'red', 'red', 'red', 'green', 'green', 'green', 'green', 'east', 'east', 'east', 'east', 'c2', 'c2'] as MahjongTileId[] },
     ],
   },
@@ -111,7 +131,7 @@ const HAND_SECTIONS = [
     description: 'Common sequence-based hands and special patterns from the manual.',
     hands: [
       { title: 'All Sequences', value: '1 fan', description: 'Only sequences and a pair.', tiles: ['c2', 'c3', 'c4', 'b2', 'b3', 'b4', 'o2', 'o3', 'o4', 'c7', 'c8', 'c9', 'south', 'south'] as MahjongTileId[] },
-      { title: 'Thirteen Orphans', value: 'Limit', description: 'Have one of each terminal and honor plus a paired terminal.', tiles: ['c1', 'c9', 'b1', 'b9', 'o1', 'o9', 'east', 'south', 'west', 'north', 'red', 'green', 'white', 'c1'] as MahjongTileId[] },
+      { title: 'Thirteen Orphans', value: 'Limit', description: 'Have one of each terminal and honor, plus a pair of any one of those tiles.', tiles: ['c1', 'c9', 'b1', 'b9', 'o1', 'o9', 'east', 'south', 'west', 'north', 'red', 'green', 'white', 'c1'] as MahjongTileId[] },
       { title: 'Nine Gates', value: 'Limit', description: 'Have the concealed pattern 1112345678999 and win on any tile 1–9.', tiles: ['c1', 'c1', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'c9', 'c9', 'c1'] as MahjongTileId[] },
       { title: 'Blessing of Heaven', value: 'Limit', description: 'Win on the first turn as the dealer.', tiles: ['b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'b9', 'east', 'east', 'east', 'red', 'red'] as MahjongTileId[] },
       { title: 'Blessing of Earth', value: 'Limit', description: "Win on the first dealer's first discard.", tiles: ['o1', 'o2', 'o3', 'o4', 'o5', 'o6', 'o7', 'o8', 'o9', 'south', 'south', 'south', 'green', 'green'] as MahjongTileId[] },
@@ -121,7 +141,7 @@ const HAND_SECTIONS = [
   {
     heading: 'Non-traditional hands',
     id: 'non-traditional-hands',
-    description: 'Optional house-rule hands; include them for club reference.',
+    description: 'Optional hands that are not part of traditional Hong Kong Mahjong. Clubs may include them by house rule; many other optional hands are possible.',
     hands: [
       { title: 'Seven Pairs', value: '3 fan', description: 'Hand contains 7 pairs.', tiles: ['c1', 'c1', 'c2', 'c2', 'c3', 'c3', 'b4', 'b4', 'b5', 'b5', 'o6', 'o6', 'south', 'south'] as MahjongTileId[] },
       { title: 'Three Kongs', value: '3 fan', description: 'Hand contains 3 kongs.', tiles: ['c2', 'c2', 'c2', 'c2', 'b3', 'b3', 'b3', 'b3', 'o4', 'o4', 'o4', 'o4', 'red', 'red'] as MahjongTileId[] },
@@ -158,6 +178,7 @@ function HandExample({ title, value, description, tiles }: { title: string; valu
 }
 
 const sections = [
+  { id: 'scoring-guide', label: 'Scoring guide' },
   { id: 'complete-tile-reference', label: 'Tile reference' },
   ...HAND_SECTIONS.map((section) => ({ id: section.id, label: section.heading })),
 ]
@@ -165,12 +186,18 @@ const sections = [
 export default function WikiPage() {
   const [activeSection, setActiveSection] = useState('complete-tile-reference')
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [clubOptions, setClubOptions] = useState<ClubMembershipDoc[]>([])
+  const [selectedClubId, setSelectedClubId] = useState<string | null>(null)
+  const [requestedClubId, setRequestedClubId] = useState<string | null>(null)
+  const [scoringRules, setScoringRules] = useState<ScoringRules>(DEFAULT_SCORING_RULES)
   const touchStartX = useRef<number | null>(null)
   const touchStartY = useRef<number | null>(null)
   const touchActive = useRef(false)
   const touchStartedInSidebar = useRef(false)
   const { user, loading } = useAuth()
   const router = useRouter()
+  const selectedClub = clubOptions.find((club) => club.clubId === selectedClubId) ?? null
+  const displayedFanValues = selectedClubId ? fanValues(scoringRules) : FAN_POINTS.map(([fan]) => fan)
 
   const sectionIds = useMemo(() => sections.map((section) => section.id), [])
 
@@ -194,6 +221,49 @@ export default function WikiPage() {
       router.replace('/login')
     }
   }, [loading, router, user])
+
+  useEffect(() => {
+    if (typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1024px)').matches) {
+      setSidebarOpen(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    const clubId = new URLSearchParams(window.location.search).get('club')?.trim().toUpperCase()
+    setRequestedClubId(clubId || null)
+  }, [])
+
+  useEffect(() => {
+    if (!user) {
+      setClubOptions([])
+      setSelectedClubId(null)
+      return
+    }
+    return subscribeUserClubs(user.uid, setClubOptions)
+  }, [user])
+
+  useEffect(() => {
+    setSelectedClubId((current) => {
+      if (requestedClubId && clubOptions.some((club) => club.clubId === requestedClubId)) return requestedClubId
+      if (current && clubOptions.some((club) => club.clubId === current)) return current
+      return clubOptions[0]?.clubId ?? null
+    })
+  }, [clubOptions, requestedClubId])
+
+  useEffect(() => {
+    if (!selectedClubId) {
+      setScoringRules(DEFAULT_SCORING_RULES)
+      return
+    }
+    return subscribeScoringRules(selectedClubId, setScoringRules)
+  }, [selectedClubId])
+
+  const handleClubChange = (clubId: string) => {
+    const nextClubId = clubId || null
+    setSelectedClubId(nextClubId)
+    const nextUrl = nextClubId ? `/wiki?club=${encodeURIComponent(nextClubId)}` : '/wiki'
+    window.history.replaceState(null, '', nextUrl)
+  }
 
   useEffect(() => {
     if (typeof IntersectionObserver === 'undefined') {
@@ -286,23 +356,38 @@ export default function WikiPage() {
 
   return (
     <div className={`wiki-page-shell ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
-      <aside className="wiki-toc-sidebar" data-open={sidebarOpen ? 'true' : 'false'}>
+      <button
+        type="button"
+        className={`wiki-toc-backdrop ${sidebarOpen ? 'is-visible' : ''}`}
+        aria-label="Close wiki contents"
+        onClick={() => setSidebarOpen(false)}
+      />
+      <aside id="wiki-contents" className="wiki-toc-sidebar" data-open={sidebarOpen ? 'true' : 'false'}>
+        <div className="wiki-toc-aside-top">
+          <div>
+            <p className="wiki-toc-overline">Mahjong Messiah</p>
+            <p className="wiki-toc-title">Wiki contents</p>
+          </div>
+          <button type="button" className="wiki-toc-close" onClick={() => setSidebarOpen(false)} aria-label="Hide wiki contents">×</button>
+        </div>
+        <div className="wiki-toc-summary">Rules, hand patterns, and tile references in one place.</div>
         <div className="wiki-toc-aside-top">
           <Link href="/" className="wiki-back-link" aria-label="Back to dashboard">
             <span aria-hidden="true">←</span>
             Back to dashboard
           </Link>
         </div>
-        <p className="wiki-toc-title">Contents</p>
         <nav className="wiki-toc-list" aria-label="Wiki table of contents">
-          {sections.map((section) => (
+          {sections.map((section, index) => (
             <a
               key={section.id}
               href={`#${section.id}`}
               onClick={handleTocClick(section.id)}
+              aria-current={activeSection === section.id ? 'location' : undefined}
               className={`wiki-toc-link ${activeSection === section.id ? 'active' : ''}`}
             >
-              {section.label}
+              <span className="wiki-toc-number">{String(index + 1).padStart(2, '0')}</span>
+              <span>{section.label}</span>
             </a>
           ))}
         </nav>
@@ -312,9 +397,12 @@ export default function WikiPage() {
         type="button"
         className={`wiki-toc-side-tab ${sidebarOpen ? 'open' : 'closed'}`}
         aria-label={sidebarOpen ? 'Tuck away contents' : 'Open table of contents'}
+        aria-controls="wiki-contents"
+        aria-expanded={sidebarOpen}
         onClick={() => setSidebarOpen((current) => !current)}
       >
         <span className="wiki-toc-side-icon" aria-hidden="true" />
+        <span className="wiki-toc-side-label">Contents</span>
       </button>
 
       <main className="wiki-page-content">
@@ -323,8 +411,47 @@ export default function WikiPage() {
             <p className="wiki-page-kicker">Mahjong hand guide</p>
             <h1>Hong Kong Mahjong Wiki</h1>
             <p className="wiki-page-intro">Explore the rules, scoring patterns, and example hands used in this app so you can quickly identify winning combinations and understand how the score tracker represents each win.</p>
+            <div className="wiki-hero-meta" aria-label="Wiki details">
+              <span>Scoring reference</span>
+              <span>Real tile artwork</span>
+              <span>Club rules can vary</span>
+            </div>
+            <div className="wiki-reference-controls">
+              <label htmlFor="wiki-club-select">Show scoring for</label>
+              <select id="wiki-club-select" value={selectedClubId ?? ''} onChange={(event) => handleClubChange(event.target.value)}>
+                <option value="">General reference</option>
+                {clubOptions.map((club) => <option key={club.clubId} value={club.clubId}>{club.clubName} · {club.clubId}</option>)}
+              </select>
+              <span>{selectedClub ? `Live rules from ${selectedClub.clubName}` : 'The classic reference map is shown until you choose a club.'}</span>
+            </div>
           </div>
         </div>
+
+        <section id="scoring-guide" className="wiki-section wiki-scoring-section">
+          <div className="wiki-section-heading">
+            <p className="wiki-section-kicker">Start here</p>
+            <h2>How scoring works</h2>
+            <p>This is a scoring reference, not a complete guide to playing Hong Kong Mahjong. Add the fan values for a winning hand, then use the base-point table below.</p>
+          </div>
+          <div className="wiki-rule-note">
+            <strong>House rules are club-specific.</strong>
+            <span>New clubs start with a 3-fan minimum, a 13+ cap, and the default map below. A manager can change the fan range and every fan-to-point value in Club settings; this wiki remains a general reference.</span>
+          </div>
+          <div className="wiki-scoring-grid">
+            <article className="wiki-scoring-card wiki-scoring-table-card">
+              <div className="wiki-card-heading"><div><p className="wiki-section-kicker">Fan → base points</p><h3>The reference table</h3></div><span className="wiki-card-mark" aria-hidden="true">中</span></div>
+              <p>{selectedClub ? 'These values are live for the selected club. Managers can change the range and mapping in Club settings.' : 'Each fan doubles the points through 4 fan. After that, every 2 additional fan doubles the value. 13+ uses the cap.'}</p>
+              <div className="wiki-table-wrap">
+                <table className="wiki-scoring-table"><caption className="sr-only">Hong Kong Mahjong fan to base points reference</caption><thead><tr><th scope="col">Fan</th><th scope="col">Base points</th></tr></thead><tbody>{displayedFanValues.map((fan) => <tr key={fan}><th scope="row">{selectedClub ? fanLabel(fan, scoringRules) : fan === 13 ? '13+ (limit)' : fan}</th><td>{selectedClub ? scoringRules.fanPoints[fan] : FAN_POINTS.find(([referenceFan]) => referenceFan === fan)?.[1]}</td></tr>)}</tbody></table>
+              </div>
+            </article>
+            <div className="wiki-scoring-side">
+              <article className="wiki-scoring-card"><p className="wiki-section-kicker">Self draw</p><h3>Everyone pays the hand value</h3><p>The winner receives 3× the base value. Each other player pays 1× the base value.</p><div className="wiki-example"><strong>Example</strong><span>4 fan = 16 base points. Each of the other 3 players pays 16.</span></div></article>
+              <article className="wiki-scoring-card"><p className="wiki-section-kicker">Win by discard</p><h3>The discarder pays the full penalty</h3><p>Under this app&apos;s default all-paid rule, the discarder pays 2× the base value and the other players pay nothing.</p><div className="wiki-example"><strong>Example</strong><span>7 fan = 48 base points. The discarder pays 96.</span></div></article>
+            </div>
+          </div>
+          <div className="wiki-scoring-footnote"><strong>Minimum fan:</strong> 3 fan is common, but beginners may play without a minimum. An alternative table rule is for a self-draw to collect 2× from everyone, while a discard win collects 2× from the discarder and 1× from each other player.</div>
+        </section>
 
         <section id="complete-tile-reference" className="wiki-section wiki-tile-chart-section">
           <div className="wiki-section-heading">

@@ -85,12 +85,14 @@ app/
   check-in/[publicId]/             Mobile QR onboarding and check-in
   club/[clubId]/                   Authenticated club workspace route
   login/                           Signed-out welcome and Google sign-in route
+  wiki/                            Authenticated, read-only Mahjong scoring reference
   globals.css                      Theme tokens, responsive rules, component styling
   icon.svg                         Browser icon
   layout.tsx                       Global header, providers, fonts, metadata
   page.tsx                         Signed-in personal dashboard
 components/
   AppGuide.tsx                     Global guide and no-write training tour
+  MahjongTile.tsx                  Canonical tile definitions, artwork, and labels
   AnalyticsPanel.tsx               Summary comparison cards
   ClubWorkspace.tsx                Main club coordinator and modal owner
   DashboardContent.tsx             Detailed chart analytics and player selection
@@ -144,6 +146,12 @@ The personal dashboard requires an authenticated user. It:
 ### `/club/[clubId]`
 
 The club route normalizes the club ID, requires authentication, subscribes to the current user’s memberships, and renders `ClubWorkspace` only when the user has an active membership. Unauthorized or missing clubs receive an explanatory state rather than the workspace.
+
+### `/wiki`
+
+The authenticated wiki is a read-only Hong Kong Mahjong reference. It combines the canonical tile artwork with the scoring table, payment examples, and the hand patterns represented by the printed scoring guide. The reference intentionally explains that it is not a complete play guide, that the classic 0–13+ table is a general reference, and that each club may customize its minimum fan, cap, and fan-to-point map in Club settings. The page does not write club data or duplicate the scoring engine.
+
+The contents drawer uses the same semantic surfaces and touch-target rules as the rest of the app. It is visible on desktop, collapses into a labelled floating control on smaller screens, closes with an explicit button or backdrop tap, and tracks the section currently in view. Long hand examples wrap inside the content column instead of forcing the page to overflow horizontally.
 
 ### Global layout
 
@@ -313,6 +321,14 @@ Shared client-facing types live in `lib/types.ts`:
 - Club game counts without downloading the game collection.
 - First-club empty state.
 - Create club, request to join by ID, open club, leave eligible club, and sign out.
+
+### Mahjong hand wiki
+
+- Read-only reference for the tile set used by the app, including suits, winds, dragons, and flowers.
+- Fan-to-base-point table from 0 through 13+ with the default self-draw and all-paid discard examples.
+- Hand reference grouped into flowers, winning methods, suit-based, honor, triplet, sequence/special, and optional non-traditional patterns.
+- Values and descriptions are kept aligned with the printed Hong Kong scoring guide; the page explicitly calls out optional hands and club-specific house-rule overrides.
+- Desktop keeps a sticky contents rail. Mobile uses a contained drawer with a backdrop, an explicit close action, and a section-aware active state.
 
 ### Clubs and membership
 
