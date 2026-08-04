@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -10,10 +11,16 @@ import ScoreCelebration, {
   type ScoreCelebrationResult,
 } from "@/components/ScoreCelebration";
 import {
+  requestToJoinClub,
   subscribeActiveSession,
   subscribePlayers,
   subscribeScoringRules,
 } from "@/lib/data";
+import {
+  clearGuestTableSession,
+  exitGuestTableToLogin,
+  guestSessionMatches,
+} from "@/lib/guest-table-session";
 import { calculateTableScores, type TableWinType } from "@/lib/table-scoring";
 import {
   basePointsForFan,
@@ -23,6 +30,7 @@ import {
   type ScoringRules,
 } from "@/lib/scoring-rules";
 import {
+  createGuestGame,
   generateTableQr,
   tableAction,
   type TableContext,
@@ -48,9 +56,11 @@ export default function FocusedTableView({
   tableNumber: number;
 }) {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const { user, loading, signingIn, signInWithGoogle, signOut } = useAuth();
   const { play } = useSound();
   const { saveGame: saveGameWithOfflineSupport } = useGameSync();
+  const [isGuest, setIsGuest] = useState(false);
+  const [guestReady, setGuestReady] = useState(false);
   const [context, setContext] = useState<TableContext | null>(null);
   const [session, setSession] = useState<TableSession | null>(null);
   const [players, setPlayers] = useState<TablePlayer[]>([]);
@@ -70,11 +80,15 @@ export default function FocusedTableView({
     DEFAULT_SCORING_RULES,
   );
   const [fan, setFan] = useState(DEFAULT_SCORING_RULES.minFan);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeBusy, setUpgradeBusy] = useState(false);
+  const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
   const requestKey = useRef("");
   const sessionRef = useRef<TableSession | null>(null);
   const confirmedSessionRef = useRef<TableSession | null>(null);
   const pendingTableMutationsRef = useRef(0);
   const tableMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const canAccess = Boolean(user) || isGuest;
 
   const showSession = useCallback((next: TableSession | null) => {
     sessionRef.current = next;
@@ -95,6 +109,7 @@ export default function FocusedTableView({
     setContext(next);
     acceptServerSession(next.session);
     setPlayers(next.players);
+    if (next.scoringRules) setScoringRules(next.scoringRules);
   }, [acceptServerSession, clubId, tableNumber]);
 
   useEffect(() => {
@@ -102,18 +117,50 @@ export default function FocusedTableView({
     return () => document.body.classList.remove("table-focus-mode");
   }, []);
   useEffect(() => {
-    if (!loading && !user) router.replace("/login");
-    else if (user)
-      void loadContext().catch((nextError) =>
-        setError(
-          nextError instanceof Error
-            ? nextError.message
-            : "Unable to load table.",
-        ),
-      );
-  }, [loadContext, loading, router, user]);
+    const guest = guestSessionMatches(clubId, tableNumber);
+    if (user && guest && !upgradeBusy) {
+      clearGuestTableSession();
+      setIsGuest(false);
+    } else {
+      setIsGuest(guest);
+    }
+    setGuestReady(true);
+  }, [clubId, tableNumber, upgradeBusy, user]);
   useEffect(() => {
-    if (!user) return;
+    if (loading || !guestReady) return;
+    if (!user && !isGuest) {
+      router.replace("/login");
+      return;
+    }
+    void loadContext().catch((nextError) =>
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to load table.",
+      ),
+    );
+  }, [guestReady, isGuest, loadContext, loading, router, user]);
+  useEffect(() => {
+    if (!isGuest) return;
+    const ensureGuestSession = () => {
+      if (!guestSessionMatches(clubId, tableNumber)) {
+        clearGuestTableSession();
+        window.location.replace("/login");
+      }
+    };
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) ensureGuestSession();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    window.addEventListener("focus", ensureGuestSession);
+    return () => {
+      window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("focus", ensureGuestSession);
+    };
+  }, [clubId, isGuest, tableNumber]);
+  useEffect(() => {
+    if (!canAccess) return;
+    const intervalMs = isGuest ? 5_000 : 5 * 60 * 1000;
     const timer = window.setInterval(
       () => {
         void loadContext().catch((nextError) =>
@@ -124,12 +171,12 @@ export default function FocusedTableView({
           ),
         );
       },
-      5 * 60 * 1000,
+      intervalMs,
     );
     return () => window.clearInterval(timer);
-  }, [loadContext, user]);
+  }, [canAccess, isGuest, loadContext]);
   useEffect(() => {
-    if (!context) return;
+    if (!context || isGuest) return;
     const unsubscribeSession = subscribeActiveSession(
       clubId,
       context.seasonNumber,
@@ -162,11 +209,11 @@ export default function FocusedTableView({
       unsubscribeSession();
       unsubscribePlayers();
     };
-  }, [acceptServerSession, clubId, context]);
+  }, [acceptServerSession, clubId, context, isGuest]);
   useEffect(() => {
-    if (!user) return;
+    if (!user || isGuest) return;
     return subscribeScoringRules(clubId, setScoringRules);
-  }, [clubId, user]);
+  }, [clubId, isGuest, user]);
   useEffect(() => {
     if (fan < scoringRules.minFan || fan > scoringRules.maxFan)
       setFan(scoringRules.minFan);
@@ -270,7 +317,7 @@ export default function FocusedTableView({
     setResultOpen(true);
   };
   const saveGame = async (draw = false) => {
-    if (!user || occupants.length !== 4 || !session) return;
+    if ((!user && !isGuest) || occupants.length !== 4 || !session) return;
     const scores = draw
       ? Object.fromEntries(occupants.map((id) => [id, 0]))
       : calculateTableScores({
@@ -291,20 +338,30 @@ export default function FocusedTableView({
     setBusy(true);
     setError(null);
     try {
-      const result = await saveGameWithOfflineSupport(clubId, {
+      const gameInput = {
         entries: Object.entries(scores).map(([playerId, score]) => ({
           playerId,
           score,
         })),
-        createdBy: user.uid,
+        createdBy: user?.uid ?? `guest:${clubId}:${tableNumber}`,
         seasonNumber: session.seasonNumber,
         tableId: String(tableNumber),
-        winType: draw ? "draw" : winType === "self" ? "self_draw" : "discard",
+        winType: (draw
+          ? "draw"
+          : winType === "self"
+            ? "self_draw"
+            : "discard") as "draw" | "self_draw" | "discard",
         loserPlayerId: draw || winType === "self" ? null : loser,
         fan: draw ? null : fan,
         notes: null,
         idempotencyKey: requestKey.current,
-      });
+      };
+      const result = isGuest
+        ? await createGuestGame(clubId, {
+            ...gameInput,
+            createdBy: `guest:${clubId}:${tableNumber}`,
+          }).then(() => ({ status: "synced" as const }))
+        : await saveGameWithOfflineSupport(clubId, gameInput);
       setResultOpen(false);
       requestKey.current = "";
       play(draw ? "draw" : "win");
@@ -322,6 +379,45 @@ export default function FocusedTableView({
       );
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleUpgrade = async () => {
+    setUpgradeBusy(true);
+    setUpgradeMessage(null);
+    setError(null);
+    try {
+      await signInWithGoogle();
+      const authUser = (await import("@/lib/firebase")).auth.currentUser;
+      if (!authUser) throw new Error("Sign-in did not complete. Please try again.");
+      const result = await requestToJoinClub({
+        clubId,
+        user: authUser,
+        appUrl: window.location.origin,
+      });
+      if (result === "already-member") {
+        clearGuestTableSession();
+        setIsGuest(false);
+        setUpgradeOpen(false);
+        setToast("Welcome back — you are signed in as a club member.");
+        await loadContext();
+      } else {
+        setUpgradeMessage(
+          "Your join request was sent to the club manager. Keep scoring as a guest until they approve you.",
+        );
+        await signOut();
+        setIsGuest(guestSessionMatches(clubId, tableNumber));
+      }
+      play("confirmation");
+    } catch (nextError) {
+      play("error");
+      setUpgradeMessage(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to sign in and join this club.",
+      );
+    } finally {
+      setUpgradeBusy(false);
     }
   };
 
@@ -351,7 +447,7 @@ export default function FocusedTableView({
     URL.revokeObjectURL(link.href);
   };
 
-  if (loading || !user || !context)
+  if (loading || !guestReady || !canAccess || !context)
     return (
       <main className="flex min-h-dvh items-center justify-center p-6">
         <div className="rounded-lg border bg-white p-6 font-bold">
@@ -363,28 +459,43 @@ export default function FocusedTableView({
   return (
     <main className="focused-table min-h-dvh bg-[rgb(var(--paper))] pb-28">
       <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-[rgb(var(--line))] bg-[rgb(var(--surface))]/95 px-3 py-3 backdrop-blur">
-        <Link
-          href={`/club/${encodeURIComponent(clubId)}`}
-          aria-label="Back to club"
-          className="flex h-11 w-11 items-center justify-center rounded-full border border-[rgb(var(--line))] text-2xl"
-        >
-          ←
-        </Link>
+        {isGuest ? (
+          <button
+            type="button"
+            aria-label="Back to login"
+            onClick={() => exitGuestTableToLogin()}
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-[rgb(var(--line))] text-2xl"
+            data-tour="guest-back-login"
+          >
+            ←
+          </button>
+        ) : (
+          <Link
+            href={`/club/${encodeURIComponent(clubId)}`}
+            aria-label="Back to club"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-[rgb(var(--line))] text-2xl"
+          >
+            ←
+          </Link>
+        )}
         <div className="min-w-0 flex-1">
           <p className="truncate text-xs font-bold uppercase tracking-[.15em] text-[rgb(var(--muted))]">
             {context.clubName}
+            {isGuest ? " · Guest" : ""}
           </p>
           <h1 className="text-xl font-black text-[rgb(var(--ink))]">
             Table {tableNumber}
           </h1>
         </div>
-        <button
-          type="button"
-          onClick={() => void showQr()}
-          className="min-h-11 rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface-2))] px-3 text-sm font-black"
-        >
-          QR
-        </button>
+        {!isGuest ? (
+          <button
+            type="button"
+            onClick={() => void showQr()}
+            className="min-h-11 rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface-2))] px-3 text-sm font-black"
+          >
+            QR
+          </button>
+        ) : null}
         <button
           type="button"
           disabled={!session || busy}
@@ -398,6 +509,22 @@ export default function FocusedTableView({
           Clear Table
         </button>
       </header>
+
+      {isGuest ? (
+        <div className="mx-auto max-w-xl px-3 pt-3 sm:px-5">
+          <button
+            type="button"
+            onClick={() => {
+              setUpgradeMessage(null);
+              setUpgradeOpen(true);
+            }}
+            className="w-full rounded-xl border border-[rgb(var(--bamboo))] bg-[rgb(var(--bamboo)/.08)] px-4 py-3 text-center text-sm font-bold text-[rgb(var(--ink))]"
+            data-tour="guest-upgrade-cta"
+          >
+            Want to track your session points and more? Click here to sign in to experinece the full app.
+          </button>
+        </div>
+      ) : null}
 
       <div className="mx-auto max-w-xl p-3 sm:p-5">
         {error ? (
@@ -420,15 +547,18 @@ export default function FocusedTableView({
           <section className="rounded-xl border border-dashed border-[rgb(var(--line))] bg-[rgb(var(--surface))] p-8 text-center">
             <h2 className="text-xl font-black">No active session</h2>
             <p className="mt-2 text-sm text-[rgb(var(--muted))]">
-              Scan this table&apos;s QR code to check in and start one
-              automatically.
+              {isGuest
+                ? "Ask a club member to start a session, then refresh this table."
+                : "Scan this table's QR code to check in and start one automatically."}
             </p>
-            <button
-              onClick={() => void showQr()}
-              className="mt-5 min-h-12 rounded-lg bg-[rgb(var(--bamboo))] px-5 font-black text-white"
-            >
-              Generate table QR
-            </button>
+            {!isGuest ? (
+              <button
+                onClick={() => void showQr()}
+                className="mt-5 min-h-12 rounded-lg bg-[rgb(var(--bamboo))] px-5 font-black text-white"
+              >
+                Generate table QR
+              </button>
+            ) : null}
           </section>
         ) : (
           <>
@@ -469,7 +599,7 @@ export default function FocusedTableView({
                     <h2 className="mt-2 max-w-full truncate text-base font-black">
                       {info.displayName}
                     </h2>
-                    {info.authUid === user.uid ? (
+                    {user && info.authUid === user.uid ? (
                       <span className="mt-1 rounded-full bg-[rgb(var(--bamboo)/.12)] px-2 py-1 text-[10px] font-black uppercase text-[rgb(var(--bamboo))]">
                         You
                       </span>
@@ -865,6 +995,59 @@ export default function FocusedTableView({
               className="mt-2 min-h-11 w-full rounded-lg bg-slate-900 font-black text-white"
             >
               Close
+            </button>
+          </section>
+        </div>
+      ) : null}
+
+      {upgradeOpen ? (
+        <div
+          className="viewport-overlay fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
+          onMouseDown={(event) =>
+            event.target === event.currentTarget && !upgradeBusy && setUpgradeOpen(false)
+          }
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="guest-upgrade-title"
+            className="w-full max-w-md rounded-t-2xl bg-[rgb(var(--surface))] p-5 sm:rounded-2xl"
+          >
+            <h2 id="guest-upgrade-title" className="text-xl font-black text-[rgb(var(--ink))]">
+              Want to track your points and more?
+            </h2>
+            <p className="mt-2 text-sm text-[rgb(var(--muted))]">
+              Sign in with Google and join this club to unlock session point tracking, roster tools, and your personal standings.
+            </p>
+            {upgradeMessage ? (
+              <p className="mt-3 rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface-2))] p-3 text-sm font-bold text-[rgb(var(--ink))]" role="status">
+                {upgradeMessage}
+              </p>
+            ) : null}
+            <button
+              type="button"
+              disabled={upgradeBusy || signingIn}
+              onClick={() => void handleUpgrade()}
+              className="login-google-button mt-4"
+              data-tour="guest-upgrade-google"
+            >
+              <Image
+                className="google-mark object-contain p-[3px]"
+                src="/google-g.png"
+                alt=""
+                width={25}
+                height={25}
+                aria-hidden="true"
+              />
+              {upgradeBusy || signingIn ? "Working…" : "Continue with Google"}
+            </button>
+            <button
+              type="button"
+              disabled={upgradeBusy}
+              onClick={() => setUpgradeOpen(false)}
+              className="mt-2 min-h-11 w-full rounded-lg border border-[rgb(var(--line))] font-bold text-[rgb(var(--ink))]"
+            >
+              Not now
             </button>
           </section>
         </div>

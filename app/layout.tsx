@@ -8,6 +8,8 @@ import AppGuide from '@/components/AppGuide'
 import WikiHeaderLink from '@/components/WikiHeaderLink'
 import { SoundProvider } from '@/contexts/SoundContext'
 import { GameSyncProvider } from '@/contexts/GameSyncContext'
+import { FloatingSessionTrackerProvider } from '@/contexts/FloatingSessionTrackerContext'
+import FloatingSessionTracker from '@/components/FloatingSessionTracker'
 import ViewportMetrics from '@/components/ViewportMetrics'
 import { BrandLockup } from '@/components/BrandMark'
 
@@ -42,6 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthProvider>
           <SoundProvider>
           <GameSyncProvider>
+          <FloatingSessionTrackerProvider>
           <div className="relative mx-auto flex min-h-screen max-w-[1500px] flex-col">
             <a
               href="#main-content"
@@ -67,6 +70,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </header>
             <main id="main-content" tabIndex={-1} className="min-w-0 flex-1">{children}</main>
           </div>
+          <FloatingSessionTracker />
+          </FloatingSessionTrackerProvider>
           </GameSyncProvider>
           </SoundProvider>
         </AuthProvider>

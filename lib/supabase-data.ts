@@ -32,6 +32,12 @@ import {
   titleRulesFromRow,
   type TitleRules,
 } from '@/lib/title-rules'
+import {
+  sessionWindowRequestBody,
+  type SessionPointWindow,
+} from '@/lib/session-point-window'
+
+export type { SessionPointWindow }
 
 type UserLike = {
   uid: string
@@ -790,6 +796,57 @@ export const closeSession = (clubId: string, sessionId: string) =>
   })
 export const ensureConfig = (clubId: string) =>
   serverAction<void>('ensureConfig', { clubId })
+
+export type SessionPointWindowHours = 24 | 48 | 168
+export type SessionPointTotal = {
+  playerId: string
+  displayName: string
+  icon: string
+  netPoints: number
+  games: number
+}
+export type SessionPointGameRow = {
+  gameId: string
+  playedAt: string
+  score: number
+  winType: string | null
+  tableId: string | null
+  fan: number | null
+  opponents: string
+}
+
+export const loadSessionPointTotals = (
+  clubId: string,
+  window: SessionPointWindow | SessionPointWindowHours,
+) => {
+  const body =
+    typeof window === 'number'
+      ? { mode: 'hours' as const, hours: window }
+      : sessionWindowRequestBody(window)
+  return serverAction<{
+    window: SessionPointWindow
+    hours: SessionPointWindowHours | null
+    totals: SessionPointTotal[]
+  }>('sessionPointTotals', { clubId, ...body })
+}
+
+export const loadSessionPointBreakdown = (
+  clubId: string,
+  playerId: string,
+  window: SessionPointWindow | SessionPointWindowHours,
+) => {
+  const body =
+    typeof window === 'number'
+      ? { mode: 'hours' as const, hours: window }
+      : sessionWindowRequestBody(window)
+  return serverAction<{
+    window: SessionPointWindow
+    hours: SessionPointWindowHours | null
+    playerId: string
+    games: SessionPointGameRow[]
+  }>('sessionPointBreakdown', { clubId, playerId, ...body })
+}
+
 export async function getSoundPreference(uid: string) {
   const { data, error } = await client()
     .from('user_profiles')

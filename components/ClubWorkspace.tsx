@@ -6,6 +6,7 @@ import { useEffect, useState, useRef } from 'react'
 import DashboardContent from '@/components/DashboardContent'
 import GameLogsModal from '@/components/GameLogsModal'
 import NetworkGraphModal from '@/components/NetworkGraphModal'
+import SessionPointTrackerModal from '@/components/SessionPointTrackerModal'
 import { LeaderboardPanel } from '@/components/Leaderboard'
 import SessionManager from '@/components/SessionManager'
 import ScoringRulesSettings from '@/components/ScoringRulesSettings'
@@ -116,6 +117,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [seasonMessage, setSeasonMessage] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [rosterOpen, setRosterOpen] = useState(false)
+  const [sessionTrackerOpen, setSessionTrackerOpen] = useState(false)
   const [analyticsOpen, setAnalyticsOpen] = useState(false)
   const [gameLogsOpen, setGameLogsOpen] = useState(false)
   const [networkOpen, setNetworkOpen] = useState(false)
@@ -409,6 +411,18 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             Roster
           </button>
           <button
+            data-tour="session-tracker-open"
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded={sessionTrackerOpen}
+            aria-controls="club-session-tracker-dialog"
+            onClick={() => setSessionTrackerOpen(true)}
+            className="club-secondary-action club-tool-action rounded-lg px-3 py-2 text-sm font-bold transition"
+          >
+            <span aria-hidden="true" className="club-tool-icon">±</span>
+            <span>Session tracker</span>
+          </button>
+          <button
             data-tour="analytics-open"
             type="button"
             aria-haspopup="dialog"
@@ -628,6 +642,16 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           <SessionManager clubId={clubId} seasonNumber={activeSeasonNumber} players={players} isManager={isManager} scoringRules={scoringRules} />
         </aside>
       </div>
+
+      {sessionTrackerOpen ? (
+        <SessionPointTrackerModal
+          clubId={clubId}
+          clubName={club?.name ?? membership.clubName}
+          players={players}
+          linkedPlayerId={linkedPlayerForUser?.id ?? null}
+          onClose={() => setSessionTrackerOpen(false)}
+        />
+      ) : null}
 
       {rosterOpen ? (
         <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">

@@ -50,6 +50,9 @@ describe('AppGuide', () => {
     expect(screen.getByText('Start on your dashboard')).toBeInTheDocument()
     expect(screen.getByText('What is a Session?')).toBeInTheDocument()
     expect(screen.getByText('Fan Scoring')).toBeInTheDocument()
+    expect(screen.getByText('Session tracker')).toBeInTheDocument()
+    expect(screen.getByText(/Float to pin a compact chip/)).toBeInTheDocument()
+    expect(screen.getByText(/custom From\/To date range/i)).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: 'Fan' })).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: 'Base points' })).toBeInTheDocument()
     expect(screen.getByRole('cell', { name: '13+' })).toBeInTheDocument()
@@ -61,7 +64,7 @@ describe('AppGuide', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open app guide' }))
     fireEvent.click(screen.getByRole('button', { name: /Take a Tour/ }))
 
-    expect(TOUR_STEP_COUNT).toBe(23)
+    expect(TOUR_STEP_COUNT).toBe(26)
     expect(screen.getByText('Your personal dashboard')).toBeInTheDocument()
     await waitFor(() => expect(document.querySelector('.real-tour-spotlight')).toBeInTheDocument())
     expect(screen.getByText('Real dashboard')).toBeInTheDocument()

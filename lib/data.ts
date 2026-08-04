@@ -48,6 +48,14 @@ export const createSession = backend.createSession
 export const updateSession = backend.updateSession
 export const closeSession = backend.closeSession
 export const ensureConfig = backend.ensureConfig
+export const loadSessionPointTotals = backend.loadSessionPointTotals
+export const loadSessionPointBreakdown = backend.loadSessionPointBreakdown
+export type SessionPointTotal = import('@/lib/supabase-data').SessionPointTotal
+export type SessionPointGameRow = import('@/lib/supabase-data').SessionPointGameRow
+export type SessionPointWindowHours =
+  import('@/lib/supabase-data').SessionPointWindowHours
+export type SessionPointWindow = import('@/lib/supabase-data').SessionPointWindow
+
 export const claimMingWelcome = backend.claimMingWelcome
 
 async function postGameMutation(body: Record<string, unknown>) {
