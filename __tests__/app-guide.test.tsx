@@ -52,6 +52,7 @@ describe('AppGuide', () => {
     expect(screen.getByText('Fan Scoring')).toBeInTheDocument()
     expect(screen.getByText('Session tracker')).toBeInTheDocument()
     expect(screen.getByText(/Float to pin a compact chip/)).toBeInTheDocument()
+    expect(screen.getByText(/custom From\/To date range/i)).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: 'Fan' })).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: 'Base points' })).toBeInTheDocument()
     expect(screen.getByRole('cell', { name: '13+' })).toBeInTheDocument()

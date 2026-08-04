@@ -5,10 +5,14 @@ import { usePathname } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useFloatingSessionTracker } from '@/contexts/FloatingSessionTrackerContext'
 import { useGameSync } from '@/contexts/GameSyncContext'
+import { loadSessionPointTotals } from '@/lib/data'
 import {
-  loadSessionPointTotals,
+  buildCustomSessionWindow,
+  hoursSessionWindow,
+  sessionWindowTag,
+  todayDateInputValue,
   type SessionPointWindowHours,
-} from '@/lib/data'
+} from '@/lib/session-point-window'
 
 const WINDOW_OPTIONS: { hours: SessionPointWindowHours; label: string }[] = [
   { hours: 24, label: '24h' },
@@ -21,11 +25,6 @@ function formatNet(points: number) {
   return String(points)
 }
 
-function windowTag(hours: number) {
-  if (hours === 168) return '7d'
-  return `${hours}h`
-}
-
 function clubPathMatches(pathname: string, clubId: string) {
   const prefix = `/club/${encodeURIComponent(clubId)}`
   return pathname === prefix || pathname.startsWith(`${prefix}/`)
@@ -34,11 +33,22 @@ function clubPathMatches(pathname: string, clubId: string) {
 export default function FloatingSessionTracker() {
   const pathname = usePathname() ?? ''
   const { user } = useAuth()
-  const { state, disableFloat, setFloatHours } = useFloatingSessionTracker()
+  const { state, disableFloat, setFloatHours, setFloatWindow } =
+    useFloatingSessionTracker()
   const { pendingCount, attentionCount, online } = useGameSync()
   const [netPoints, setNetPoints] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [customError, setCustomError] = useState<string | null>(null)
+  const today = todayDateInputValue()
+  const [customStartDate, setCustomStartDate] = useState(
+    () =>
+      (state?.window.mode === 'range' ? state.window.startDate : null) ?? today,
+  )
+  const [customEndDate, setCustomEndDate] = useState(
+    () =>
+      (state?.window.mode === 'range' ? state.window.endDate : null) ?? today,
+  )
   const rootRef = useRef<HTMLElement>(null)
 
   const visible = Boolean(
@@ -52,6 +62,13 @@ export default function FloatingSessionTracker() {
     !online || pendingCount > 0 || attentionCount > 0
 
   useEffect(() => {
+    if (state?.window.mode === 'range') {
+      setCustomStartDate(state.window.startDate)
+      setCustomEndDate(state.window.endDate)
+    }
+  }, [state?.window])
+
+  useEffect(() => {
     if (!visible || !state) {
       setNetPoints(null)
       setError(null)
@@ -61,7 +78,7 @@ export default function FloatingSessionTracker() {
 
     let cancelled = false
     const refresh = () => {
-      void loadSessionPointTotals(state.clubId, state.hours)
+      void loadSessionPointTotals(state.clubId, state.window)
         .then((result) => {
           if (cancelled) return
           const row = result.totals.find(
@@ -118,6 +135,24 @@ export default function FloatingSessionTracker() {
 
   if (!visible || !state) return null
 
+  const customSelected = state.window.mode === 'range'
+
+  const applyCustomRange = (startDate: string, endDate: string) => {
+    try {
+      const next = buildCustomSessionWindow(startDate, endDate)
+      setCustomError(null)
+      setCustomStartDate(next.startDate)
+      setCustomEndDate(next.endDate)
+      setFloatWindow(next)
+    } catch (nextError) {
+      setCustomError(
+        nextError instanceof Error
+          ? nextError.message
+          : 'Choose a valid date range.',
+      )
+    }
+  }
+
   return (
     <aside
       ref={rootRef}
@@ -145,7 +180,7 @@ export default function FloatingSessionTracker() {
           {error ? '—' : netPoints == null ? '…' : formatNet(netPoints)}
         </span>
         <span className="floating-session-tracker-window">
-          {windowTag(state.hours)}
+          {sessionWindowTag(state.window)}
         </span>
       </button>
       <button
@@ -168,26 +203,88 @@ export default function FloatingSessionTracker() {
           aria-label="Session window"
           data-tour="floating-session-window-menu"
         >
-          {WINDOW_OPTIONS.map((option) => (
+          <div className="floating-session-tracker-menu-presets">
+            {WINDOW_OPTIONS.map((option) => (
+              <button
+                key={option.hours}
+                type="button"
+                role="option"
+                aria-selected={
+                  state.window.mode === 'hours' &&
+                  state.window.hours === option.hours
+                }
+                data-tour={`floating-session-window-${option.hours}`}
+                className={`floating-session-tracker-menu-option${
+                  state.window.mode === 'hours' &&
+                  state.window.hours === option.hours
+                    ? ' floating-session-tracker-menu-option-active'
+                    : ''
+                }`}
+                onClick={() => {
+                  setCustomError(null)
+                  setFloatHours(option.hours)
+                  setMenuOpen(false)
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
             <button
-              key={option.hours}
               type="button"
               role="option"
-              aria-selected={state.hours === option.hours}
-              data-tour={`floating-session-window-${option.hours}`}
+              aria-selected={customSelected}
+              data-tour="floating-session-window-custom"
               className={`floating-session-tracker-menu-option${
-                state.hours === option.hours
+                customSelected
                   ? ' floating-session-tracker-menu-option-active'
                   : ''
               }`}
-              onClick={() => {
-                setFloatHours(option.hours)
-                setMenuOpen(false)
-              }}
+              onClick={() => applyCustomRange(customStartDate, customEndDate)}
             >
-              {option.label}
+              Custom
             </button>
-          ))}
+          </div>
+          {customSelected ? (
+            <div
+              className="floating-session-tracker-menu-custom"
+              data-tour="floating-session-window-custom-fields"
+            >
+              <label>
+                <span>From</span>
+                <input
+                  type="date"
+                  data-tour="floating-session-window-start"
+                  value={customStartDate}
+                  max={customEndDate || today}
+                  onChange={(event) => {
+                    const nextStart = event.target.value
+                    setCustomStartDate(nextStart)
+                    applyCustomRange(nextStart, customEndDate)
+                  }}
+                />
+              </label>
+              <label>
+                <span>To</span>
+                <input
+                  type="date"
+                  data-tour="floating-session-window-end"
+                  value={customEndDate}
+                  min={customStartDate || undefined}
+                  max={today}
+                  onChange={(event) => {
+                    const nextEnd = event.target.value
+                    setCustomEndDate(nextEnd)
+                    applyCustomRange(customStartDate, nextEnd)
+                  }}
+                />
+              </label>
+              {customError ? (
+                <p role="alert" className="floating-session-tracker-menu-error">
+                  {customError}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </aside>

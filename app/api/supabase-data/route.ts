@@ -19,7 +19,7 @@ import { isGuestTableToken } from '@/lib/guest-table-token'
 import {
   loadSessionPointBreakdown,
   loadSessionPointTotals,
-  normalizeSessionPointHours,
+  normalizeSessionPointWindow,
 } from '@/lib/server/session-points'
 
 export const runtime = 'nodejs'
@@ -648,10 +648,11 @@ export async function POST(request: NextRequest) {
           .trim()
           .toUpperCase()
         await requireMember(clubId)
-        const hours = normalizeSessionPointHours(body.hours)
+        const window = normalizeSessionPointWindow(body)
         return {
-          hours,
-          totals: await loadSessionPointTotals(db, clubId, hours),
+          window,
+          hours: window.mode === 'hours' ? window.hours : null,
+          totals: await loadSessionPointTotals(db, clubId, window),
         }
       }
       if (action === 'sessionPointBreakdown') {
@@ -661,11 +662,12 @@ export async function POST(request: NextRequest) {
         const playerId = String(body.playerId ?? '').trim()
         if (!playerId) throw new Error('Choose a player to view the breakdown.')
         await requireMember(clubId)
-        const hours = normalizeSessionPointHours(body.hours)
+        const window = normalizeSessionPointWindow(body)
         return {
-          hours,
+          window,
+          hours: window.mode === 'hours' ? window.hours : null,
           playerId,
-          games: await loadSessionPointBreakdown(db, clubId, playerId, hours),
+          games: await loadSessionPointBreakdown(db, clubId, playerId, window),
         }
       }
       throw new Error(`Unsupported Supabase action: ${action}`)

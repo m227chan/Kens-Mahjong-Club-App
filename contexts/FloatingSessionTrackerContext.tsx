@@ -9,9 +9,16 @@ import {
   useState,
 } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import type { SessionPointWindowHours } from '@/lib/data'
+import {
+  hoursSessionWindow,
+  isSessionPointWindowHours,
+  normalizeSessionPointWindow,
+  sessionWindowsEqual,
+  type SessionPointWindow,
+  type SessionPointWindowHours,
+} from '@/lib/session-point-window'
 
-const STORAGE_KEY = 'mahjong:floating-session-tracker:v1'
+const STORAGE_KEY = 'mahjong:floating-session-tracker:v2'
 
 export type FloatingSessionTrackerConfig = {
   clubId: string
@@ -19,7 +26,7 @@ export type FloatingSessionTrackerConfig = {
   playerId: string
   playerName: string
   playerIcon: string
-  hours: SessionPointWindowHours
+  window: SessionPointWindow
 }
 
 export type FloatingSessionTrackerState = FloatingSessionTrackerConfig & {
@@ -30,8 +37,13 @@ type FloatingSessionTrackerValue = {
   state: FloatingSessionTrackerState | null
   enableFloat: (config: FloatingSessionTrackerConfig) => void
   disableFloat: () => void
+  setFloatWindow: (window: SessionPointWindow) => void
   setFloatHours: (hours: SessionPointWindowHours) => void
-  isFloatingFor: (clubId: string, playerId?: string, hours?: SessionPointWindowHours) => boolean
+  isFloatingFor: (
+    clubId: string,
+    playerId?: string,
+    window?: SessionPointWindow | SessionPointWindowHours,
+  ) => boolean
 }
 
 const FloatingSessionTrackerContext =
@@ -39,18 +51,23 @@ const FloatingSessionTrackerContext =
 
 function readStoredState(): FloatingSessionTrackerState | null {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
+    const raw =
+      window.localStorage.getItem(STORAGE_KEY) ??
+      window.localStorage.getItem('mahjong:floating-session-tracker:v1')
     if (!raw) return null
-    const value = JSON.parse(raw) as FloatingSessionTrackerState
-    if (
-      !value?.enabled ||
-      !value.clubId ||
-      !value.playerId ||
-      !value.playerName ||
-      ![24, 48, 168].includes(Number(value.hours))
-    ) {
+    const value = JSON.parse(raw) as FloatingSessionTrackerState & {
+      hours?: SessionPointWindowHours
+      window?: SessionPointWindow
+    }
+    if (!value?.enabled || !value.clubId || !value.playerId || !value.playerName) {
       return null
     }
+    const nextWindow = value.window
+      ? normalizeSessionPointWindow(value.window)
+      : isSessionPointWindowHours(value.hours)
+        ? hoursSessionWindow(value.hours)
+        : null
+    if (!nextWindow) return null
     return {
       enabled: true,
       clubId: String(value.clubId).trim().toUpperCase(),
@@ -58,7 +75,7 @@ function readStoredState(): FloatingSessionTrackerState | null {
       playerId: String(value.playerId),
       playerName: String(value.playerName),
       playerIcon: String(value.playerIcon ?? '🀄'),
-      hours: Number(value.hours) as SessionPointWindowHours,
+      window: nextWindow,
     }
   } catch {
     return null
@@ -67,6 +84,7 @@ function readStoredState(): FloatingSessionTrackerState | null {
 
 function writeStoredState(state: FloatingSessionTrackerState | null) {
   try {
+    window.localStorage.removeItem('mahjong:floating-session-tracker:v1')
     if (!state?.enabled) {
       window.localStorage.removeItem(STORAGE_KEY)
       return
@@ -107,7 +125,7 @@ export function FloatingSessionTrackerProvider({
       playerId: config.playerId,
       playerName: config.playerName,
       playerIcon: config.playerIcon || '🀄',
-      hours: config.hours,
+      window: config.window,
     }
     setState(next)
     writeStoredState(next)
@@ -118,29 +136,57 @@ export function FloatingSessionTrackerProvider({
     writeStoredState(null)
   }, [])
 
-  const setFloatHours = useCallback((hours: SessionPointWindowHours) => {
+  const setFloatWindow = useCallback((nextWindow: SessionPointWindow) => {
     setState((current) => {
       if (!current?.enabled) return current
-      const next = { ...current, hours }
+      const next = { ...current, window: nextWindow }
       writeStoredState(next)
       return next
     })
   }, [])
 
+  const setFloatHours = useCallback((hours: SessionPointWindowHours) => {
+    setFloatWindow(hoursSessionWindow(hours))
+  }, [setFloatWindow])
+
   const isFloatingFor = useCallback(
-    (clubId: string, playerId?: string, hours?: SessionPointWindowHours) => {
+    (
+      clubId: string,
+      playerId?: string,
+      windowOrHours?: SessionPointWindow | SessionPointWindowHours,
+    ) => {
       if (!state?.enabled) return false
       if (state.clubId !== clubId.trim().toUpperCase()) return false
       if (playerId != null && state.playerId !== playerId) return false
-      if (hours != null && state.hours !== hours) return false
+      if (windowOrHours != null) {
+        const expected =
+          typeof windowOrHours === 'number'
+            ? hoursSessionWindow(windowOrHours)
+            : windowOrHours
+        if (!sessionWindowsEqual(state.window, expected)) return false
+      }
       return true
     },
     [state],
   )
 
   const value = useMemo<FloatingSessionTrackerValue>(
-    () => ({ state, enableFloat, disableFloat, setFloatHours, isFloatingFor }),
-    [disableFloat, enableFloat, isFloatingFor, setFloatHours, state],
+    () => ({
+      state,
+      enableFloat,
+      disableFloat,
+      setFloatWindow,
+      setFloatHours,
+      isFloatingFor,
+    }),
+    [
+      disableFloat,
+      enableFloat,
+      isFloatingFor,
+      setFloatHours,
+      setFloatWindow,
+      state,
+    ],
   )
 
   return (

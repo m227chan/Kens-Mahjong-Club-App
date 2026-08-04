@@ -1712,14 +1712,19 @@ body:has([role="dialog"][aria-modal="true"]) .game-sync-banner { display: none; 
   right: 0;
   bottom: calc(100% + .45rem);
   display: grid;
-  min-width: 100%;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: .35rem;
+  min-width: max(100%, 14rem);
+  gap: .45rem;
   border: 1px solid rgb(var(--line));
   border-radius: .75rem;
   padding: .4rem;
   background: rgb(var(--surface));
   box-shadow: 0 12px 28px rgb(0 18 13 / .2);
+}
+
+.floating-session-tracker-menu-presets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .35rem;
 }
 
 .floating-session-tracker-menu-option {
@@ -1737,6 +1742,42 @@ body:has([role="dialog"][aria-modal="true"]) .game-sync-banner { display: none; 
   border-color: rgb(var(--bamboo));
   background: rgb(var(--bamboo) / .12);
   color: rgb(var(--bamboo));
+}
+
+.floating-session-tracker-menu-custom {
+  display: grid;
+  gap: .4rem;
+}
+
+.floating-session-tracker-menu-custom label {
+  display: grid;
+  gap: .2rem;
+}
+
+.floating-session-tracker-menu-custom span {
+  color: rgb(var(--muted));
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.floating-session-tracker-menu-custom input[type="date"] {
+  min-height: 40px;
+  border: 1px solid rgb(var(--line));
+  border-radius: .55rem;
+  padding: 0 .55rem;
+  background: rgb(var(--surface-2));
+  color: rgb(var(--ink));
+  font-size: .78rem;
+  font-weight: 700;
+}
+
+.floating-session-tracker-menu-error {
+  margin: 0;
+  color: rgb(var(--cinnabar));
+  font-size: .72rem;
+  font-weight: 800;
 }
 
 body.table-focus-mode .floating-session-tracker {

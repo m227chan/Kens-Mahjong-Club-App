@@ -12,6 +12,7 @@ vi.mock('@/contexts/FloatingSessionTrackerContext', () => ({
     enableFloat: enableFloatMock,
     disableFloat: vi.fn(),
     setFloatHours: vi.fn(),
+    setFloatWindow: vi.fn(),
     isFloatingFor: isFloatingForMock,
     state: null,
   }),
@@ -72,7 +73,37 @@ describe('SessionPointTrackerModal float control', () => {
       playerId: 'p1',
       playerName: 'Jane',
       playerIcon: '🐎',
-      hours: 24,
+      window: { mode: 'hours', hours: 24 },
     })
+  })
+
+  it('supports choosing a custom date range', async () => {
+    render(
+      <SessionPointTrackerModal
+        clubId="ABC123"
+        clubName="Test Club"
+        players={players as never}
+        linkedPlayerId="p1"
+        onClose={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Custom' }))
+    expect(screen.getByLabelText('From')).toBeTruthy()
+    expect(screen.getByLabelText('To')).toBeTruthy()
+
+    const start = screen.getByLabelText('From') as HTMLInputElement
+    const end = screen.getByLabelText('To') as HTMLInputElement
+    fireEvent.change(start, { target: { value: '2026-08-01' } })
+    fireEvent.change(end, { target: { value: '2026-08-02' } })
+
+    expect(loadTotalsMock).toHaveBeenCalledWith(
+      'ABC123',
+      expect.objectContaining({
+        mode: 'range',
+        startDate: '2026-08-01',
+        endDate: '2026-08-02',
+      }),
+    )
   })
 })

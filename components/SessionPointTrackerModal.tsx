@@ -8,6 +8,13 @@ import {
   type SessionPointTotal,
   type SessionPointWindowHours,
 } from '@/lib/data'
+import {
+  buildCustomSessionWindow,
+  hoursSessionWindow,
+  sessionWindowPhrase,
+  todayDateInputValue,
+  type SessionPointWindow,
+} from '@/lib/session-point-window'
 import type { PlayerDoc } from '@/lib/types'
 import { useFloatingSessionTracker } from '@/contexts/FloatingSessionTrackerContext'
 
@@ -22,9 +29,14 @@ function formatNet(points: number) {
   return String(points)
 }
 
-function windowPhrase(hours: SessionPointWindowHours) {
-  if (hours === 168) return '7 days'
-  return `${hours} hours`
+function windowScopePhrase(window: SessionPointWindow) {
+  if (window.mode === 'hours') {
+    return `over the last ${sessionWindowPhrase(window)}`
+  }
+  if (window.startDate === window.endDate) {
+    return `on ${window.startDate}`
+  }
+  return `from ${window.startDate} to ${window.endDate}`
 }
 
 function formatPlayedAt(iso: string) {
@@ -58,7 +70,13 @@ export default function SessionPointTrackerModal({
   linkedPlayerId: string | null
   onClose: () => void
 }) {
-  const [hours, setHours] = useState<SessionPointWindowHours>(24)
+  const today = todayDateInputValue()
+  const [window, setWindow] = useState<SessionPointWindow>(() =>
+    hoursSessionWindow(24),
+  )
+  const [customStartDate, setCustomStartDate] = useState(today)
+  const [customEndDate, setCustomEndDate] = useState(today)
+  const [customError, setCustomError] = useState<string | null>(null)
   const [selectedPlayerId, setSelectedPlayerId] = useState(
     linkedPlayerId ?? players[0]?.id ?? '',
   )
@@ -71,7 +89,8 @@ export default function SessionPointTrackerModal({
   const [breakdownError, setBreakdownError] = useState<string | null>(null)
   const { enableFloat, isFloatingFor } = useFloatingSessionTracker()
   const floatingActive =
-    Boolean(selectedPlayerId) && isFloatingFor(clubId, selectedPlayerId, hours)
+    Boolean(selectedPlayerId) && isFloatingFor(clubId, selectedPlayerId, window)
+  const customSelected = window.mode === 'range'
 
   useEffect(() => {
     // Only fill a missing/invalid selection — never override a manual player pick.
@@ -84,7 +103,7 @@ export default function SessionPointTrackerModal({
     let cancelled = false
     setLoading(true)
     setError(null)
-    void loadSessionPointTotals(clubId, hours)
+    void loadSessionPointTotals(clubId, window)
       .then((result) => {
         if (cancelled) return
         setTotals(result.totals)
@@ -103,14 +122,14 @@ export default function SessionPointTrackerModal({
     return () => {
       cancelled = true
     }
-  }, [clubId, hours])
+  }, [clubId, window])
 
   useEffect(() => {
     if (!showBreakdown || !selectedPlayerId) return
     let cancelled = false
     setBreakdownLoading(true)
     setBreakdownError(null)
-    void loadSessionPointBreakdown(clubId, selectedPlayerId, hours)
+    void loadSessionPointBreakdown(clubId, selectedPlayerId, window)
       .then((result) => {
         if (cancelled) return
         setBreakdown(result.games)
@@ -129,7 +148,7 @@ export default function SessionPointTrackerModal({
     return () => {
       cancelled = true
     }
-  }, [clubId, hours, selectedPlayerId, showBreakdown])
+  }, [clubId, window, selectedPlayerId, showBreakdown])
 
   const selectedTotal = useMemo(
     () => totals.find((total) => total.playerId === selectedPlayerId) ?? null,
@@ -145,6 +164,22 @@ export default function SessionPointTrackerModal({
           icon: selectedTotal.icon,
         }
       : null)
+
+  const applyCustomRange = (startDate: string, endDate: string) => {
+    try {
+      const next = buildCustomSessionWindow(startDate, endDate)
+      setCustomError(null)
+      setCustomStartDate(next.startDate)
+      setCustomEndDate(next.endDate)
+      setWindow(next)
+    } catch (nextError) {
+      setCustomError(
+        nextError instanceof Error
+          ? nextError.message
+          : 'Choose a valid date range.',
+      )
+    }
+  }
 
   return (
     <div
@@ -175,8 +210,8 @@ export default function SessionPointTrackerModal({
               Net change this session
             </h3>
             <p className="mt-1 text-sm text-slate-500">
-              Points gained or lost in {clubName} over the last{' '}
-              {windowPhrase(hours)} — not your overall standing.
+              Points gained or lost in {clubName} {windowScopePhrase(window)} —
+              not your overall standing.
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -192,7 +227,7 @@ export default function SessionPointTrackerModal({
                   playerId: selectedPlayer.id,
                   playerName: selectedPlayer.displayName,
                   playerIcon: selectedPlayer.icon,
-                  hours,
+                  window,
                 })
               }}
               className={`min-h-11 rounded-lg border px-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
@@ -216,7 +251,7 @@ export default function SessionPointTrackerModal({
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
           <div
-            className="grid grid-cols-3 gap-2"
+            className="grid grid-cols-2 gap-2 sm:grid-cols-4"
             role="group"
             aria-label="Time window"
           >
@@ -224,11 +259,16 @@ export default function SessionPointTrackerModal({
               <button
                 key={option.hours}
                 type="button"
-                aria-pressed={hours === option.hours}
+                aria-pressed={
+                  window.mode === 'hours' && window.hours === option.hours
+                }
                 data-tour={`session-window-${option.hours}`}
-                onClick={() => setHours(option.hours)}
+                onClick={() => {
+                  setCustomError(null)
+                  setWindow(hoursSessionWindow(option.hours))
+                }}
                 className={`min-h-11 rounded-lg border px-2 text-sm font-black transition ${
-                  hours === option.hours
+                  window.mode === 'hours' && window.hours === option.hours
                     ? 'border-[rgb(var(--bamboo))] bg-[rgb(var(--bamboo))] text-white'
                     : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
                 }`}
@@ -236,7 +276,71 @@ export default function SessionPointTrackerModal({
                 {option.label}
               </button>
             ))}
+            <button
+              type="button"
+              aria-pressed={customSelected}
+              data-tour="session-window-custom"
+              onClick={() => applyCustomRange(customStartDate, customEndDate)}
+              className={`min-h-11 rounded-lg border px-2 text-sm font-black transition ${
+                customSelected
+                  ? 'border-[rgb(var(--bamboo))] bg-[rgb(var(--bamboo))] text-white'
+                  : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              Custom
+            </button>
           </div>
+
+          {customSelected ? (
+            <div
+              className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2"
+              data-tour="session-window-custom-fields"
+            >
+              <label className="block space-y-1">
+                <span className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+                  From
+                </span>
+                <input
+                  type="date"
+                  data-tour="session-window-start"
+                  value={customStartDate}
+                  max={customEndDate || today}
+                  onChange={(event) => {
+                    const nextStart = event.target.value
+                    setCustomStartDate(nextStart)
+                    applyCustomRange(nextStart, customEndDate)
+                  }}
+                  className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+                  To
+                </span>
+                <input
+                  type="date"
+                  data-tour="session-window-end"
+                  value={customEndDate}
+                  min={customStartDate || undefined}
+                  max={today}
+                  onChange={(event) => {
+                    const nextEnd = event.target.value
+                    setCustomEndDate(nextEnd)
+                    applyCustomRange(customStartDate, nextEnd)
+                  }}
+                  className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900"
+                />
+              </label>
+              {customError ? (
+                <p
+                  role="alert"
+                  className="sm:col-span-2 text-sm font-bold text-rose-700"
+                >
+                  {customError}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
           {players.length === 0 ? (
             <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm font-semibold text-slate-600">
@@ -309,8 +413,8 @@ export default function SessionPointTrackerModal({
               </p>
               <p className="mt-2 text-sm font-semibold text-slate-500">
                 net change · {selectedTotal?.games ?? 0} game
-                {(selectedTotal?.games ?? 0) === 1 ? '' : 's'} in the last{' '}
-                {windowPhrase(hours)}
+                {(selectedTotal?.games ?? 0) === 1 ? '' : 's'}{' '}
+                {windowScopePhrase(window)}
               </p>
               <button
                 type="button"
@@ -337,8 +441,8 @@ export default function SessionPointTrackerModal({
                   Game summary
                 </h4>
                 <p className="mt-1 text-sm text-slate-500">
-                  Each hand&apos;s point change for {selectedPlayer?.displayName} in
-                  the last {windowPhrase(hours)}.
+                  Each hand&apos;s point change for {selectedPlayer?.displayName}{' '}
+                  {windowScopePhrase(window)}.
                 </p>
               </div>
               {breakdownError ? (

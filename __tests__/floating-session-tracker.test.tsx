@@ -1,5 +1,6 @@
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { hoursSessionWindow } from '@/lib/session-point-window'
 
 const { loadSessionPointTotalsMock } = vi.hoisted(() => ({
   loadSessionPointTotalsMock: vi.fn(),
@@ -38,7 +39,9 @@ function Probe() {
     <div>
       <p data-testid="enabled">{String(Boolean(state?.enabled))}</p>
       <p data-testid="club">{state?.clubId ?? ''}</p>
-      <p data-testid="hours">{String(state?.hours ?? '')}</p>
+      <p data-testid="hours">
+        {state?.window.mode === 'hours' ? String(state.window.hours) : ''}
+      </p>
       <p data-testid="match">
         {String(isFloatingFor('ABC123', 'p1', 24))}
       </p>
@@ -51,7 +54,7 @@ function Probe() {
             playerId: 'p1',
             playerName: 'Jane',
             playerIcon: '🐎',
-            hours: 24,
+            window: hoursSessionWindow(24),
           })
         }
       >
@@ -95,7 +98,7 @@ describe('FloatingSessionTrackerContext', () => {
     expect(screen.getByTestId('hours').textContent).toBe('24')
     expect(screen.getByTestId('match').textContent).toBe('true')
     expect(
-      window.localStorage.getItem('mahjong:floating-session-tracker:v1'),
+      window.localStorage.getItem('mahjong:floating-session-tracker:v2'),
     ).toContain('ABC123')
 
     await act(async () => {
@@ -104,7 +107,7 @@ describe('FloatingSessionTrackerContext', () => {
 
     expect(screen.getByTestId('hours').textContent).toBe('48')
     expect(
-      window.localStorage.getItem('mahjong:floating-session-tracker:v1'),
+      window.localStorage.getItem('mahjong:floating-session-tracker:v2'),
     ).toContain('"hours":48')
 
     await act(async () => {
@@ -113,7 +116,7 @@ describe('FloatingSessionTrackerContext', () => {
 
     expect(screen.getByTestId('enabled').textContent).toBe('false')
     expect(
-      window.localStorage.getItem('mahjong:floating-session-tracker:v1'),
+      window.localStorage.getItem('mahjong:floating-session-tracker:v2'),
     ).toBeNull()
   })
 })
@@ -122,6 +125,7 @@ describe('FloatingSessionTracker visibility', () => {
   beforeEach(() => {
     window.localStorage.clear()
     loadSessionPointTotalsMock.mockResolvedValue({
+      window: hoursSessionWindow(24),
       hours: 24,
       totals: [
         {
@@ -169,7 +173,7 @@ describe('FloatingSessionTracker visibility', () => {
 
   it('opens window options and updates the tag on select', async () => {
     window.localStorage.setItem(
-      'mahjong:floating-session-tracker:v1',
+      'mahjong:floating-session-tracker:v2',
       JSON.stringify({
         enabled: true,
         clubId: 'ABC123',
@@ -177,11 +181,12 @@ describe('FloatingSessionTracker visibility', () => {
         playerId: 'p1',
         playerName: 'Jane',
         playerIcon: '🐎',
-        hours: 24,
+        window: hoursSessionWindow(24),
       }),
     )
     loadSessionPointTotalsMock
       .mockResolvedValueOnce({
+        window: hoursSessionWindow(24),
         hours: 24,
         totals: [
           {
@@ -194,6 +199,7 @@ describe('FloatingSessionTracker visibility', () => {
         ],
       })
       .mockResolvedValue({
+        window: hoursSessionWindow(48),
         hours: 48,
         totals: [
           {
@@ -226,8 +232,11 @@ describe('FloatingSessionTracker visibility', () => {
     expect(screen.queryByLabelText('Session window')).toBeNull()
     expect(await screen.findByText('48h')).toBeTruthy()
     expect(
-      window.localStorage.getItem('mahjong:floating-session-tracker:v1'),
+      window.localStorage.getItem('mahjong:floating-session-tracker:v2'),
     ).toContain('"hours":48')
-    expect(loadSessionPointTotalsMock).toHaveBeenCalledWith('ABC123', 48)
+    expect(loadSessionPointTotalsMock).toHaveBeenCalledWith(
+      'ABC123',
+      hoursSessionWindow(48),
+    )
   })
 })

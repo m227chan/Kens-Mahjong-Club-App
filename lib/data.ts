@@ -54,6 +54,7 @@ export type SessionPointTotal = import('@/lib/supabase-data').SessionPointTotal
 export type SessionPointGameRow = import('@/lib/supabase-data').SessionPointGameRow
 export type SessionPointWindowHours =
   import('@/lib/supabase-data').SessionPointWindowHours
+export type SessionPointWindow = import('@/lib/supabase-data').SessionPointWindow
 
 export const claimMingWelcome = backend.claimMingWelcome
 
