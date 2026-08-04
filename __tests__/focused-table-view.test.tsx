@@ -36,7 +36,13 @@ const context = {
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }))
 vi.mock('@/contexts/AuthContext', () => ({
-  useAuth: () => ({ user: { uid: 'user-1' }, loading: false }),
+  useAuth: () => ({
+    user: { uid: 'user-1' },
+    loading: false,
+    signingIn: false,
+    signInWithGoogle: vi.fn(),
+    signOut: vi.fn(),
+  }),
 }))
 vi.mock('@/contexts/SoundContext', () => ({
   useSound: () => ({ play: playMock }),
@@ -45,13 +51,20 @@ vi.mock('@/contexts/GameSyncContext', () => ({
   useGameSync: () => ({ saveGame: createGameMock }),
 }))
 vi.mock('@/lib/data', () => ({
+  requestToJoinClub: vi.fn(),
   subscribeActiveSession: vi.fn(() => () => undefined),
   subscribePlayers: vi.fn(() => () => undefined),
   subscribeScoringRules: vi.fn(() => () => undefined),
 }))
+vi.mock('@/lib/guest-table-session', () => ({
+  clearGuestTableSession: vi.fn(),
+  exitGuestTableToLogin: vi.fn(),
+  guestSessionMatches: vi.fn(() => false),
+}))
 vi.mock('@/lib/table-checkin-client', () => ({
   tableAction: tableActionMock,
   generateTableQr: vi.fn(),
+  createGuestGame: vi.fn(),
 }))
 
 import FocusedTableView from '@/components/FocusedTableView'

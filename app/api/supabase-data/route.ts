@@ -4,6 +4,10 @@ import { adminAuth } from '@/lib/firebase-admin'
 import { withTransaction } from '@/lib/postgres-admin'
 import { normalizeSessionLayout } from '@/lib/session-layout'
 import { apiError, bearerToken, jsonObject } from '@/lib/server/api'
+import {
+  assertGuestTableScope,
+  resolveAuthCaller,
+} from '@/lib/server/auth-caller'
 import { mutateSupabaseGames } from '@/lib/server/supabase-game-management'
 import {
   CREATED_CLUB_LIMIT_MESSAGE,
@@ -11,6 +15,12 @@ import {
 } from '@/lib/club-limits'
 import { validateScoringRules } from '@/lib/scoring-rules'
 import { DEFAULT_TITLE_RULES, validateTitleRules } from '@/lib/title-rules'
+import { isGuestTableToken } from '@/lib/guest-table-token'
+import {
+  loadSessionPointBreakdown,
+  loadSessionPointTotals,
+  normalizeSessionPointHours,
+} from '@/lib/server/session-points'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -25,7 +35,34 @@ const grantId = (club: string, email: string) =>
 
 export async function POST(request: NextRequest) {
   try {
-    const caller = await adminAuth.verifyIdToken(bearerToken(request))
+    const rawToken = bearerToken(request)
+    if (isGuestTableToken(rawToken)) {
+      const caller = await resolveAuthCaller(request)
+      if (caller.kind !== 'guest')
+        throw new Error('Guest access is invalid or expired.')
+      const body = (await jsonObject(request, 2 * 1024 * 1024)) as Record<
+        string,
+        any
+      >
+      const action = String(body.action ?? '')
+      if (action !== 'createGame')
+        throw new Error('Guests can only record games for their table.')
+      const clubId = String(body.clubId ?? '')
+        .trim()
+        .toUpperCase()
+      const tableId = Number(body.input?.tableId)
+      assertGuestTableScope(caller, clubId, tableId)
+      const result = await mutateSupabaseGames({
+        callerUid: caller.uid,
+        clubId,
+        action: 'create',
+        game: body.input,
+        guestTableNumber: caller.tableNumber,
+      })
+      return NextResponse.json({ result: result.gameId })
+    }
+
+    const caller = await adminAuth.verifyIdToken(rawToken)
     const body = (await jsonObject(request, 2 * 1024 * 1024)) as Record<
       string,
       any
@@ -605,6 +642,31 @@ export async function POST(request: NextRequest) {
           ],
         )
         return null
+      }
+      if (action === 'sessionPointTotals') {
+        const clubId = String(body.clubId ?? '')
+          .trim()
+          .toUpperCase()
+        await requireMember(clubId)
+        const hours = normalizeSessionPointHours(body.hours)
+        return {
+          hours,
+          totals: await loadSessionPointTotals(db, clubId, hours),
+        }
+      }
+      if (action === 'sessionPointBreakdown') {
+        const clubId = String(body.clubId ?? '')
+          .trim()
+          .toUpperCase()
+        const playerId = String(body.playerId ?? '').trim()
+        if (!playerId) throw new Error('Choose a player to view the breakdown.')
+        await requireMember(clubId)
+        const hours = normalizeSessionPointHours(body.hours)
+        return {
+          hours,
+          playerId,
+          games: await loadSessionPointBreakdown(db, clubId, playerId, hours),
+        }
       }
       throw new Error(`Unsupported Supabase action: ${action}`)
     })

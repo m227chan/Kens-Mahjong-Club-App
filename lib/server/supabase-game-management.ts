@@ -1122,18 +1122,41 @@ export async function mutateSupabaseGames(input: {
   gameId?: string
   game?: GameInput
   games?: GameInput[]
+  guestTableNumber?: number
 }) {
   const clubId = input.clubId.trim().toUpperCase()
   return withTransaction(async (client) => {
     await client.query("select set_config('app.actor_uid', $1, true)", [
       input.callerUid,
     ])
-    const role = await requireAccess(
-      client,
-      clubId,
-      input.callerUid,
-      ['delete', 'import', 'rebuild'].includes(input.action),
-    )
+    if (input.guestTableNumber != null) {
+      if (input.action !== 'create' || !input.game)
+        throw new Error('Guests can only record games for their table.')
+      const tableId = Number(input.game.tableId)
+      if (
+        !Number.isInteger(tableId) ||
+        tableId !== Math.min(99, Math.max(1, Math.floor(input.guestTableNumber)))
+      ) {
+        throw new Error('Guest access is limited to one table.')
+      }
+      const session = await client.query(
+        'select table_count from sessions where club_id=$1 and is_active limit 1',
+        [clubId],
+      )
+      if (!session.rowCount || tableId > Number(session.rows[0].table_count))
+        throw new Error(
+          'That table is no longer available. Ask a club member to start a session.',
+        )
+    }
+    const role =
+      input.guestTableNumber != null
+        ? ('member' as const)
+        : await requireAccess(
+            client,
+            clubId,
+            input.callerUid,
+            ['delete', 'import', 'rebuild'].includes(input.action),
+          )
     const incrementalCreate =
       input.action === 'create' &&
       input.game != null &&

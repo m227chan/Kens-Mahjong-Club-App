@@ -20,6 +20,7 @@ const GUIDE_SECTIONS = [
   { icon: '🎴', title: 'Recording a Game', body: 'Once a table has 4 players it shows ✓ Ready. After a game finishes, tap Winner... to record who won, the win type (self-draw or discard), and the fan count. Or tap Draw if no one won.' },
   { icon: '🧮', title: 'Fan Scoring', body: 'Scores use this club’s fan range and base-point mapping. Self-draw: the winner gets 3× base and each loser pays 1× base. Discard win: the winner gets 2× base, the discarder pays 2× base, and the other players pay nothing.', fanMap: true },
   { icon: '⚙️', title: 'Edit / Clear All Tables / Reset', body: 'Edit lets you change which players are in the session or the number of tables. Clear All Tables moves everyone back to the sideline without ending the session. Reset Session wipes everything and starts fresh.' },
+  { icon: '⏱️', title: 'Session tracker', body: 'Open Session tracker from the club workspace to see net point change over the last 24 hours, 48 hours, or 7 days—not season standings. Choose a player (defaults to your linked profile), use View more for a game-by-game breakdown, and press Float to pin a compact chip on this club’s pages. Tap the chip to switch windows; × turns floating off. The float stays for that club until you dismiss it or sign out.' },
   { icon: '🏆', title: 'Standings', body: 'The leaderboard recalculates from the selected season’s game records. Points preserve raw scores, while Skill estimates playing strength with experience and uncertainty built in.' },
   { icon: '📈', title: 'Analytics', body: 'Analytics shows score and Skill movement over time. Its Metric Definitions link explains every number in plain language.' },
   { icon: '🗂️', title: 'Game logs', body: 'Game logs are the record-level source of truth, with newest games first. Members can correct games they created for 24 hours. Managers can correct or delete any record; standings and analytics then recalculate.' },
@@ -47,6 +48,9 @@ const TOUR_STEPS: TourStep[] = [
   { selector: '[data-tour="club-header"]', title: 'The club workspace', body: 'This header identifies the current club and keeps its season, roster, analytics, game logs, player network, share ID, and manager settings together.', action: 'next' },
   { selector: '[data-tour="season-selector"]', title: 'Seasons are chapters', body: 'Switch seasons to review a different chapter of standings and history. Starting a new season is a manager action in Settings; the tour will not change it.', action: 'next' },
   { selector: '[data-tour="session-manager"]', title: 'Run the live session here', body: 'Choose attendees and tables, seat players from the sideline, then record a winner or draw. Four players make a table ready. Ming will not start a session or record a game.', action: 'next' },
+  { selector: '[data-tour="session-tracker-open"]', title: 'Open the session tracker', body: 'Session tracker shows net points over a short window—24 hours, 48 hours, or 7 days—separate from season standings.', action: 'click', instruction: 'Click Session tracker.' },
+  { selector: '[data-tour="session-tracker-modal"]', title: 'Track tonight’s net change', body: 'Pick a window and player, open View more for a game breakdown, and use Float to pin a compact chip on this club’s pages. Tap the chip later to switch windows. Ming will not change selections or pin the float for you.', action: 'next' },
+  { selector: '[data-tour="session-tracker-close"]', title: 'Return to the workspace', body: 'Close the session tracker to continue.', action: 'click', instruction: 'Click Close.' },
   { selector: '[data-tour="roster-open"], [data-tour="roster-tab"]', clickTarget: 'roster-open', intermediateTarget: 'roster-tab', title: 'Open the real roster', body: 'The roster manages tracked players, account links, emojis, names, and manager access. On mobile, open the Roster tab first, then use Manage players.', action: 'responsive', instruction: 'On mobile, tap Roster and then Manage players. On desktop, click Roster.' },
   { selector: '[data-tour="roster-modal"]', title: 'Roster and linked users', body: 'Members can link themselves to one available player. Managers also see player and manager controls. Nothing is changed unless you deliberately use one of those controls.', action: 'next' },
   { selector: '[data-tour="roster-close"]', title: 'Return to the workspace', body: 'Close the real roster to continue.', action: 'click', instruction: 'Click Close.' },
@@ -170,12 +174,14 @@ export default function AppGuide() {
 
     // Restore UI that a forward-only step changed before returning to its control.
     if (stepIndex === 5) router.push('/')
-    if (stepIndex === 9) clickTourElement('roster-close')
-    if (stepIndex === 11) clickTourElement('roster-open')
-    if (stepIndex === 13) clickTourElement('analytics-close')
-    if (stepIndex === 16) clickTourElement('logs-close')
-    if (stepIndex === 19) clickTourElement('network-close')
-    if (stepIndex === 22) clickTourElement('settings-close')
+    if (stepIndex === 9) clickTourElement('session-tracker-close')
+    if (stepIndex === 11) clickTourElement('session-tracker-open')
+    if (stepIndex === 12) clickTourElement('roster-close')
+    if (stepIndex === 14) clickTourElement('roster-open')
+    if (stepIndex === 16) clickTourElement('analytics-close')
+    if (stepIndex === 19) clickTourElement('logs-close')
+    if (stepIndex === 22) clickTourElement('network-close')
+    if (stepIndex === 25) clickTourElement('settings-close')
 
     setStepIndex((current) => Math.max(0, current - 1))
   }, [clickTourElement, router, stepIndex])

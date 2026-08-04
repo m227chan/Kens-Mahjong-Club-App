@@ -4,6 +4,9 @@ import { randomBytes } from 'node:crypto'
 import type { PoolClient } from 'pg'
 import { normalizeSessionLayout } from '@/lib/session-layout'
 import { verifyTableQr } from '@/lib/qr-signing'
+import { scoringRulesFromRow } from '@/lib/scoring-rules'
+import type { AuthCaller } from '@/lib/server/auth-caller'
+import { assertGuestTableScope } from '@/lib/server/auth-caller'
 
 type Caller = {
   uid: string
@@ -253,13 +256,66 @@ export async function requestQrEnrollment(
   }
 }
 
+async function loadScoringRules(db: PoolClient, clubId: string) {
+  const config = (
+    await db.query(
+      'select scoring_min_fan, scoring_max_fan, fan_points from app_configs where club_id=$1',
+      [clubId],
+    )
+  ).rows[0]
+  return scoringRulesFromRow(config)
+}
+
 export async function getTableContext(
   db: PoolClient,
-  caller: Caller,
+  caller: AuthCaller | Caller,
   clubId: string,
   tableNumber: number,
 ) {
   await clearStaleTables(db)
+  const normalizedClub = clubId.trim().toUpperCase()
+  const normalizedTable = Math.min(99, Math.max(1, Math.floor(tableNumber || 1)))
+  const authCaller = caller as AuthCaller
+  const isGuest = 'kind' in authCaller && authCaller.kind === 'guest'
+
+  if (isGuest) {
+    assertGuestTableScope(authCaller, normalizedClub, normalizedTable)
+    const context = (
+      await db.query(
+        `select c.name,c.active_season_number,
+          (select to_jsonb(s) from sessions s where s.club_id=c.id and s.is_active limit 1) active_session,
+          coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'displayName',p.display_name,'icon',p.icon,'authUid',p.auth_uid) order by p.display_name)
+            from players p where p.club_id=c.id and p.active),'[]'::jsonb) players
+         from clubs c
+         where c.id=$1 and c.active`,
+        [normalizedClub],
+      )
+    ).rows[0]
+    if (!context) throw new Error('No club found with that ID.')
+    const session = sessionPayload(context.active_session as SessionRow | undefined)
+    if (!session || normalizedTable > session.tableCount) {
+      throw new Error(
+        'That table is no longer available. Ask a club member to start a session, then try again.',
+      )
+    }
+    const players = context.players as Awaited<ReturnType<typeof roster>>
+    return {
+      clubId: normalizedClub,
+      clubName: String(context.name),
+      seasonNumber: Number(context.active_season_number),
+      tableNumber: normalizedTable,
+      session,
+      players,
+      linkedPlayer: null,
+      scoringRules: await loadScoringRules(db, normalizedClub),
+      guest: true as const,
+    }
+  }
+
+  const memberUid =
+    'kind' in authCaller && authCaller.kind === 'member'
+      ? authCaller.uid
+      : (caller as Caller).uid
   const context = (
     await db.query(
       `select c.name,c.active_season_number,
@@ -268,20 +324,22 @@ export async function getTableContext(
           from players p where p.club_id=c.id and p.active),'[]'::jsonb) players
        from clubs c join club_members m on m.club_id=c.id and m.firebase_uid=$2 and m.active
        where c.id=$1 and c.active`,
-      [clubId, caller.uid],
+      [normalizedClub, memberUid],
     )
   ).rows[0]
   if (!context) throw new Error('You are not an active member of this club.')
   const players = context.players as Awaited<ReturnType<typeof roster>>
   return {
-    clubId,
+    clubId: normalizedClub,
     clubName: String(context.name),
     seasonNumber: Number(context.active_season_number),
-    tableNumber: Math.min(99, Math.max(1, Math.floor(tableNumber || 1))),
+    tableNumber: normalizedTable,
     session: sessionPayload(context.active_session as SessionRow | undefined),
     players,
     linkedPlayer:
-      players.find((player) => player.authUid === caller.uid) ?? null,
+      players.find((player) => player.authUid === memberUid) ?? null,
+    scoringRules: await loadScoringRules(db, normalizedClub),
+    guest: false as const,
   }
 }
 
@@ -405,7 +463,7 @@ async function markCleared(
 
 export async function mutateTable(
   db: PoolClient,
-  caller: Caller,
+  caller: AuthCaller | Caller,
   input: {
     action: MutationAction
     clubId: string
@@ -414,19 +472,55 @@ export async function mutateTable(
     replacePlayerId?: string
   },
 ) {
-  const { clubId } = input
+  const clubId = input.clubId.trim().toUpperCase()
   const requestedPlayerId = input.playerId ?? ''
-  const state = (
-    await db.query(
-      `select c.active_season_number,
-        (select p.id from players p where p.club_id=c.id and p.auth_uid=$2 and p.active limit 1) linked_player_id,
-        case when $3='' then true else exists(select 1 from players p where p.club_id=c.id and p.id=$3 and p.active) end player_available
-       from clubs c join club_members m on m.club_id=c.id and m.firebase_uid=$2 and m.active
-       where c.id=$1 and c.active`,
-      [clubId, caller.uid, requestedPlayerId],
+  const authCaller = caller as AuthCaller
+  const isGuest = 'kind' in authCaller && authCaller.kind === 'guest'
+  const targetTable = Math.min(
+    99,
+    Math.max(1, Math.floor(Number(input.tableNumber) || 1)),
+  )
+
+  if (isGuest) {
+    assertGuestTableScope(authCaller, clubId, targetTable)
+    if (!['seat', 'remove', 'clear'].includes(input.action))
+      throw new Error('Guests can only seat players, remove players, or clear this table.')
+  }
+
+  const memberUid = isGuest
+    ? null
+    : 'kind' in authCaller && authCaller.kind === 'member'
+      ? authCaller.uid
+      : (caller as Caller).uid
+
+  const state = isGuest
+    ? (
+        await db.query(
+          `select c.active_season_number,
+            null::text linked_player_id,
+            case when $2='' then true else exists(select 1 from players p where p.club_id=c.id and p.id=$2 and p.active) end player_available
+           from clubs c
+           where c.id=$1 and c.active`,
+          [clubId, requestedPlayerId],
+        )
+      ).rows[0]
+    : (
+        await db.query(
+          `select c.active_season_number,
+            (select p.id from players p where p.club_id=c.id and p.auth_uid=$2 and p.active limit 1) linked_player_id,
+            case when $3='' then true else exists(select 1 from players p where p.club_id=c.id and p.id=$3 and p.active) end player_available
+           from clubs c join club_members m on m.club_id=c.id and m.firebase_uid=$2 and m.active
+           where c.id=$1 and c.active`,
+          [clubId, memberUid, requestedPlayerId],
+        )
+      ).rows[0]
+  if (!state) {
+    throw new Error(
+      isGuest
+        ? 'No club found with that ID.'
+        : 'You are not an active member of this club.',
     )
-  ).rows[0]
-  if (!state) throw new Error('You are not an active member of this club.')
+  }
   await db.query('select pg_advisory_xact_lock(hashtext($1))', [
     `session:${clubId}`,
   ])
@@ -438,13 +532,10 @@ export async function mutateTable(
       [clubId],
     )
   ).rows[0]
-  const targetTable = Math.min(
-    99,
-    Math.max(1, Math.floor(Number(input.tableNumber) || 1)),
-  )
 
   let playerId = input.playerId
   if (input.action === 'checkIn') {
+    if (isGuest) throw new Error('Guests cannot check in as a player.')
     playerId = String(state.linked_player_id ?? '')
     if (!playerId)
       throw new Error('Link or create your roster player before checking in.')
@@ -453,6 +544,8 @@ export async function mutateTable(
   if (!row && input.action !== 'checkIn')
     throw new Error('Start or join a session before changing this table.')
   if (!row) {
+    if (isGuest)
+      throw new Error('No active session. Ask a club member to start one first.')
     const tables = ensureTables(targetTable, {
       [String(targetTable)]: [playerId!],
     })
@@ -462,7 +555,7 @@ export async function mutateTable(
       values($1,$2,$3,$4,$5,$6,'{}',1) returning *`,
         [
           clubId,
-          caller.uid,
+          memberUid,
           seasonNumber,
           targetTable,
           [playerId],
@@ -474,10 +567,18 @@ export async function mutateTable(
     return { status: 'ok' as const, session: sessionPayload(row) }
   }
 
+  if (isGuest && targetTable > Number(row.table_count)) {
+    throw new Error(
+      'That table is no longer available. Ask a club member to add it to the session.',
+    )
+  }
+
   if (
     Number(row.season_number) !== seasonNumber &&
     input.action === 'checkIn'
   ) {
+    if (isGuest)
+      throw new Error('No active session. Ask a club member to start one first.')
     await db.query(
       'update sessions set is_active=false,closed_at=coalesce(closed_at,now()) where id=$1',
       [row.id],
@@ -491,7 +592,7 @@ export async function mutateTable(
       values($1,$2,$3,$4,$5,$6,'{}',1) returning *`,
         [
           clubId,
-          caller.uid,
+          memberUid,
           seasonNumber,
           targetTable,
           [playerId],
@@ -503,7 +604,9 @@ export async function mutateTable(
     return { status: 'ok' as const, session: sessionPayload(row) }
   }
 
-  const nextCount = Math.max(Number(row.table_count), targetTable)
+  const nextCount = isGuest
+    ? Number(row.table_count)
+    : Math.max(Number(row.table_count), targetTable)
   const participants = [
     ...new Set(((row.participants as string[]) ?? []).map(String)),
   ]
@@ -517,6 +620,7 @@ export async function mutateTable(
   let sideline = [...new Set(normalized.sideline)]
 
   if (input.action === 'clearAll') {
+    if (isGuest) throw new Error('Guests cannot clear every table.')
     for (const [key, occupants] of Object.entries(tables)) {
       sideline = [...new Set([...sideline, ...occupants])]
       tables[key] = []

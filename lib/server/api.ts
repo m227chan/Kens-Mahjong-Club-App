@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const DEFAULT_BODY_LIMIT = 64 * 1024
 
-class ApiError extends Error {
+export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
