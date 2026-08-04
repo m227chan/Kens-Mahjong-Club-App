@@ -75,8 +75,8 @@ describe('Mahjong hand wiki', () => {
       'winning-methods': 1120,
       'suit-based-hands': 1460,
     }
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
-      const top = topBySection[(this as HTMLElement).id] ?? 2_000
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const top = topBySection[this.id] ?? 2_000
       return {
         top,
         bottom: top + 320,
