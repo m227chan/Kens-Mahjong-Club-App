@@ -37,6 +37,8 @@ import {
   type SessionPointWindow,
 } from '@/lib/session-point-window'
 
+export type { SessionPointWindow }
+
 type UserLike = {
   uid: string
   email: string | null
@@ -796,8 +798,6 @@ export const ensureConfig = (clubId: string) =>
   serverAction<void>('ensureConfig', { clubId })
 
 export type SessionPointWindowHours = 24 | 48 | 168
-export type SessionPointWindow =
-  import('@/lib/session-point-window').SessionPointWindow
 export type SessionPointTotal = {
   playerId: string
   displayName: string
