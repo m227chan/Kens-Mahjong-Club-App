@@ -382,7 +382,7 @@ export default function WikiPage() {
                   <StaticMahjongTile id="c3" size={52} />
                   <StaticMahjongTile id="c4" size={52} />
                 </div>
-                <span className="wiki-basics-label">Chow (Set 1)</span>
+                <span className="wiki-basics-label">Sheung (Set 1)</span>
               </div>
               <div className="wiki-basics-example-group">
                 <div className="wiki-hand-tile-group">
@@ -390,7 +390,7 @@ export default function WikiPage() {
                   <StaticMahjongTile id="b5" size={52} />
                   <StaticMahjongTile id="b6" size={52} />
                 </div>
-                <span className="wiki-basics-label">Chow (Set 2)</span>
+                <span className="wiki-basics-label">Sheung (Set 2)</span>
               </div>
               <div className="wiki-basics-example-group">
                 <div className="wiki-hand-tile-group">
@@ -398,7 +398,7 @@ export default function WikiPage() {
                   <StaticMahjongTile id="o7" size={52} />
                   <StaticMahjongTile id="o8" size={52} />
                 </div>
-                <span className="wiki-basics-label">Chow (Set 3)</span>
+                <span className="wiki-basics-label">Sheung (Set 3)</span>
               </div>
               <div className="wiki-basics-example-group">
                 <div className="wiki-hand-tile-group">
