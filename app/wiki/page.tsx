@@ -26,7 +26,7 @@ import {
 
 const TILE_CATEGORIES = [
   {
-    heading: 'Character suit',
+    heading: 'Character /  suit',
     description: 'The character suit (萬) is a numbered suit running from 1 through 9.',
     ids: characterTileIds,
   },
@@ -36,7 +36,7 @@ const TILE_CATEGORIES = [
     ids: circleTileIds,
   },
   {
-    heading: 'Bamboo suit',
+    heading: 'Bamboo / Stick suit',
     description: 'The bamboo suit runs from 1 through 9.',
     ids: bambooTileIds,
   },
@@ -420,7 +420,7 @@ export default function WikiPage() {
 
           <div className="wiki-basics-terms-grid">
             <div className="wiki-basics-term-card">
-              <h4>Chow (Sequence)</h4>
+              <h4>Sheung / Chow (Sequence)</h4>
               <p>3 consecutive numbered tiles in the same suit (e.g. 2-3-4 of Characters). Honors cannot make chows.</p>
             </div>
             <div className="wiki-basics-term-card">
