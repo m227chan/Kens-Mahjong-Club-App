@@ -98,7 +98,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
   const [toast, setToast] = useState<string | null>(null)
   const [flash, setFlash] = useState<ScoreCelebrationResult | null>(null)
   const [collapsedTables, setCollapsedTables] = useState<Record<string, boolean>>({})
-  const [sidelineCollapsed, setSidelineCollapsed] = useState(false)
+  const [sidelineCollapsed, setSidelineCollapsed] = useState(true)
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
   const [savingSession, setSavingSession] = useState(false)
   const [qrAutoEnroll, setQrAutoEnroll] = useState<boolean | null>(null)
@@ -111,6 +111,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
   const confirmedSessionRef = useRef<SessionState>(initialSession)
   const pendingLayoutMutationsRef = useRef(0)
   const layoutMutationQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const initializedSessionLayoutRef = useRef('')
 
   const showSession = useCallback((next: SessionState) => {
     sessionRef.current = next
@@ -245,6 +246,36 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
   const sessionTables = useMemo(() => {
     return Array.from({ length: session.tableCount }, (_, index) => session.tables[String(index + 1)] ?? [])
   }, [session.tableCount, session.tables])
+
+  const linkedSessionPlayerId = useMemo(() => {
+    if (!user) return null
+    return players.find((player) => player.authUid === user.uid && session.participants.includes(player.id))?.id ?? null
+  }, [players, session.participants, user])
+
+  const currentUserTableId = useMemo(() => {
+    if (!linkedSessionPlayerId) return null
+    const table = Object.entries(session.tables).find(([, playerIds]) => playerIds.includes(linkedSessionPlayerId))
+    return table?.[0] ?? null
+  }, [linkedSessionPlayerId, session.tables])
+
+  useEffect(() => {
+    if (!session.active || session.tableCount < 1) return
+    const layoutKey = `${session.id ?? 'active'}:${session.tableCount}:${currentUserTableId ?? 'none'}`
+    if (initializedSessionLayoutRef.current === layoutKey) return
+    initializedSessionLayoutRef.current = layoutKey
+
+    if (session.tableCount >= 5) {
+      setCollapsedTables(Object.fromEntries(
+        Array.from({ length: session.tableCount }, (_, index) => {
+          const tableId = String(index + 1)
+          return [tableId, tableId !== currentUserTableId]
+        }),
+      ))
+    } else {
+      setCollapsedTables({})
+    }
+    setSidelineCollapsed(true)
+  }, [currentUserTableId, session.active, session.id, session.tableCount])
 
   const assignedTablePlayers = sessionTables.flat()
   const sessionSideline = session.sideline || []
@@ -586,6 +617,18 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
     setSidelineCollapsed((current) => !current)
   }
 
+  const jumpToTable = (tableId: string) => {
+    setTableSearch('')
+    setCollapsedTables((current) => ({ ...current, [tableId]: false }))
+    window.setTimeout(() => {
+      const table = document.getElementById(`table-${tableId}`)
+      if (!table) return
+      const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+      table.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' })
+      table.querySelector<HTMLElement>('.table-name')?.focus({ preventScroll: true })
+    }, 40)
+  }
+
   const openPicker = (tableId: string) => {
     setPickerTableId(tableId)
     setPickerSearch('')
@@ -821,6 +864,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
   const handleDragStart = (event: React.DragEvent<HTMLDivElement>, playerId: string, source: string) => {
     dragPlayerRef.current = playerId
     dragSourceRef.current = source
+    if (source !== 'sideline') setSidelineCollapsed(false)
     const chip = event.currentTarget.closest('.player-chip')
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('text/plain', playerId)
@@ -949,24 +993,38 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
       const tableId = String(index + 1)
       const isValid = playersOnTable.length === 4
       const tableName = `Table ${tableId}`
+      const isCurrentUserTable = tableId === currentUserTableId
+      const isCollapsed = Boolean(collapsedTables[tableId])
       const visible = filteredTableCards.find((item) => item.tableId === tableId)?.visible ?? true
       if (!visible) return null
 
       return (
-        <div key={tableId} className={`table-card${isValid ? ' valid' : ''}`} id={`table-${tableId}`}>
+        <div key={tableId} className={`table-card${isValid ? ' valid' : ''}${isCurrentUserTable ? ' is-current-user-table' : ''}${isCollapsed ? ' is-collapsed' : ''}`} id={`table-${tableId}`}>
           {playersOnTable.length > 0 ? (
             <button className="clear-table-btn" type="button" onClick={() => clearSingleTable(tableId)} aria-label={`Clear ${tableName}`}>✕</button>
           ) : null}
           <div className="table-header">
-            <button
-              type="button"
-              className="table-name"
-              onClick={() => toggleTable(tableId)}
-              aria-expanded={!collapsedTables[tableId]}
-              aria-controls={`tableBody-${tableId}`}
-            >
-              🀄 {tableName}
-            </button>
+            <div className="table-title-block">
+              <div className="table-title-line">
+                <button
+                  type="button"
+                  className="table-name"
+                  onClick={() => toggleTable(tableId)}
+                  aria-expanded={!isCollapsed}
+                  aria-controls={`tableBody-${tableId}`}
+                >
+                  {tableName}
+                </button>
+                {isCurrentUserTable ? <span className="table-you-badge">Your table</span> : null}
+              </div>
+              {isCollapsed ? (
+                <span className="table-player-preview">
+                  {playersOnTable.length > 0
+                    ? playersOnTable.map((playerId) => `${playerInfo(playerId).icon ?? ''} ${shortName(playerInfo(playerId).displayName)}`).join(' · ')
+                    : 'Empty table'}
+                </span>
+              ) : null}
+            </div>
             <span className={`table-status ${isValid ? 'valid' : 'waiting'}`}>
               {isValid ? '✓ Ready' : `${playersOnTable.length}/4`}
             </span>
@@ -991,13 +1049,13 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
               type="button"
               id={`tableChevron-${tableId}`}
               onClick={() => toggleTable(tableId)}
-              aria-label={collapsedTables[tableId] ? `Expand ${tableName}` : `Collapse ${tableName}`}
+              aria-label={isCollapsed ? `Expand ${tableName}` : `Collapse ${tableName}`}
               style={{ fontSize: 10, color: 'var(--gray)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
             >
               {collapsedTables[tableId] ? '▼' : '▲'}
             </button>
           </div>
-          <div id={`tableBody-${tableId}`} style={{ display: collapsedTables[tableId] ? 'none' : undefined }}>
+          <div id={`tableBody-${tableId}`} style={{ display: isCollapsed ? 'none' : undefined }}>
             <div
               className="table-seats"
               id={`seats-${tableId}`}
@@ -1103,7 +1161,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           justify-content: space-between;
           position: sticky;
           top: 0;
-          z-index: 100;
+          z-index: 1;
           border: 1px solid #e2e8f0;
           border-radius: 10px 10px 0 0;
           box-shadow: 0 1px 3px rgba(15,23,42,0.08);
@@ -1725,8 +1783,8 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           transform: scale(1.08);
         }
         /* Clubhouse session system */
-        .session-manager { color:rgb(var(--ink)); font-family:var(--font-sans),sans-serif; overflow:hidden; border:1px solid rgb(var(--line)); border-radius:4px; background:rgb(var(--canvas)/.58); box-shadow:5px 6px 0 rgb(var(--shadow)/.07); }
-        .session-manager .header { position:relative; top:auto; padding:16px 18px; border:0; border-bottom:3px double rgb(var(--line)); border-radius:0; background:rgb(var(--surface)); box-shadow:none; }
+        .session-manager { color:rgb(var(--ink)); font-family:var(--font-sans),sans-serif; overflow:hidden; border:1px solid rgb(var(--line)); border-radius:8px; background:rgb(var(--canvas)/.58); box-shadow:5px 6px 0 rgb(var(--shadow)/.07); }
+        .session-manager .header { position:relative; top:auto; box-sizing:border-box; min-height:76px; padding:16px 18px; border:0; border-bottom:3px double rgb(var(--line)); border-radius:0; background:rgb(var(--surface)); box-shadow:none; }
         .session-manager .header>div:first-child>div:first-child { font-family:var(--font-sans),sans-serif; font-size:22px!important; letter-spacing:-.02em; }
         .session-manager .header-sub { margin-top:4px; color:rgb(var(--muted)); font-size:10px; letter-spacing:.08em; text-transform:uppercase; }
         .session-manager .btn-icon { min-width:38px; min-height:38px; border:1px solid rgb(var(--line)); border-radius:3px; background:rgb(var(--surface-2)); color:rgb(var(--ink)); box-shadow:2px 2px 0 rgb(var(--shadow)/.07); }
@@ -1780,9 +1838,56 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         .session-manager .score-preview-name { font-size:12px; }
         .session-manager .score-preview-val { font-size:15px; }
         .session-manager .spinner { border-color:rgb(var(--line)); border-top-color:rgb(var(--cinnabar)); }
+        .session-table-locator { margin:0 0 12px; padding:10px; border:1px solid rgb(var(--line)); border-radius:7px; background:rgb(var(--surface-2)/.72); }
+        .session-table-locator-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+        .session-table-locator-heading>div { min-width:0; }
+        .session-table-locator-kicker { display:block; color:rgb(var(--cinnabar)); font-family:var(--font-display),monospace; font-size:9px; font-weight:800; letter-spacing:.15em; text-transform:uppercase; }
+        .session-table-locator-heading strong { display:block; margin-top:2px; overflow:hidden; color:rgb(var(--ink)); font-size:12px; text-overflow:ellipsis; white-space:nowrap; }
+        .session-my-table-button { display:inline-flex; min-height:36px; flex:0 0 auto; align-items:center; gap:6px; border:1px solid rgb(var(--bamboo)/.4); border-radius:5px; background:rgb(var(--bamboo)/.1); padding:6px 9px; color:rgb(var(--bamboo)); font-size:10px; font-weight:800; cursor:pointer; }
+        .session-my-table-button:hover,.session-my-table-button:focus-visible { border-color:rgb(var(--bamboo)); background:rgb(var(--bamboo)); color:#fff; }
+        .session-my-table-button span { display:grid; min-width:18px; min-height:18px; place-items:center; border-radius:50%; background:currentColor; color:rgb(var(--surface)); }
+        .session-table-jumps { display:flex; gap:5px; overflow-x:auto; padding:8px 0 6px; scrollbar-width:none; scroll-snap-type:x proximity; }
+        .session-table-jumps::-webkit-scrollbar { display:none; }
+        .session-table-jump { display:grid; min-width:42px; min-height:40px; flex:0 0 auto; place-items:center; gap:1px; scroll-snap-align:start; border:1px solid rgb(var(--line)); border-radius:5px; background:rgb(var(--surface)); color:rgb(var(--ink)); cursor:pointer; }
+        .session-table-jump:hover,.session-table-jump:focus-visible { border-color:rgb(var(--bamboo)); background:rgb(var(--bamboo)/.08); }
+        .session-table-jump.is-current { border-color:rgb(var(--bamboo)); background:rgb(var(--bamboo)); color:#fff; box-shadow:0 2px 0 rgb(var(--shadow)/.14); }
+        .session-table-jump strong { font-size:13px; line-height:1; }
+        .session-table-jump small { color:inherit; font-size:8px; line-height:1; opacity:.78; }
+        .session-table-search { display:flex; min-height:38px; align-items:center; gap:6px; border:1px solid rgb(var(--line)); border-radius:5px; background:rgb(var(--surface)); padding:0 8px; color:rgb(var(--muted)); }
+        .session-table-search:focus-within { border-color:rgb(var(--bamboo)); box-shadow:0 0 0 2px rgb(var(--bamboo)/.1); }
+        .session-table-search svg { width:15px; height:15px; flex:0 0 auto; }
+        .session-manager .session-table-search input[type=search] { min-width:0; width:100%; border:0!important; border-radius:0!important; background:transparent!important; padding:8px 2px!important; color:rgb(var(--ink)); box-shadow:none!important; outline:0; }
+        .session-table-search button { display:grid; min-width:30px; min-height:30px; place-items:center; border:0; border-radius:4px; background:transparent; color:rgb(var(--muted)); cursor:pointer; }
+        .session-table-search button:hover { background:rgb(var(--line)/.5); color:rgb(var(--ink)); }
+        .session-table-result-count { display:block; margin-top:5px; color:rgb(var(--muted)); font-size:9px; text-align:right; }
+        .table-title-block { min-width:0; flex:1; }
+        .table-title-line { display:flex; min-width:0; align-items:center; gap:7px; }
+        .session-manager .table-title-line .table-name { min-height:0; flex:0 1 auto; }
+        .table-you-badge { flex:0 0 auto; border:1px solid rgb(var(--bamboo)/.35); border-radius:999px; background:rgb(var(--bamboo)/.1); padding:2px 6px; color:rgb(var(--bamboo)); font-size:8px; font-weight:850; letter-spacing:.06em; text-transform:uppercase; }
+        .table-player-preview { display:block; margin-top:3px; overflow:hidden; color:rgb(var(--muted)); font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
+        .session-manager .table-card.is-current-user-table { border-color:rgb(var(--bamboo)); box-shadow:0 0 0 2px rgb(var(--bamboo)/.12),4px 4px 0 rgb(var(--bamboo)/.1); }
+        .session-manager .table-card.is-collapsed { margin-bottom:8px; box-shadow:2px 2px 0 rgb(var(--shadow)/.04); }
+        .session-manager .table-card.is-collapsed .table-header { min-height:52px; border-bottom:0; }
+        .session-manager .sideline-section { margin:10px 12px 0; padding:0; border:1px solid rgb(var(--line)); border-left:1px solid rgb(var(--line)); border-radius:6px; background:rgb(var(--surface-2)/.58); }
+        .session-manager .sideline-section.is-collapsed { background:rgb(var(--surface)/.56); }
+        .session-manager .sideline-toggle { min-height:40px; margin:0; padding:7px 10px; gap:6px; color:rgb(var(--muted)); font-size:0; }
+        .session-manager .sideline-label { color:rgb(var(--ink)); font-family:var(--font-sans),sans-serif; font-size:11px; font-weight:850; letter-spacing:0; text-transform:none; }
+        .session-manager .sideline-helper { min-width:0; overflow:hidden; color:rgb(var(--muted)); font-family:var(--font-sans),sans-serif; font-size:9px; font-weight:500; letter-spacing:0; text-overflow:ellipsis; text-transform:none; white-space:nowrap; }
+        .session-manager #sidelineChevron { margin-left:auto; color:rgb(var(--muted)); font-size:9px; }
+        .session-manager .sideline-body { padding:0 8px 8px; }
+        .session-manager .sideline-area { min-height:62px; padding:8px; gap:8px; }
         html.dark .session-manager .header,html.dark .session-manager .table-name,html.dark .session-manager .chip-name,html.dark .session-manager .section-label,html.dark .session-manager .setup-card h3 { color:rgb(var(--ink))!important; }
         @media(max-width:640px){
-          .session-manager #sessionPage{height:calc(100dvh - 112px)}.session-manager .tables-scroll{padding:10px}.session-manager .sideline-section{margin:10px 10px 0}
+          .session-manager #sessionPage{height:calc(100dvh - 112px)}
+          .session-manager .tables-scroll{padding:8px}
+          .session-manager .sideline-section{margin:8px 8px 0!important;padding:0!important}
+          .session-table-locator{margin-bottom:8px;padding:8px}
+          .session-table-locator-heading strong{font-size:11px}
+          .session-my-table-button{min-height:42px;padding:7px 9px}
+          .session-table-jump{min-width:44px;min-height:44px}
+          .session-manager .table-card.is-collapsed{margin-bottom:7px!important}
+          .session-manager .table-card.is-collapsed .table-header{min-height:52px;padding:8px 10px}
+          .session-manager .sideline-toggle{min-height:44px}
           .desktop-table-count { display:none; }
           .mobile-table-stepper { display:flex; align-items:center; gap:10px; }
           .session-result-dialog { display:block!important; position:fixed!important; left:50%!important; top:calc(var(--visual-viewport-top,0px) + var(--visual-viewport-height,100dvh)/2)!important; transform:translate(-50%,-50%)!important; width:min(420px,calc(100vw - 24px))!important; max-height:calc(var(--visual-viewport-height,100dvh) - 24px)!important; overflow-y:auto!important; z-index:12000!important; padding:16px!important; border:1px solid rgb(var(--line))!important; border-radius:6px!important; background:rgb(var(--surface))!important; color:rgb(var(--ink))!important; box-shadow:0 0 0 100vmax rgb(0 0 0/.68),0 20px 60px rgb(0 0 0/.35)!important; overscroll-behavior:contain; }
@@ -1791,7 +1896,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
 
       <div className="header">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 15, fontWeight: 800 }}>🀄 Session</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 15, fontWeight: 800 }}>Session</div>
           <div className="header-sub">{page === 'setup' ? (session.active ? 'Editing session' : 'New session') : sessionHeaderLabel}</div>
         </div>
         <div className="header-actions">
@@ -1926,33 +2031,68 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
 
       <div id="sessionPage" className={`page ${page === 'session' ? 'active' : ''}`}>
         <div className="tables-scroll">
-          <div style={{ paddingBottom: 8 }}>
+          {sessionTables.length > 1 ? <div className="session-table-locator" aria-label="Find a session table">
+            <div className="session-table-locator-heading">
+              <div>
+                <span className="session-table-locator-kicker">Find a table</span>
+                <strong>{currentUserTableId ? `You are seated at Table ${currentUserTableId}` : 'Jump directly to any table'}</strong>
+              </div>
+              {currentUserTableId ? (
+                <button type="button" className="session-my-table-button" onClick={() => jumpToTable(currentUserTableId)}>
+                  My table <span>{currentUserTableId}</span>
+                </button>
+              ) : null}
+            </div>
+            <div className="session-table-jumps" aria-label="Session tables">
+              {sessionTables.map((playersOnTable, index) => {
+                const tableId = String(index + 1)
+                const isCurrent = tableId === currentUserTableId
+                return (
+                  <button
+                    key={tableId}
+                    type="button"
+                    className={`session-table-jump${isCurrent ? ' is-current' : ''}`}
+                    aria-label={`Jump to Table ${tableId}, ${playersOnTable.length} of 4 seats filled${isCurrent ? ', your table' : ''}`}
+                    aria-current={isCurrent ? 'location' : undefined}
+                    onClick={() => jumpToTable(tableId)}
+                  >
+                    <strong>{tableId}</strong>
+                    <small>{playersOnTable.length}/4</small>
+                  </button>
+                )
+              })}
+            </div>
+            {sessionTables.length >= 5 ? <div className="session-table-search">
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>
             <input
-              type="text"
+              type="search"
               aria-label="Search tables or players"
               value={tableSearch}
               onChange={(event) => setTableSearch(event.target.value)}
-              placeholder="🔍 Search table or player…"
-              style={{ width: '100%', padding: '8px 10px', border: '2px solid #e2e8f0', borderRadius: 8, fontSize: 12, background: 'white' }}
+              placeholder="Search table or player…"
             />
-          </div>
+              {tableSearch ? <button type="button" onClick={() => setTableSearch('')} aria-label="Clear table search">Ã—</button> : null}
+            </div> : null}
+            {tableSearch ? <span className="session-table-result-count" role="status">{filteredTableCards.filter((table) => table.visible).length} table{filteredTableCards.filter((table) => table.visible).length === 1 ? '' : 's'} found</span> : null}
+          </div> : null}
           <div className="tables-container">{renderSessionTables()}</div>
         </div>
 
-        <div className="sideline-section">
+        <div className={`sideline-section${sidelineCollapsed ? ' is-collapsed' : ''}`}>
           <button
             type="button"
-            className="section-label"
+            className="section-label sideline-toggle"
             onClick={toggleSideline}
             aria-expanded={!sidelineCollapsed}
             aria-controls="sidelineBody"
-            style={{ width: '100%', border: 0, background: 'transparent', padding: 0, textAlign: 'left', cursor: 'pointer' }}
+            style={{ width: '100%', border: 0, background: 'transparent', textAlign: 'left', cursor: 'pointer' }}
           >
-            🪑 Sideline
+            <span className="sideline-label">Sideline</span>
             <span className="badge" id="sidelineCount">{sessionSideline.length}</span>
+            <span className="sideline-helper">{sidelineCollapsed ? 'Show waiting players' : 'Drag players here or use table controls'}</span>
             <span id="sidelineChevron" style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--gray)' }}>{sidelineCollapsed ? '▼' : '▲'}</span>
           </button>
-          <div id="sidelineBody" style={{ display: sidelineCollapsed ? 'none' : 'block' }}>
+          <div id="sidelineBody" className="sideline-body" style={{ display: sidelineCollapsed ? 'none' : 'block' }}>
             <div
               className={`sideline-area${dragContext.player ? ' drag-over' : ''}`}
               id="sidelineArea"

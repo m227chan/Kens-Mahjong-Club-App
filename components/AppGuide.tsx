@@ -16,7 +16,7 @@ const GUIDE_SECTIONS = [
   { icon: '📋', title: 'What is a Session?', body: 'A session is a single mahjong night. You choose which players are attending and how many tables are running. The session tracks who is seated where and records all games played during the night.' },
   { icon: '🔢', title: 'Number of Tables', body: 'Set how many tables will be running simultaneously. Each table seats exactly 4 players. You can have as many tables as you need.' },
   { icon: '🧑‍🤝‍🧑', title: 'Selecting Players', body: 'Choose all players attending tonight. Anyone not selected won’t appear in the session. You need at least 4 players to start. Use the search bar to find players quickly.' },
-  { icon: '🪑', title: 'Sideline', body: 'Players who are attending but not currently seated at a table sit on the sideline. Drag them to a table when they’re ready to play, or drag them back to the sideline between rounds.' },
+  { icon: '🪑', title: 'Sideline', body: 'Players who are attending but not currently seated at a table sit on the sideline. It starts collapsed to keep the session compact; open it when you need the waiting-player list. Dragging a seated player also opens it automatically, and the add, remove, and swap controls remain available without dragging.' },
   { icon: '🎴', title: 'Recording a Game', body: 'Once a table has 4 players it shows ✓ Ready. After a game finishes, tap Winner... to record who won, the win type (self-draw or discard), and the fan count. Or tap Draw if no one won.' },
   { icon: '🧮', title: 'Fan Scoring', body: 'Scores use this club’s fan range and base-point mapping. Self-draw: the winner gets 3× base and each loser pays 1× base. Discard win: the winner gets 2× base, the discarder pays 2× base, and the other players pay nothing.', fanMap: true },
   { icon: '⚙️', title: 'Edit / Clear All Tables / Reset', body: 'Edit lets you change which players are in the session or the number of tables. Clear All Tables moves everyone back to the sideline without ending the session. Reset Session wipes everything and starts fresh.' },
@@ -45,16 +45,17 @@ const TOUR_STEPS: TourStep[] = [
   { selector: '[data-tour="clubs-list"]', title: 'Your clubs', body: 'Each card opens a real club and shows your linked player summary. The universal club is available to first-time users too.', action: 'next' },
   { selector: '[data-tour="club-actions"]', title: 'Create or join', body: 'Create a club for a new group, or join an existing one with its club ID. The tour will not submit either form.', action: 'next' },
   { selector: '[data-tour="open-club"]', title: 'Open a real club', body: 'Choose a club you already belong to. Ming will stay with you while the actual club workspace loads.', action: 'click', instruction: 'Click the highlighted Open club or Open roster button.' },
-  { selector: '[data-tour="club-header"]', title: 'The club workspace', body: 'This header identifies the current club and keeps its season, roster, analytics, game logs, player network, share ID, and manager settings together.', action: 'next' },
+  { selector: '[data-tour="club-header"]', title: 'The club workspace', body: 'The compact header keeps the club name, season, and share ID visible. Club tools live in the left rail so the workspace stays clear.', action: 'next' },
   { selector: '[data-tour="season-selector"]', title: 'Seasons are chapters', body: 'Switch seasons to review a different chapter of standings and history. Starting a new season is a manager action in Settings; the tour will not change it.', action: 'next' },
-  { selector: '[data-tour="session-manager"]', title: 'Run the live session here', body: 'Choose attendees and tables, seat players from the sideline, then record a winner or draw. Four players make a table ready. Ming will not start a session or record a game.', action: 'next' },
+  { selector: '[data-tour="club-tools-toggle"]', title: 'Open Club tools', body: 'The Club tools rail starts compact so it never covers your tables or charts. Expand it to reveal Roster, Session tracker, Analytics, Game logs, Network, and Club settings. On mobile it opens as a temporary drawer.', action: 'next', instruction: 'Expand Club tools, then choose Next.' },
+  { selector: '[data-tour="session-manager"]', title: 'Run the live session here', body: 'Choose attendees and tables, then record a winner or draw. Use Find a table or My table to jump directly to the right table; large sessions open as compact table summaries. The sideline stays tucked away until needed, and four players make a table ready. Ming will not start a session or record a game.', action: 'next' },
   { selector: '[data-tour="session-tracker-open"]', title: 'Open the session tracker', body: 'Session tracker shows net points over a short window—24 hours, 48 hours, or 7 days—separate from season standings.', action: 'click', instruction: 'Click Session tracker.' },
   { selector: '[data-tour="session-tracker-modal"]', title: 'Track tonight’s net change', body: 'Pick a preset window or Custom From/To dates, choose a player, open View more for a game breakdown, and use Float to pin a compact chip on this club’s pages. Tap the chip later to switch windows. Ming will not change selections or pin the float for you.', action: 'next' },
   { selector: '[data-tour="session-tracker-close"]', title: 'Return to the workspace', body: 'Close the session tracker to continue.', action: 'click', instruction: 'Click Close.' },
-  { selector: '[data-tour="roster-open"], [data-tour="roster-tab"]', clickTarget: 'roster-open', intermediateTarget: 'roster-tab', title: 'Open the real roster', body: 'The roster manages tracked players, account links, emojis, names, and manager access. On mobile, open the Roster tab first, then use Manage players.', action: 'responsive', instruction: 'On mobile, tap Roster and then Manage players. On desktop, click Roster.' },
+  { selector: '[data-tour="roster-open"]', title: 'Open the real roster', body: 'The roster manages tracked players, account links, emojis, names, and manager access. The Club tools rail opens it directly on desktop and mobile.', action: 'click', instruction: 'Click Roster.' },
   { selector: '[data-tour="roster-modal"]', title: 'Roster and linked users', body: 'Any active member can add a roster player or link themselves to one available player. Managers also see player-wide and manager controls. Nothing is changed unless you deliberately use one of those controls.', action: 'next' },
   { selector: '[data-tour="roster-close"]', title: 'Return to the workspace', body: 'Close the real roster to continue.', action: 'click', instruction: 'Click Close.' },
-  { selector: '[data-tour="leaderboard"], [data-tour="standings-tab"]', clickTarget: 'standings-tab', title: 'Standings update from games', body: 'Points, Skill, activity, and results are recalculated for the selected season. On mobile, open the Standings tab to reveal the same leaderboard.', action: 'responsive', instruction: 'On mobile, click Standings. On desktop, choose Next.' },
+  { selector: '[data-tour="leaderboard"], [data-tour="standings-tab"]', clickTarget: 'standings-tab', title: 'Standings update from games', body: 'Points, Skill, activity, and results are recalculated for the selected season. On mobile, open the Leaderboard tab to reveal the same standings.', action: 'responsive', instruction: 'On mobile, click Leaderboard. On desktop, choose Next.' },
   { selector: '[data-tour="analytics-open"]', title: 'Open real analytics', body: 'Analytics lets you compare selected players across score and Skill history.', action: 'click', instruction: 'Click Analytics.' },
   { selector: '[data-tour="analytics-modal"]', title: 'Explore club trends', body: 'Use the real filters to focus on session players, clear the selection, choose specific players, and change the game range. The horizontal axis uses game dates.', action: 'next' },
   { selector: '[data-tour="analytics-close"]', title: 'Return to the workspace', body: 'Close analytics when you are finished reviewing trends.', action: 'click', instruction: 'Click Close.' },
@@ -158,8 +159,12 @@ export default function AppGuide() {
   }, [guideOpen])
 
   const advance = useCallback(() => {
+    if (step?.selector === '[data-tour="club-tools-toggle"]') {
+      const toggle = visibleTarget('[data-tour="club-tools-toggle"]')
+      if (toggle?.getAttribute('aria-expanded') === 'true') toggle.click()
+    }
     setStepIndex((current) => Math.min(current + 1, TOUR_STEPS.length - 1))
-  }, [])
+  }, [step])
 
   const clickTourElement = useCallback((tourName: string) => {
     const element = visibleTarget(`[data-tour="${tourName}"]`)
@@ -174,14 +179,14 @@ export default function AppGuide() {
 
     // Restore UI that a forward-only step changed before returning to its control.
     if (stepIndex === 5) router.push('/')
-    if (stepIndex === 9) clickTourElement('session-tracker-close')
-    if (stepIndex === 11) clickTourElement('session-tracker-open')
-    if (stepIndex === 12) clickTourElement('roster-close')
-    if (stepIndex === 14) clickTourElement('roster-open')
-    if (stepIndex === 16) clickTourElement('analytics-close')
-    if (stepIndex === 19) clickTourElement('logs-close')
-    if (stepIndex === 22) clickTourElement('network-close')
-    if (stepIndex === 25) clickTourElement('settings-close')
+    if (stepIndex === 10) clickTourElement('session-tracker-close')
+    if (stepIndex === 12) clickTourElement('session-tracker-open')
+    if (stepIndex === 13) clickTourElement('roster-close')
+    if (stepIndex === 15) clickTourElement('roster-open')
+    if (stepIndex === 17) clickTourElement('analytics-close')
+    if (stepIndex === 20) clickTourElement('logs-close')
+    if (stepIndex === 23) clickTourElement('network-close')
+    if (stepIndex === 26) clickTourElement('settings-close')
 
     setStepIndex((current) => Math.max(0, current - 1))
   }, [clickTourElement, router, stepIndex])

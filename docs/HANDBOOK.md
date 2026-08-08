@@ -368,10 +368,10 @@ Shared client-facing types live in `lib/types.ts`:
 - Create or resume one active session per club. Session creation is transactional: a stale active session from an older season is closed before the new session is inserted, preventing the partial unique-index conflict on active sessions.
 - Choose participating players and a table count.
 - “All” selection includes the complete currently filtered roster selection.
-- New sessions begin with every participant on the sideline and empty numbered tables.
+- New sessions begin with every participant on the sideline and empty numbered tables. The sideline is collapsed by default so waiting players remain available without occupying the primary scoring area; starting a drag from a table opens it automatically.
 - Mobile-only decrement/increment controls make table count editing reliable without text-selection quirks.
 - Move players between sideline and tables, fill open seats, clear tables, swap players, and edit the session. Occupied tables expose a clear-table control on hover, and every occupied seat exposes a remove-player control on hover, including incomplete tables; touch layouts keep these controls visible because hover is unavailable. The add-player dialog shows the table's selected players first and lets the user remove a selection without closing the dialog.
-- Search by player or table.
+- A compact table locator shows every table's occupancy, identifies the signed-in player's table, and jumps directly to a selected table. Search by player or table appears for large sessions, and sessions with five or more tables initially collapse every table except the signed-in player's table.
 - Table cards show capacity and readiness; four players marks a table ready.
 - Record self-draw wins, discard wins, or draws.
 - Winner, discarder, and fan selections have visible selected states.
@@ -580,8 +580,9 @@ Content sits on distinct surface layers with borders, restrained offset shadows,
 ### Responsive behavior
 
 - The global content width is capped for readable desktop composition.
-- The club workspace uses a desktop two-column layout, but mobile places the session above standings and uses a sticky three-option workspace navigator.
-- The desktop action bar collapses into a simple mobile grid.
+- The club workspace uses a desktop two-column layout, with the leaderboard as the wider visual anchor and Session as the narrower operational panel. Mobile opens directly to Session and uses a sticky two-option Session/Leaderboard navigator.
+- The authenticated club workspace keeps the club name, season selector, and copyable Club ID in a compact header. Roster, Session tracker, Analytics, Game logs, Network, and Club settings live in a collapsible Club tools rail. The rail is a 60px in-flow icon column when collapsed and expands to 224px on desktop; on mobile it remains a 46px in-flow rail and opens a temporary drawer no wider than 260px.
+- The collapsed rail always consumes layout width, so it cannot cover the Session Manager, leaderboard, charts, roster summary, join requests, or mobile workspace tabs. Selecting a tool closes the mobile drawer before opening the existing modal.
 - Full-screen mobile modal panels use `100dvh` and safe-area padding.
 - Session-specific dialogs use fixed viewport positioning, never document-relative centering.
 - Wide data tables scroll horizontally on desktop/tablet; game logs become cards on mobile.

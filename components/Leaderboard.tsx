@@ -193,9 +193,9 @@ export function LeaderboardPanel({
       data-tour="leaderboard"
       className="leaderboard-board overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"
     >
-      <header className="border-b border-slate-200 px-5 py-4">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <h2 className="text-lg font-bold text-slate-900">Leaderboard</h2>
+      <header className="leaderboard-board-header border-b border-slate-200 px-5 py-4">
+        <div className="leaderboard-board-header-row flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-2xl font-black leading-none text-slate-900">Leaderboard</h2>
           <div className="flex items-center gap-2">
             <p className="text-sm font-medium text-slate-500">
               {rows.length} ranked players

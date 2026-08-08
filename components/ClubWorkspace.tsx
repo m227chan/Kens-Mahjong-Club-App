@@ -11,6 +11,7 @@ import { LeaderboardPanel } from '@/components/Leaderboard'
 import SessionManager from '@/components/SessionManager'
 import ScoringRulesSettings from '@/components/ScoringRulesSettings'
 import TitleRulesSettings from '@/components/TitleRulesSettings'
+import ClubToolSidebar from '@/components/ClubToolSidebar'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSound } from '@/contexts/SoundContext'
 import {
@@ -42,62 +43,6 @@ import { DEFAULT_TITLE_RULES, type TitleRules } from '@/lib/title-rules'
 
 const iconChoices = PLAYER_EMOJIS
 
-function StatCard({ label, value, tone, explanation }: { label: string; value: string; tone: string; explanation: string }) {
-  const [showInfo, setShowInfo] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!showInfo) return
-    const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setShowInfo(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [showInfo])
-
-  return (
-    <div ref={ref} className={`relative group rounded-lg border p-4 transition-all duration-200 hover:shadow-sm ${tone}`}>
-      <div className="flex items-start justify-between">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] opacity-70">{label}</p>
-        <button
-          type="button"
-          onClick={() => setShowInfo(!showInfo)}
-          className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-500/10 hover:bg-slate-500/20 text-current opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-200"
-          aria-label={`Learn more about ${label}`}
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="12" y1="16" x2="12" y2="12"></line>
-            <line x1="12" y1="8" x2="12.01" y2="8"></line>
-          </svg>
-        </button>
-      </div>
-      <p className="mt-2 text-2xl font-black">{value}</p>
-
-      {/* Explanation Popup */}
-      {showInfo && (
-        <div role="tooltip" className="stat-info-popover absolute left-1/2 bottom-[calc(100%+8px)] z-20 w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white p-3 shadow-lg text-slate-800 text-xs font-semibold leading-relaxed">
-          <p>{explanation}</p>
-          <div className="stat-info-arrow absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-white"></div>
-          <div className="stat-info-arrow absolute top-full left-1/2 -z-10 -translate-x-1/2 translate-y-[1px] border-8 border-transparent border-t-slate-200"></div>
-        </div>
-      )}
-    </div>
-  )
-}
-
 export default function ClubWorkspace({ clubId, membership }: { clubId: string; membership: ClubMembershipDoc }) {
   const { user } = useAuth()
   const router = useRouter()
@@ -122,6 +67,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [gameLogsOpen, setGameLogsOpen] = useState(false)
   const [networkOpen, setNetworkOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [clubToolsExpanded, setClubToolsExpanded] = useState(false)
   const [seasons, setSeasons] = useState<SeasonDoc[]>([])
   const [seasonAction, setSeasonAction] = useState(false)
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null)
@@ -131,7 +77,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleteConfirmName, setDeleteConfirmName] = useState('')
   const [deletingClub, setDeletingClub] = useState(false)
-  const [mobileView, setMobileView] = useState<'session' | 'standings' | 'roster'>('session')
+  const [mobileView, setMobileView] = useState<'session' | 'standings'>('session')
   const [managerEmail, setManagerEmail] = useState('')
   const [managerMessage, setManagerMessage] = useState<string | null>(null)
   const [promotingManager, setPromotingManager] = useState(false)
@@ -363,12 +309,35 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
 
   return (
     <main className="club-workspace-main px-4 py-6">
+      <div className="club-workspace-shell" data-sidebar-expanded={clubToolsExpanded}>
+        <ClubToolSidebar
+          expanded={clubToolsExpanded}
+          onExpandedChange={setClubToolsExpanded}
+          rosterOpen={rosterOpen}
+          sessionTrackerOpen={sessionTrackerOpen}
+          analyticsOpen={analyticsOpen}
+          gameLogsOpen={gameLogsOpen}
+          networkOpen={networkOpen}
+          settingsOpen={settingsOpen}
+          onRoster={() => { setPlayerMessage(null); setRosterOpen(true) }}
+          onSessionTracker={() => setSessionTrackerOpen(true)}
+          onAnalytics={() => setAnalyticsOpen(true)}
+          onGameLogs={() => setGameLogsOpen(true)}
+          onNetwork={() => setNetworkOpen(true)}
+          onSettings={() => setSettingsOpen(true)}
+        />
+        <div className="club-workspace-content">
       <div data-tour="club-header" className="club-workspace-header mb-5 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-black text-slate-950">{club?.name ?? membership.clubName}</h1>
+        <div className="club-workspace-heading">
+              <h1 className="truncate text-2xl font-black text-slate-950">{club?.name ?? membership.clubName}</h1>
+              <div className="club-header-roster-summary" aria-label="Club roster summary">
+                <span><strong>{players.length}</strong><small>Players</small></span>
+                <span><strong>{players.filter((player) => player.authUid).length}</strong><small>Linked</small></span>
+                <span><strong>{members.length}</strong><small>Members</small></span>
+              </div>
         </div>
-        <div className="club-action-bar flex flex-wrap gap-2">
-          <div className="club-context-actions contents">
+        <div className="club-context-actions flex min-w-0 shrink-0 flex-wrap items-center gap-2">
+          <div className="contents">
           <label data-tour="season-selector" className="club-season-action flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
             <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Season</span>
             <select
@@ -395,21 +364,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           </button>
           </div>
           {seasonMessage ? <span role="status" aria-live="polite" className="club-action-status flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">{seasonMessage}</span> : null}
-          <div className="club-tool-grid contents">
-          <button
-            data-tour="roster-open"
-            type="button"
-            aria-haspopup="dialog"
-            aria-expanded={rosterOpen}
-            aria-controls="club-roster-dialog"
-            onClick={() => {
-              setPlayerMessage(null)
-              setRosterOpen(true)
-            }}
-            className="club-secondary-action club-roster-action rounded-lg px-3 py-2 text-sm font-bold transition"
-          >
-            Roster
-          </button>
+          {/* Legacy header tool markup retained only in source history; actions now render in ClubToolSidebar. <div className="club-tool-grid contents">
           <button
             data-tour="session-tracker-open"
             type="button"
@@ -468,7 +423,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             <span className="hidden sm:inline">Club settings</span>
             <span className="sm:hidden">Settings</span>
           </button>
-          </div>
+          </div> */}
         </div>
       </div>
 
@@ -556,15 +511,14 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         </div>
       ) : null}
 
-      <nav className="mobile-workspace-tabs sticky top-0 z-30 mx-auto mb-4 grid w-full grid-cols-3 rounded-lg border border-slate-200 bg-white/95 p-2 backdrop-blur md:hidden" aria-label="Club workspace">
+      <nav className="mobile-workspace-tabs sticky top-0 z-30 mx-auto mb-4 grid w-full grid-cols-2 rounded-lg border border-slate-200 bg-white/95 p-2 backdrop-blur md:hidden" aria-label="Club workspace">
         {([
           ['session', 'Session'],
-          ['standings', 'Standings'],
-          ['roster', 'Roster'],
+          ['standings', 'Leaderboard'],
         ] as const).map(([view, label]) => (
           <button
             key={view}
-            data-tour={view === 'standings' ? 'standings-tab' : view === 'roster' ? 'roster-tab' : undefined}
+            data-tour={view === 'standings' ? 'standings-tab' : undefined}
             type="button"
             onClick={() => setMobileView(view)}
             aria-pressed={mobileView === view}
@@ -575,8 +529,8 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         ))}
       </nav>
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_460px]">
-        <div className="min-w-0 space-y-6">
+      <div className="club-workspace-dashboard-grid grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_460px]">
+        <div className="flex min-w-0 flex-col gap-6">
           {joinRequestNotice ? (
             <div role={joinRequestNotice.error ? 'alert' : 'status'} aria-live={joinRequestNotice.error ? 'assertive' : 'polite'} className={`rounded-lg border px-4 py-3 text-sm font-bold shadow-sm ${joinRequestNotice.error ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
               {joinRequestNotice.message}
@@ -606,41 +560,17 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             </section>
           ) : null}
 
-          <section id="players" className={mobileView === 'roster' ? 'block rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:block' : 'hidden rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:block'}>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h3 className="text-lg font-black text-slate-950">Club Roster</h3>
-              </div>
-            </div>
-             <div className="club-roster-stats mt-5 grid gap-3 sm:grid-cols-3">
-               <StatCard label="Tracked players" value={String(players.length)} tone="border-slate-200 bg-slate-50 text-slate-900" explanation="Tracked players are individual profiles created for the club roster to record game statistics." />
-               <StatCard label="Linked users" value={String(players.filter((player) => player.authUid).length)} tone="border-blue-200 bg-blue-50 text-blue-900" explanation="Linked users are roster players who have linked their signed-in account to their player profile." />
-               <StatCard label="Club members" value={String(members.length)} tone="border-teal-200 bg-teal-50 text-teal-900" explanation="Club members are registered users who have joined the club to view matches, standings, and stats." />
-             </div>
-            <button
-              data-tour="roster-open"
-              type="button"
-              aria-haspopup="dialog"
-              aria-expanded={rosterOpen}
-              aria-controls="club-roster-dialog"
-              onClick={() => {
-                setPlayerMessage(null)
-                setRosterOpen(true)
-              }}
-              className="mobile-manage-players mt-3 block w-full rounded bg-[rgb(var(--bamboo))] px-4 py-3 text-sm font-bold text-white md:hidden"
-            >
-              Manage players
-            </button>
-          </section>
-
           <div className={mobileView === 'standings' ? 'block md:block' : 'hidden md:block'}>
             <LeaderboardPanel clubId={clubId} seasonNumber={activeSeasonNumber} players={players} titleRules={titleRules} />
           </div>
         </div>
 
-        <aside className={mobileView === 'session' ? 'order-first block md:block xl:order-none xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto' : 'order-first hidden md:block xl:order-none xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto'}>
+        <aside className={mobileView === 'session' ? 'club-session-panel order-first block md:block xl:order-none' : 'club-session-panel order-first hidden md:block xl:order-none'}>
           <SessionManager clubId={clubId} seasonNumber={activeSeasonNumber} players={players} isManager={isManager} scoringRules={scoringRules} />
         </aside>
+      </div>
+
+        </div>
       </div>
 
       {sessionTrackerOpen ? (

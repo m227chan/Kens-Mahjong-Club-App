@@ -75,6 +75,8 @@ describe('session manager optimistic table changes', () => {
       />,
     )
 
+    await screen.findByRole('button', { name: 'Move Jane to the sideline' })
+    expect(document.querySelector('.sideline-toggle')?.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(await screen.findByRole('button', { name: 'Move Jane to the sideline' }))
 
     expect(screen.queryByRole('button', { name: 'Move Jane to the sideline' })).toBeNull()
@@ -99,4 +101,25 @@ describe('session manager optimistic table changes', () => {
     })
     await waitFor(() => expect(document.getElementById('sidelineArea')?.textContent).toContain('Jane'))
   }, 10_000)
+
+  it('keeps the signed-in player table open in a large session', async () => {
+    const largeSession = {
+      ...activeSession,
+      tableCount: 6,
+      tables: { '1': [], '2': [], '3': [], '4': ['jane'], '5': [], '6': [] },
+    } as unknown as SessionDoc
+    subscribeActiveSessionMock.mockImplementation(
+      (_clubId: string, _seasonNumber: number, onValue: (session: SessionDoc) => void) => {
+        onValue(largeSession)
+        return () => undefined
+      },
+    )
+
+    render(<SessionManager clubId="TEST" seasonNumber={1} players={players} />)
+
+    expect(await screen.findByRole('button', { name: 'My table 4' })).not.toBeNull()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Expand Table 1' })).not.toBeNull())
+    expect(screen.getByRole('button', { name: 'Collapse Table 4' })).not.toBeNull()
+    expect(screen.getByRole('button', { name: /Jump to Table 4.*your table/i }).getAttribute('aria-current')).toBe('location')
+  })
 })
