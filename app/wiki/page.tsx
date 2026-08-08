@@ -42,7 +42,7 @@ const TILE_CATEGORIES = [
   },
   {
     heading: 'Honor tiles',
-    description: 'Four winds (East, South, West, North) and three dragons (Red, Green, White Dragon). Note: White Dragon is the blank outlined box. Honors CANNOT form chows.',
+    description: 'Four winds (East, South, West, North) and three dragons (Red, Green, White Dragon). Note: White Dragon is the blank outlined box. Honors CANNOT form sheungs.',
     ids: honorTileIds,
   },
   {
@@ -421,7 +421,7 @@ export default function WikiPage() {
           <div className="wiki-basics-terms-grid">
             <div className="wiki-basics-term-card">
               <h4>Sheung / Chow (Sequence)</h4>
-              <p>3 consecutive numbered tiles in the same suit (e.g. 2-3-4 of Characters). Honors cannot make chows.</p>
+              <p>3 consecutive numbered tiles in the same suit (e.g. 2-3-4 of Characters). Honors cannot make sheungs.</p>
             </div>
             <div className="wiki-basics-term-card">
               <h4>Pong (Triplet)</h4>
@@ -437,7 +437,7 @@ export default function WikiPage() {
             </div>
             <div className="wiki-basics-term-card">
               <h4>Honor tiles</h4>
-              <p>The four Winds (East, South, West, North) and three Dragons (Red, Green, White). Honors CANNOT form chows.</p>
+              <p>The four Winds (East, South, West, North) and three Dragons (Red, Green, White). Honors CANNOT form sheungs.</p>
             </div>
             <div className="wiki-basics-term-card">
               <h4>Terminal</h4>
