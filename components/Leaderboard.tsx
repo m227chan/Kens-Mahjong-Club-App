@@ -194,21 +194,24 @@ export function LeaderboardPanel({
       className="leaderboard-board overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"
     >
       <header className="leaderboard-board-header border-b border-slate-200 px-5 py-4">
-        <div className="leaderboard-board-header-row flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-2xl font-black leading-none text-slate-900">Leaderboard</h2>
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-medium text-slate-500">
+        <div className="leaderboard-board-header-row flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-2xl font-black leading-none text-slate-900">Leaderboard</h2>
+            <p className="mt-2 text-sm font-medium text-slate-500">
               {rows.length} ranked players
             </p>
-            <button
-              type="button"
-              aria-expanded={filtersOpen}
-              onClick={() => setFiltersOpen((current) => !current)}
-              className={`min-h-11 rounded border px-3 py-1.5 text-xs font-bold ${activeFilterCount ? 'border-[rgb(var(--bamboo))] bg-[rgb(var(--bamboo)/.08)] text-[rgb(var(--bamboo))]' : 'border-slate-300 bg-white text-slate-600'}`}
-            >
-              Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}
-            </button>
           </div>
+          <button
+            type="button"
+            aria-expanded={filtersOpen}
+            aria-label={`Filter leaderboard${activeFilterCount ? `, ${activeFilterCount} active` : ''}`}
+            title="Filter leaderboard"
+            onClick={() => setFiltersOpen((current) => !current)}
+            className={`relative grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[3px] border p-0 shadow-[2px_2px_0_rgb(var(--shadow)/.07)] transition-colors ${activeFilterCount ? 'border-[rgb(var(--bamboo))] bg-[rgb(var(--bamboo)/.10)] text-[rgb(var(--bamboo))]' : 'border-[rgb(var(--line))] bg-[rgb(var(--surface-2))] text-[rgb(var(--ink))] hover:border-[rgb(var(--cinnabar))] hover:bg-[rgb(var(--cinnabar)/.06)] hover:text-[rgb(var(--cinnabar))]'}`}
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M4 6h16" /><path d="M7 12h10" /><path d="M10 18h4" /></svg>
+            {activeFilterCount ? <span aria-hidden="true" className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-[rgb(var(--cinnabar))] px-1 text-[9px] font-black text-white">{activeFilterCount}</span> : null}
+          </button>
         </div>
       </header>
       {filtersOpen ? (

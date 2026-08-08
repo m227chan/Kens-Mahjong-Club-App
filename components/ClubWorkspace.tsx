@@ -43,6 +43,24 @@ import { DEFAULT_TITLE_RULES, type TitleRules } from '@/lib/title-rules'
 
 const iconChoices = PLAYER_EMOJIS
 
+const CLUB_SUMMARY_DEFINITIONS = {
+  players: {
+    label: 'Players',
+    title: 'What is a player?',
+    body: 'A player is a roster entry used for sessions, scores, standings, and titles. A player can exist even when it is not connected to anyone’s account.',
+  },
+  linked: {
+    label: 'Linked',
+    title: 'What does linked mean?',
+    body: 'A linked player is a roster player connected to a user account. That connection lets the person identify their own player and update their own name or emoji.',
+  },
+  users: {
+    label: 'Users',
+    title: 'What is a user?',
+    body: 'A user is someone who has joined this club with an account. Users can open the club workspace; they do not need to be linked to a roster player.',
+  },
+} as const
+
 export default function ClubWorkspace({ clubId, membership }: { clubId: string; membership: ClubMembershipDoc }) {
   const { user } = useAuth()
   const router = useRouter()
@@ -68,6 +86,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [networkOpen, setNetworkOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [clubToolsExpanded, setClubToolsExpanded] = useState(false)
+  const [summaryDefinition, setSummaryDefinition] = useState<keyof typeof CLUB_SUMMARY_DEFINITIONS | null>(null)
   const [seasons, setSeasons] = useState<SeasonDoc[]>([])
   const [seasonAction, setSeasonAction] = useState(false)
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null)
@@ -331,9 +350,9 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         <div className="club-workspace-heading">
               <h1 className="truncate text-2xl font-black text-slate-950">{club?.name ?? membership.clubName}</h1>
               <div className="club-header-roster-summary" aria-label="Club roster summary">
-                <span><strong>{players.length}</strong><small>Players</small></span>
-                <span><strong>{players.filter((player) => player.authUid).length}</strong><small>Linked</small></span>
-                <span><strong>{members.length}</strong><small>Members</small></span>
+                <button type="button" onClick={() => setSummaryDefinition('players')} aria-haspopup="dialog" aria-controls="club-summary-definition-dialog"><strong>{players.length}</strong><small>Players</small></button>
+                <button type="button" onClick={() => setSummaryDefinition('linked')} aria-haspopup="dialog" aria-controls="club-summary-definition-dialog"><strong>{players.filter((player) => player.authUid).length}</strong><small>Linked</small></button>
+                <button type="button" onClick={() => setSummaryDefinition('users')} aria-haspopup="dialog" aria-controls="club-summary-definition-dialog"><strong>{members.length}</strong><small>Users</small></button>
               </div>
         </div>
         <div className="club-context-actions flex min-w-0 shrink-0 flex-wrap items-center gap-2">
@@ -426,6 +445,21 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           </div> */}
         </div>
       </div>
+
+      {summaryDefinition ? (
+        <div className="responsive-modal fixed inset-0 z-[55] flex items-center justify-center bg-slate-950/70 px-4 py-6">
+          <div id="club-summary-definition-dialog" role="dialog" aria-modal="true" aria-labelledby="club-summary-definition-title" className="responsive-modal-panel w-full max-w-sm rounded-lg border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[rgb(var(--cinnabar))]">Club glossary</p>
+                <h3 id="club-summary-definition-title" className="mt-2 text-xl font-black text-slate-950">{CLUB_SUMMARY_DEFINITIONS[summaryDefinition].title}</h3>
+              </div>
+              <button type="button" onClick={() => setSummaryDefinition(null)} className="min-h-10 rounded-lg border border-slate-300 px-3 text-sm font-bold text-slate-700" aria-label="Close definition">Close</button>
+            </div>
+            <p className="mt-4 text-sm leading-6 text-slate-600">{CLUB_SUMMARY_DEFINITIONS[summaryDefinition].body}</p>
+          </div>
+        </div>
+      ) : null}
 
       {settingsOpen ? (
         <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
