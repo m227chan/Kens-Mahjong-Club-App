@@ -308,11 +308,10 @@ export function LeaderboardPanel({
       {visibleRows.length > 0 ? (
         <>
           <div className="mobile-leaderboard md:hidden">
-            <div className="grid grid-cols-[42px_minmax(0,1fr)_72px_64px] items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">
+            <div className="grid grid-cols-[42px_minmax(0,1fr)_76px] items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">
               <span>Rank</span>
               <span>Player</span>
               <span>Points</span>
-              <span>Skill</span>
             </div>
             <div className="divide-y divide-slate-200">
               {mobileRows.map((row, index) => (
@@ -322,7 +321,7 @@ export function LeaderboardPanel({
                     onClick={() => setExpandedMobileRows((current) => ({ ...current, [row.playerId]: !current[row.playerId] }))}
                     aria-expanded={Boolean(expandedMobileRows[row.playerId])}
                     aria-controls={`mobile-player-stats-${row.playerId}`}
-                    className="grid min-h-16 w-full grid-cols-[42px_minmax(0,1fr)_72px_64px] items-center gap-2 px-3 py-2.5 text-left"
+                    className="grid min-h-16 w-full grid-cols-[42px_minmax(0,1fr)_76px] items-center gap-2 px-3 py-2.5 text-left"
                   >
                     <span className="font-mono text-base font-black text-[rgb(var(--cinnabar))]">
                       #{row.pointsRank || index + 1}
@@ -345,17 +344,19 @@ export function LeaderboardPanel({
                         </p>
                       </div>
                     </div>
-                    <span className="font-mono text-sm font-bold text-slate-900">{row.totalPoints}</span>
                     <span className="flex items-center justify-between gap-1 font-mono text-sm font-bold text-slate-900">
-                      {row.skillRating}<span aria-hidden="true" className="text-[rgb(var(--muted))]">{expandedMobileRows[row.playerId] ? '⌃' : '⌄'}</span>
+                      {row.totalPoints}<span aria-hidden="true" className="text-[rgb(var(--muted))]">{expandedMobileRows[row.playerId] ? '⌃' : '⌄'}</span>
                     </span>
                   </button>
                   {expandedMobileRows[row.playerId] ? (
-                    <div id={`mobile-player-stats-${row.playerId}`} className="grid grid-cols-4 gap-2 border-t border-slate-200 bg-slate-50 px-3 py-3 text-center">
-                      <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Games</p><p className="mt-1 font-mono text-sm font-bold text-slate-900">{row.gamesPlayed}</p></div>
-                      <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Wins</p><p className="mt-1 font-mono text-sm font-bold text-slate-900">{row.gamesWon}</p></div>
-                      <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Losses</p><p className="mt-1 font-mono text-sm font-bold text-slate-900">{row.gamesLost}</p></div>
-                      <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Win ratio</p><p className="mt-1 font-mono text-sm font-bold text-slate-900">{formatWinRate(row.gamesWon, row.gamesPlayed)}</p></div>
+                    <div id={`mobile-player-stats-${row.playerId}`} className="border-t border-slate-200 bg-slate-50 px-3 py-3 text-center">
+                      <div className="grid grid-cols-5 gap-2">
+                        <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Skill</p><p className="mt-1 font-mono text-sm font-bold text-slate-900">{row.skillRating}</p></div>
+                        <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Games</p><p className="mt-1 font-mono text-sm font-bold text-slate-900">{row.gamesPlayed}</p></div>
+                        <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Wins</p><p className="mt-1 font-mono text-sm font-bold text-slate-900">{row.gamesWon}</p></div>
+                        <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Losses</p><p className="mt-1 font-mono text-sm font-bold text-slate-900">{row.gamesLost}</p></div>
+                        <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Win ratio</p><p className="mt-1 font-mono text-sm font-bold text-slate-900">{formatWinRate(row.gamesWon, row.gamesPlayed)}</p></div>
+                      </div>
                     </div>
                   ) : null}
                 </article>

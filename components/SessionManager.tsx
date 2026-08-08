@@ -2062,7 +2062,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
                 )
               })}
             </div>
-            {sessionTables.length >= 5 ? <div className="session-table-search">
+            <div className="session-table-search">
               <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>
             <input
               type="search"
@@ -2072,7 +2072,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
               placeholder="Search table or player…"
             />
               {tableSearch ? <button type="button" onClick={() => setTableSearch('')} aria-label="Clear table search">Ã—</button> : null}
-            </div> : null}
+            </div>
             {tableSearch ? <span className="session-table-result-count" role="status">{filteredTableCards.filter((table) => table.visible).length} table{filteredTableCards.filter((table) => table.visible).length === 1 ? '' : 's'} found</span> : null}
           </div> : null}
           <div className="tables-container">{renderSessionTables()}</div>
