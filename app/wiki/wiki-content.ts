@@ -107,7 +107,7 @@ export const WIKI_HAND_SECTIONS: WikiHandSection[] = [
     description: 'These conditions add fan value based on how or when the winning tile is acquired.',
     hands: [
       { title: 'Self Draw', value: '1 fan', description: 'Draw the winning tile yourself.', type: 'condition-only' },
-      { title: 'Concealed Hand', value: '1 fan', description: 'Win without calling chow, pong, or kong; entire hand is concealed.', type: 'condition-only' },
+      { title: 'Concealed Hand', value: '1 fan', description: 'Win without calling sheung , pong, or kong; entire hand is concealed.', type: 'condition-only' },
       { title: 'Win on Final Tile', value: '1 fan', description: 'Win by drawing the final tile in the wall, or when another player discards the final tile.', type: 'condition-only' },
       { title: 'After a Kong', value: '1 fan', description: 'Win with the replacement tile after calling kong.', type: 'condition-only' },
       { title: 'After Multiple Kongs', value: '8 fan', description: 'Call kong multiple times in a row and win with the replacement tile.', type: 'condition-only' },
@@ -266,7 +266,7 @@ export const WIKI_HAND_SECTIONS: WikiHandSection[] = [
       {
         title: 'All Triplets',
         value: '3 fan',
-        description: 'Four pongs or kongs plus a pair. No chows.',
+        description: 'Four pongs or kongs plus a pair. No sheungs.',
         type: 'standard',
         groups: [
           ['c1', 'c1', 'c1'],
@@ -333,12 +333,12 @@ export const WIKI_HAND_SECTIONS: WikiHandSection[] = [
   {
     heading: 'Sequence hands',
     id: 'sequence-hands',
-    description: 'Hands made of sequence sets (chows).',
+    description: 'Hands made of sequence sets (sheungs).',
     hands: [
       {
         title: 'All Sequences',
         value: '1 fan',
-        description: 'Four chows plus a pair. No pongs or kongs.',
+        description: 'Four sheungs plus a pair. No pongs or kongs.',
         type: 'standard',
         groups: [
           ['c2', 'c3', 'c4'],
