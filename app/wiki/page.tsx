@@ -424,7 +424,7 @@ export default function WikiPage() {
               <p>3 consecutive numbered tiles in the same suit (e.g. 2-3-4 of Characters). Honors cannot make chows.</p>
             </div>
             <div className="wiki-basics-term-card">
-              <h4>Pong / Triplet</h4>
+              <h4>Pong (Triplet)</h4>
               <p>3 identical tiles (e.g. 3 Red Dragons or 3 Five of Circles).</p>
             </div>
             <div className="wiki-basics-term-card">
