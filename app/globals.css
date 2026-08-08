@@ -63,8 +63,21 @@ html.dark {
   --focus-ring: 243 188 82;
 }
 
-* { box-sizing: border-box; }
-html { background: rgb(var(--canvas)); }
+* {
+  box-sizing: border-box;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+html, body {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+  background: rgb(var(--canvas));
+}
 body {
   margin: 0;
   color: rgb(var(--ink));
@@ -690,8 +703,11 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
   background: rgb(var(--surface-3));
 }
 .wiki-section {
-  margin-bottom: 2.5rem;
+  margin-bottom: 3.5rem;
   scroll-margin-top: calc(6rem + 1rem);
+}
+.wiki-section-heading {
+  margin-bottom: 1.5rem;
 }
 .wiki-section-heading h2 {
   margin: 0;
@@ -700,7 +716,7 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
   letter-spacing: -.02em;
 }
 .wiki-section-heading p {
-  margin: .7rem 0 0;
+  margin: .75rem 0 0;
   color: rgb(var(--muted));
   line-height: 1.75;
   max-width: 68rem;
@@ -708,16 +724,16 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
 .wiki-hand-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 1.35rem;
-  margin-top: 1.25rem;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
 }
 .wiki-tile-chart-section {
-  margin-bottom: 2.75rem;
+  margin-bottom: 3.5rem;
 }
 .wiki-tile-chart {
   display: grid;
   gap: 1.5rem;
-  margin-top: 1.2rem;
+  margin-top: 1.5rem;
 }
 .wiki-tile-chart-group {
   padding: 1.4rem;
@@ -773,30 +789,64 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
 }
 .wiki-hand-card-header {
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: .5rem;
+}
+.wiki-hand-card-title-row {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  width: 100%;
 }
-.wiki-hand-card-header h3 {
+.wiki-hand-card-title-row h3 {
   margin: 0;
   font-size: 1.05rem;
   font-weight: 800;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .5rem;
 }
-.wiki-hand-card-header p {
-  margin: .5rem 0 0;
+.wiki-hand-tag {
+  display: inline-flex;
+  padding: .2rem .55rem;
+  border-radius: 4px;
+  background: rgb(var(--cinnabar) / .12);
+  color: rgb(var(--cinnabar));
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .02em;
+}
+.wiki-hand-card-description {
+  margin: 0;
   color: rgb(var(--muted));
   font-size: .95rem;
   line-height: 1.6;
+  width: 100%;
 }
 .wiki-hand-value {
   flex-shrink: 0;
-  padding: .7rem .85rem;
+  padding: .5rem .8rem;
   border-radius: 999px;
   background: rgb(var(--action-muted));
   color: rgb(var(--ink));
   font-family: var(--font-mono), ui-monospace, monospace;
   font-weight: 900;
-  font-size: .95rem;
+  font-size: .92rem;
+}
+.wiki-hand-groups-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 1.2rem;
+  row-gap: .85rem;
+}
+.wiki-hand-tile-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
 }
 .wiki-hand-tile-row {
   display: flex;
@@ -807,6 +857,127 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
 .wiki-hand-empty {
   color: rgb(var(--muted));
   font-size: .95rem;
+  font-style: italic;
+}
+.wiki-hand-note {
+  font-size: .85rem;
+  color: rgb(var(--bamboo));
+  font-weight: 700;
+  margin-top: .15rem;
+}
+
+/* Mahjong Basics Styles */
+.wiki-basics-hero-card {
+  padding: 1.6rem;
+  border: 1px solid rgb(var(--line));
+  border-radius: 18px;
+  background: rgb(var(--surface-1));
+  box-shadow: 0 12px 32px rgb(var(--shadow)/.06);
+  margin-top: 1.5rem;
+  margin-bottom: 1.75rem;
+}
+.wiki-basics-hero-card h3 {
+  margin: 0 0 .6rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+.wiki-basics-hero-card p {
+  margin: 0 0 1.35rem;
+  color: rgb(var(--muted));
+  font-size: .98rem;
+  line-height: 1.6;
+}
+.wiki-basics-example-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  column-gap: 1.35rem;
+  row-gap: 1.1rem;
+}
+.wiki-basics-example-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .45rem;
+}
+.wiki-basics-label {
+  font-size: .75rem;
+  font-weight: 800;
+  color: rgb(var(--bamboo));
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+.wiki-basics-terms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+}
+.wiki-basics-term-card {
+  padding: 1.35rem;
+  border: 1px solid rgb(var(--line));
+  border-radius: 14px;
+  background: rgb(var(--surface-2));
+}
+.wiki-basics-term-card h4 {
+  margin: 0 0 .4rem;
+  font-size: .98rem;
+  font-weight: 800;
+  color: rgb(var(--ink));
+}
+.wiki-basics-term-card p {
+  margin: 0;
+  font-size: .88rem;
+  color: rgb(var(--muted));
+  line-height: 1.6;
+}
+
+/* How Scoring Works Steps */
+.wiki-scoring-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+  margin-bottom: 1.75rem;
+}
+.wiki-step-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.25rem;
+  border: 1px solid rgb(var(--line));
+  border-radius: 14px;
+  background: rgb(var(--surface-1));
+}
+.wiki-step-num {
+  display: grid;
+  width: 2.2rem;
+  height: 2.2rem;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 50%;
+  background: rgb(var(--bamboo));
+  color: rgb(var(--surface-1));
+  font-weight: 900;
+  font-size: .95rem;
+}
+.wiki-step-card h4 {
+  margin: 0 0 .25rem;
+  font-size: .98rem;
+  font-weight: 800;
+}
+.wiki-step-card p {
+  margin: 0;
+  font-size: .86rem;
+  color: rgb(var(--muted));
+  line-height: 1.5;
+}
+.wiki-rule-list {
+  margin: .5rem 0 0;
+  padding-left: 1.2rem;
+  font-size: .9rem;
+  line-height: 1.6;
+  color: rgb(var(--muted));
 }
 .static-mahjong-tile {
   display: grid;

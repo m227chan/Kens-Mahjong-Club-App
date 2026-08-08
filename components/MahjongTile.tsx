@@ -63,54 +63,64 @@ export const mahjongTiles = {
 
 export type MahjongTileId = keyof typeof mahjongTiles
 
-const TILE_SPRITE_IMAGE_SIZE = 894
+// Sprite source: public/mahjong-tiles-clean.jpg (1254×1254 PNG)
+const TILE_SPRITE_IMAGE_SIZE = 1254
 const mahjongTileSprites: Record<
   MahjongTileId,
-  { x: number; y: number; width: number; height: number; offsetX?: number }
+  { x: number; y: number; width: number; height: number }
 > = {
-  east: { x: 137, y: 203, width: 82, height: 109 },
-  south: { x: 219, y: 203, width: 81, height: 109 },
-  west: { x: 300, y: 203, width: 82, height: 109 },
-  north: { x: 382, y: 203, width: 81, height: 109 },
-  red: { x: 463, y: 203, width: 82, height: 109, offsetX: 6 },
-  green: { x: 545, y: 203, width: 81, height: 109, offsetX: 6 },
-  white: { x: 626, y: 203, width: 82, height: 109 },
-  flower: { x: 137, y: 336, width: 81, height: 110 },
-  f1: { x: 137, y: 336, width: 81, height: 110 },
-  f2: { x: 218, y: 336, width: 81, height: 110 },
-  f3: { x: 299, y: 336, width: 81, height: 110 },
-  f4: { x: 380, y: 336, width: 81, height: 110 },
-  f5: { x: 461, y: 336, width: 81, height: 110 },
-  f6: { x: 542, y: 336, width: 81, height: 110 },
-  f7: { x: 623, y: 336, width: 81, height: 110 },
-  f8: { x: 704, y: 336, width: 81, height: 110 },
-  c1: { x: 137, y: 471, width: 81, height: 107 },
-  c2: { x: 218, y: 471, width: 81, height: 107 },
-  c3: { x: 299, y: 471, width: 81, height: 107 },
-  c4: { x: 380, y: 471, width: 81, height: 107 },
-  c5: { x: 461, y: 471, width: 81, height: 107 },
-  c6: { x: 542, y: 471, width: 81, height: 107 },
-  c7: { x: 623, y: 471, width: 81, height: 107 },
-  c8: { x: 704, y: 471, width: 81, height: 107 },
-  c9: { x: 785, y: 471, width: 81, height: 107 },
-  o1: { x: 137, y: 602, width: 81, height: 109 },
-  o2: { x: 218, y: 602, width: 81, height: 109 },
-  o3: { x: 299, y: 602, width: 81, height: 109 },
-  o4: { x: 380, y: 602, width: 81, height: 109, offsetX: 4 },
-  o5: { x: 461, y: 602, width: 80, height: 109, offsetX: 4 },
-  o6: { x: 541, y: 602, width: 81, height: 109, offsetX: 4 },
-  o7: { x: 622, y: 602, width: 81, height: 109, offsetX: 4 },
-  o8: { x: 703, y: 602, width: 81, height: 109, offsetX: 4 },
-  o9: { x: 784, y: 602, width: 81, height: 109 },
-  b1: { x: 137, y: 736, width: 81, height: 107 },
-  b2: { x: 218, y: 736, width: 81, height: 107 },
-  b3: { x: 299, y: 736, width: 81, height: 107 },
-  b4: { x: 380, y: 736, width: 81, height: 107 },
-  b5: { x: 461, y: 736, width: 80, height: 107 },
-  b6: { x: 541, y: 736, width: 81, height: 107 },
-  b7: { x: 622, y: 736, width: 81, height: 107 },
-  b8: { x: 703, y: 736, width: 81, height: 107 },
-  b9: { x: 784, y: 736, width: 81, height: 107 },
+  // Honor tiles (row 1, y center ≈ 320)
+  east:  { x: 205, y: 249, width: 106, height: 143 },
+  south: { x: 325, y: 249, width: 106, height: 143 },
+  west:  { x: 440, y: 249, width: 106, height: 143 },
+  north: { x: 553, y: 249, width: 106, height: 143 },
+  red:   { x: 678, y: 249, width: 106, height: 143 },
+  green: { x: 798, y: 249, width: 106, height: 143 },
+  white: { x: 927, y: 249, width: 106, height: 143 },
+
+  // Flower tiles (row 2, y center ≈ 516); flower uses same crop as f1
+  flower: { x: 196, y: 445, width: 106, height: 143 },
+  f1:     { x: 196, y: 445, width: 106, height: 143 },
+  f2:     { x: 316, y: 445, width: 106, height: 143 },
+  f3:     { x: 435, y: 445, width: 106, height: 143 },
+  f4:     { x: 558, y: 445, width: 106, height: 143 },
+  f5:     { x: 676, y: 445, width: 106, height: 143 },
+  f6:     { x: 796, y: 445, width: 106, height: 143 },
+  f7:     { x: 913, y: 445, width: 106, height: 143 },
+  f8:     { x: 1034, y: 445, width: 106, height: 143 },
+
+  // Character tiles (row 3, y center ≈ 713)
+  c1: { x: 199,  y: 642, width: 106, height: 143 },
+  c2: { x: 318,  y: 642, width: 106, height: 143 },
+  c3: { x: 433,  y: 642, width: 106, height: 143 },
+  c4: { x: 547,  y: 642, width: 106, height: 143 },
+  c5: { x: 662,  y: 642, width: 106, height: 143 },
+  c6: { x: 776,  y: 642, width: 106, height: 143 },
+  c7: { x: 892,  y: 642, width: 106, height: 143 },
+  c8: { x: 1011, y: 642, width: 106, height: 143 },
+  c9: { x: 1127, y: 642, width: 106, height: 143 },
+
+  // Circle tiles (row 4, y center ≈ 905)
+  o1: { x: 198,  y: 834, width: 106, height: 143 },
+  o2: { x: 315,  y: 834, width: 106, height: 143 },
+  o3: { x: 428,  y: 834, width: 106, height: 143 },
+  o4: { x: 542,  y: 834, width: 106, height: 143 },
+  o5: { x: 657,  y: 834, width: 106, height: 143 },
+  o6: { x: 773,  y: 834, width: 106, height: 143 },
+  o7: { x: 890,  y: 834, width: 106, height: 143 },
+  o8: { x: 1014, y: 834, width: 106, height: 143 },
+  o9: { x: 1122, y: 828, width: 114, height: 154 },
+
+  // Bamboo tiles (row 5, y center ≈ 1104)
+  b1: { x: 198,  y: 1033, width: 106, height: 143 },
+  b2: { x: 317,  y: 1033, width: 106, height: 143 },
+  b3: { x: 436,  y: 1033, width: 106, height: 143 },
+  b4: { x: 557,  y: 1033, width: 106, height: 143 },
+  b5: { x: 667,  y: 1033, width: 106, height: 143 },
+  b6: { x: 780,  y: 1033, width: 106, height: 143 },
+  b7: { x: 894,  y: 1033, width: 106, height: 143 },
+  b8: { x: 1012, y: 1033, width: 106, height: 143 },
+  b9: { x: 1128, y: 1033, width: 106, height: 143 },
 }
 
 const bambooLayouts: Record<1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9, readonly [number, number][]> = {
@@ -236,9 +246,9 @@ export function StaticMahjongTile({ id, size = 52, className = '' }: { id: Mahjo
   const style: CSSProperties = {
     width: `${size}px`,
     height: `${Math.round(size * (sprite.height / sprite.width))}px`,
-    backgroundImage: 'url(/mahjong-tiles.png)',
+    backgroundImage: 'url(/mahjong-tiles-clean.jpg)',
     backgroundSize: `${TILE_SPRITE_IMAGE_SIZE * scale}px ${TILE_SPRITE_IMAGE_SIZE * scale}px`,
-    backgroundPosition: `-${Math.round((sprite.x - (sprite.offsetX ?? 0)) * scale)}px -${Math.round(sprite.y * scale)}px`,
+    backgroundPosition: `-${Math.round(sprite.x * scale)}px -${Math.round(sprite.y * scale)}px`,
     backgroundRepeat: 'no-repeat',
     backgroundOrigin: 'content-box',
   }

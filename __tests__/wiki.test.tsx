@@ -44,12 +44,13 @@ describe('Mahjong hand wiki', () => {
     render(<WikiPage />)
 
     expect(screen.getByRole('heading', { name: 'Hong Kong Mahjong Wiki' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Bonus flowers' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Winning methods' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'How scoring works' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Mahjong basics', level: 2 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Flowers', level: 2 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Winning methods', level: 2 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'How scoring works', level: 2 })).toBeInTheDocument()
     expect(screen.getByRole('table', { name: 'Hong Kong Mahjong fan to base points reference' })).toBeInTheDocument()
     expect(screen.getByRole('cell', { name: '384' })).toBeInTheDocument()
-    expect(screen.getByText('The discarder pays the full penalty')).toBeInTheDocument()
+    expect(screen.getByText('Everyone pays the base value')).toBeInTheDocument()
     expect(screen.getAllByRole('img', { name: 'One of characters' }).length).toBeGreaterThan(0)
     expect(screen.getByRole('link', { name: 'Back to dashboard' })).toBeInTheDocument()
   })
@@ -69,11 +70,11 @@ describe('Mahjong hand wiki', () => {
 
   it('highlights the section that has crossed the reading line while scrolling', () => {
     const topBySection: Record<string, number> = {
-      'scoring-guide': 0,
+      'mahjong-basics': 0,
       'complete-tile-reference': 420,
-      'bonus-flowers': 780,
-      'winning-methods': 1120,
-      'suit-based-hands': 1460,
+      'scoring-guide': 780,
+      'bonus-flowers': 1120,
+      'winning-methods': 1460,
     }
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
       const top = topBySection[this.id] ?? 2_000
@@ -95,16 +96,16 @@ describe('Mahjong hand wiki', () => {
     })
 
     render(<WikiPage />)
-    expect(screen.getByRole('link', { name: /Scoring guide/ })).toHaveAttribute('aria-current', 'location')
+    expect(screen.getByRole('link', { name: /Mahjong basics/ })).toHaveAttribute('aria-current', 'location')
 
-    topBySection['scoring-guide'] = -800
+    topBySection['mahjong-basics'] = -800
     topBySection['complete-tile-reference'] = -440
-    topBySection['bonus-flowers'] = -120
-    topBySection['winning-methods'] = 110
+    topBySection['scoring-guide'] = -120
+    topBySection['bonus-flowers'] = 110
 
     fireEvent.scroll(window)
 
-    expect(screen.getByRole('link', { name: /Winning methods/ })).toHaveAttribute('aria-current', 'location')
+    expect(screen.getByRole('link', { name: /Flowers/ })).toHaveAttribute('aria-current', 'location')
   })
 
   it('shows Small Three Dragons as a full 14-tile hand with two dragon triplets plus a pair of the last dragon', () => {
