@@ -6,11 +6,11 @@ import { useEffect, useState, useRef } from 'react'
 import DashboardContent from '@/components/DashboardContent'
 import GameLogsModal from '@/components/GameLogsModal'
 import NetworkGraphModal from '@/components/NetworkGraphModal'
-import SessionPointTrackerModal from '@/components/SessionPointTrackerModal'
 import { LeaderboardPanel } from '@/components/Leaderboard'
 import SessionManager from '@/components/SessionManager'
 import ScoringRulesSettings from '@/components/ScoringRulesSettings'
 import TitleRulesSettings from '@/components/TitleRulesSettings'
+import ActivitySettings from '@/components/ActivitySettings'
 import ClubToolSidebar from '@/components/ClubToolSidebar'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSound } from '@/contexts/SoundContext'
@@ -23,7 +23,6 @@ import {
   rebuildClubStats,
   promoteManagerByEmail,
   resolveJoinRequest,
-  setActiveSeason,
   setPlayerAuthLink,
   startNewSeason,
   updatePlayerIcon,
@@ -32,16 +31,34 @@ import {
   subscribeClubMembers,
   subscribeJoinRequests,
   subscribePlayers,
+  subscribePlayerStats,
   subscribeScoringRules,
   subscribeTitleRules,
+  subscribeActivitySettings,
   subscribeSeasons
 } from '@/lib/data'
-import type { ClubDoc, ClubMembershipDoc, JoinRequestDoc, PlayerDoc, SeasonDoc } from '@/lib/types'
+import type { ClubDoc, ClubMembershipDoc, JoinRequestDoc, PlayerDoc, PlayerStatsDoc, SeasonDoc } from '@/lib/types'
 import { PLAYER_EMOJIS, randomUnusedPlayerEmoji } from '@/lib/players'
 import { DEFAULT_SCORING_RULES, type ScoringRules } from '@/lib/scoring-rules'
 import { DEFAULT_TITLE_RULES, type TitleRules } from '@/lib/title-rules'
+import { DEFAULT_ACTIVITY_SETTINGS, type ActivitySettings as ActivitySettingsValue } from '@/lib/activity-settings'
+import {
+  allSessionWindow,
+  buildCustomSessionWindow,
+  hoursSessionWindow,
+  todayDateInputValue,
+  type SessionPointWindow,
+  type SessionPointWindowHours,
+} from '@/lib/session-point-window'
 
 const iconChoices = PLAYER_EMOJIS
+const ANALYTICS_TIME_WINDOWS = [
+  { label: 'Last 24 hours', value: '24' },
+  { label: 'Last 48 hours', value: '48' },
+  { label: 'Last 7 days', value: '168' },
+  { label: 'All time', value: 'all' },
+  { label: 'Custom dates', value: 'custom' },
+]
 
 const CLUB_SUMMARY_DEFINITIONS = {
   players: {
@@ -62,14 +79,18 @@ const CLUB_SUMMARY_DEFINITIONS = {
 } as const
 
 export default function ClubWorkspace({ clubId, membership }: { clubId: string; membership: ClubMembershipDoc }) {
+  const today = todayDateInputValue()
   const { user } = useAuth()
   const router = useRouter()
   const [club, setClub] = useState<ClubDoc | null>(null)
   const [members, setMembers] = useState<ClubMembershipDoc[]>([])
   const [joinRequests, setJoinRequests] = useState<JoinRequestDoc[]>([])
   const [players, setPlayers] = useState<PlayerDoc[]>([])
+  const [playerStats, setPlayerStats] = useState<PlayerStatsDoc[]>([])
+  const [playerStatsReady, setPlayerStatsReady] = useState(false)
   const [scoringRules, setScoringRules] = useState<ScoringRules>(DEFAULT_SCORING_RULES)
   const [titleRules, setTitleRules] = useState<TitleRules>(DEFAULT_TITLE_RULES)
+  const [activitySettings, setActivitySettings] = useState<ActivitySettingsValue>(DEFAULT_ACTIVITY_SETTINGS)
   const [playerName, setPlayerName] = useState('')
   const [playerIcon, setPlayerIcon] = useState(() => randomUnusedPlayerEmoji(new Set()))
   const [iconPickerOpen, setIconPickerOpen] = useState(false)
@@ -80,14 +101,19 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [seasonMessage, setSeasonMessage] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [rosterOpen, setRosterOpen] = useState(false)
-  const [sessionTrackerOpen, setSessionTrackerOpen] = useState(false)
   const [analyticsOpen, setAnalyticsOpen] = useState(false)
+  const [analyticsPlayerId, setAnalyticsPlayerId] = useState<string | null>(null)
+  const [analyticsWindow, setAnalyticsWindow] = useState<SessionPointWindow>(() => hoursSessionWindow(24))
+  const [analyticsStartDate, setAnalyticsStartDate] = useState(today)
+  const [analyticsEndDate, setAnalyticsEndDate] = useState(today)
+  const [analyticsWindowError, setAnalyticsWindowError] = useState<string | null>(null)
   const [gameLogsOpen, setGameLogsOpen] = useState(false)
   const [networkOpen, setNetworkOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [clubToolsExpanded, setClubToolsExpanded] = useState(false)
   const [summaryDefinition, setSummaryDefinition] = useState<keyof typeof CLUB_SUMMARY_DEFINITIONS | null>(null)
   const [seasons, setSeasons] = useState<SeasonDoc[]>([])
+  const [viewedSeasonNumber, setViewedSeasonNumber] = useState<number | null>(null)
   const [seasonAction, setSeasonAction] = useState(false)
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null)
   const [customEmojiValue, setCustomEmojiValue] = useState('')
@@ -107,13 +133,41 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const usedIconKeys = new Set(players.map((player) => player.icon.trim().toLocaleLowerCase()))
   const latestSeasonNumber = seasons.length ? seasons[seasons.length - 1].seasonNumber : club?.activeSeasonNumber ?? 1
   const activeSeasonNumber = club?.activeSeasonNumber ?? latestSeasonNumber
+  const selectedSeasonNumber = viewedSeasonNumber ?? activeSeasonNumber
+  const viewingHistoricalSeason = selectedSeasonNumber !== activeSeasonNumber
   const linkedPlayerForUser = user ? players.find((player) => player.authUid === user.uid) ?? null : null
+  const analyticsWindowValue = analyticsWindow.mode === 'all'
+    ? 'all'
+    : analyticsWindow.mode === 'range'
+      ? 'custom'
+      : String(analyticsWindow.hours)
+
+  const applyAnalyticsCustomRange = (startDate: string, endDate: string) => {
+    try {
+      setAnalyticsWindow(buildCustomSessionWindow(startDate, endDate))
+      setAnalyticsWindowError(null)
+    } catch (error) {
+      setAnalyticsWindowError(error instanceof Error ? error.message : 'Choose a valid date range.')
+    }
+  }
 
   useEffect(() => subscribeClub(clubId, setClub), [clubId])
   useEffect(() => subscribeClubMembers(clubId, setMembers), [clubId])
   useEffect(() => subscribePlayers(clubId, setPlayers), [clubId])
+  useEffect(() => {
+    setPlayerStatsReady(false)
+    return subscribePlayerStats(
+      clubId,
+      (nextStats) => {
+        setPlayerStats(nextStats)
+        setPlayerStatsReady(true)
+      },
+      selectedSeasonNumber,
+    )
+  }, [clubId, selectedSeasonNumber])
   useEffect(() => subscribeScoringRules(clubId, setScoringRules), [clubId])
   useEffect(() => subscribeTitleRules(clubId, setTitleRules), [clubId])
+  useEffect(() => subscribeActivitySettings(clubId, setActivitySettings), [clubId])
   useEffect(() => subscribeSeasons(clubId, setSeasons), [clubId])
   useEffect(() => {
     if (!isManager || club?.universal) {
@@ -293,34 +347,29 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
     window.setTimeout(() => setCopied(false), 1800)
   }
 
-  const changeSeason = async (value: string) => {
-    if (!user) return
+  const changeSeason = (value: string) => {
     const seasonNumber = Number(value)
-    if (!seasonNumber || seasonNumber === activeSeasonNumber) return
-    setSeasonAction(true)
-    setSeasonMessage(null)
-    try {
-      await setActiveSeason(clubId, seasonNumber)
-      setClub((current) => current ? { ...current, activeSeasonNumber: seasonNumber } : current)
-      setSeasons((current) => current.map((season) => ({ ...season, active: season.seasonNumber === seasonNumber })))
-      setSeasonMessage(`Showing Season ${seasonNumber}.`)
-      router.refresh()
-    } catch (error) {
-      setSeasonMessage(error instanceof Error ? error.message : 'Unable to change season.')
-      play('error')
-    } finally {
-      setSeasonAction(false)
-    }
+    if (!seasonNumber || !seasons.some((season) => season.seasonNumber === seasonNumber)) return
+    setViewedSeasonNumber(seasonNumber === activeSeasonNumber ? null : seasonNumber)
+    setSeasonMessage(seasonNumber === activeSeasonNumber
+      ? `Showing current Season ${seasonNumber}.`
+      : `Viewing Season ${seasonNumber} history.`)
   }
 
   const createNextSeason = async () => {
     if (!user) return
     if (!window.confirm('Start a new season? Current season data will remain available, and the active session will reset.')) return
     setSeasonAction(true)
+    setSeasonMessage(null)
     try {
-      await startNewSeason(clubId, { createdBy: user.uid })
+      const nextSeason = await startNewSeason(clubId, { createdBy: user.uid })
+      setViewedSeasonNumber(null)
+      setSeasonMessage(`Season ${nextSeason} started.`)
       setSettingsOpen(false)
       window.location.reload()
+    } catch (error) {
+      setSeasonMessage(error instanceof Error ? error.message : 'Unable to start a new season.')
+      play('error')
     } finally {
       setSeasonAction(false)
     }
@@ -333,14 +382,12 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           expanded={clubToolsExpanded}
           onExpandedChange={setClubToolsExpanded}
           rosterOpen={rosterOpen}
-          sessionTrackerOpen={sessionTrackerOpen}
           analyticsOpen={analyticsOpen}
           gameLogsOpen={gameLogsOpen}
           networkOpen={networkOpen}
           settingsOpen={settingsOpen}
           onRoster={() => { setPlayerMessage(null); setRosterOpen(true) }}
-          onSessionTracker={() => setSessionTrackerOpen(true)}
-          onAnalytics={() => setAnalyticsOpen(true)}
+          onAnalytics={() => { setAnalyticsPlayerId(null); setAnalyticsOpen(true) }}
           onGameLogs={() => setGameLogsOpen(true)}
           onNetwork={() => setNetworkOpen(true)}
           onSettings={() => setSettingsOpen(true)}
@@ -360,17 +407,17 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           <label data-tour="season-selector" className="club-season-action flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
             <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Season</span>
             <select
-              value={activeSeasonNumber}
+              value={selectedSeasonNumber}
               onChange={(event) => changeSeason(event.target.value)}
               disabled={seasonAction}
               className="bg-transparent text-sm font-black text-slate-900 outline-none disabled:opacity-50"
               aria-label="Season"
             >
-              {seasons.some((season) => season.seasonNumber === activeSeasonNumber) ? null : (
-                <option value={activeSeasonNumber}>{activeSeasonNumber}</option>
+              {seasons.some((season) => season.seasonNumber === selectedSeasonNumber) ? null : (
+                <option value={selectedSeasonNumber}>{selectedSeasonNumber}</option>
               )}
               {seasons.map((season) => (
-                <option key={season.id} value={season.seasonNumber}>{season.seasonNumber}</option>
+                <option key={season.id} value={season.seasonNumber}>{season.seasonNumber}{season.seasonNumber === activeSeasonNumber ? ' (current)' : ''}</option>
               ))}
             </select>
           </label>
@@ -383,66 +430,6 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           </button>
           </div>
           {seasonMessage ? <span role="status" aria-live="polite" className="club-action-status flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">{seasonMessage}</span> : null}
-          {/* Legacy header tool markup retained only in source history; actions now render in ClubToolSidebar. <div className="club-tool-grid contents">
-          <button
-            data-tour="session-tracker-open"
-            type="button"
-            aria-haspopup="dialog"
-            aria-expanded={sessionTrackerOpen}
-            aria-controls="club-session-tracker-dialog"
-            onClick={() => setSessionTrackerOpen(true)}
-            className="club-secondary-action club-tool-action rounded-lg px-3 py-2 text-sm font-bold transition"
-          >
-            <span aria-hidden="true" className="club-tool-icon">±</span>
-            <span>Session tracker</span>
-          </button>
-          <button
-            data-tour="analytics-open"
-            type="button"
-            aria-haspopup="dialog"
-            aria-expanded={analyticsOpen}
-            aria-controls="club-analytics-dialog"
-            onClick={() => setAnalyticsOpen(true)}
-            className="club-secondary-action club-tool-action rounded-lg px-3 py-2 text-sm font-bold transition"
-          >
-            <span aria-hidden="true" className="club-tool-icon">▥</span>
-            <span>Analytics</span>
-          </button>
-          <button
-            data-tour="logs-open"
-            type="button"
-            onClick={() => setGameLogsOpen(true)}
-            className="club-secondary-action club-tool-action rounded-lg px-3 py-2 text-sm font-bold transition"
-          >
-            <span aria-hidden="true" className="club-tool-icon">≡</span>
-            <span className="hidden sm:inline">Game logs</span>
-            <span className="sm:hidden">Logs</span>
-          </button>
-          <button
-            data-tour="network-open"
-            type="button"
-            onClick={() => setNetworkOpen(true)}
-            className="club-secondary-action club-tool-action rounded-lg px-3 py-2 text-sm font-bold transition"
-          >
-            <span aria-hidden="true" className="club-tool-icon">◎</span>
-            <span>Network</span>
-          </button>
-          <button
-            data-tour="settings-open"
-            type="button"
-            onClick={() => setSettingsOpen(true)}
-            aria-label="Club settings"
-            aria-haspopup="dialog"
-            aria-expanded={settingsOpen}
-            aria-controls="club-settings-dialog"
-            title="Club settings"
-            className="club-secondary-action club-settings-action club-tool-action flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-bold transition"
-          >
-            <span aria-hidden="true" className="club-tool-icon">&#9881;</span>
-            <span className="hidden sm:inline">Club settings</span>
-            <span className="sm:hidden">Settings</span>
-          </button>
-          </div> */}
         </div>
       </div>
 
@@ -509,6 +496,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                 )}
               </div>
               <ScoringRulesSettings clubId={clubId} rules={scoringRules} isManager={isManager} />
+              <ActivitySettings clubId={clubId} settings={activitySettings} isManager={isManager} />
               <TitleRulesSettings clubId={clubId} rules={titleRules} isManager={isManager} />
               {isManager && !club?.universal ? (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
@@ -595,27 +583,26 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           ) : null}
 
           <div className={mobileView === 'standings' ? 'block md:block' : 'hidden md:block'}>
-            <LeaderboardPanel clubId={clubId} seasonNumber={activeSeasonNumber} players={players} titleRules={titleRules} />
+            <LeaderboardPanel clubId={clubId} seasonNumber={selectedSeasonNumber} players={players} stats={playerStats} titleRules={titleRules} activePlayerMonths={activitySettings.activePlayerMonths} onPlayerAnalytics={(playerId) => { setAnalyticsPlayerId(playerId); setAnalyticsOpen(true) }} />
           </div>
         </div>
 
         <aside className={mobileView === 'session' ? 'club-session-panel order-first block md:block xl:order-none' : 'club-session-panel order-first hidden md:block xl:order-none'}>
-          <SessionManager clubId={clubId} seasonNumber={activeSeasonNumber} players={players} isManager={isManager} scoringRules={scoringRules} />
+          {viewingHistoricalSeason ? (
+            <section className="rounded-lg border border-amber-200 bg-amber-50 p-5 text-amber-950">
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-700">Historical season</p>
+              <h2 className="mt-2 text-lg font-black">Season {selectedSeasonNumber} is read-only</h2>
+              <p className="mt-1 text-sm leading-6 text-amber-900">Standings and analytics show Season {selectedSeasonNumber}. Return to Season {activeSeasonNumber} to manage the current session.</p>
+              <button type="button" onClick={() => changeSeason(String(activeSeasonNumber))} className="mt-4 min-h-10 rounded border border-amber-300 bg-white px-3 text-sm font-bold text-amber-900">Return to current season</button>
+            </section>
+          ) : (
+            <SessionManager clubId={clubId} seasonNumber={activeSeasonNumber} players={players} isManager={isManager} scoringRules={scoringRules} />
+          )}
         </aside>
       </div>
 
         </div>
       </div>
-
-      {sessionTrackerOpen ? (
-        <SessionPointTrackerModal
-          clubId={clubId}
-          clubName={club?.name ?? membership.clubName}
-          players={players}
-          linkedPlayerId={linkedPlayerForUser?.id ?? null}
-          onClose={() => setSessionTrackerOpen(false)}
-        />
-      ) : null}
 
       {rosterOpen ? (
         <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
@@ -803,7 +790,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
       {analyticsOpen ? (
         <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
           <div id="club-analytics-dialog" data-tour="analytics-modal" role="dialog" aria-modal="true" aria-labelledby="club-analytics-title" className="responsive-modal-panel flex max-h-[92vh] w-full max-w-6xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
-            <div className="flex items-start justify-between gap-3 border-b border-slate-200 p-5">
+            <div className="flex shrink-0 flex-col items-start justify-between gap-3 border-b border-slate-200 p-5 sm:flex-row">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">Analytics</p>
                 <h3 id="club-analytics-title" className="mt-2 text-xl font-black text-slate-950">{club?.name ?? membership.clubName} insights</h3>
@@ -812,13 +799,32 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                   <span>How are these metrics calculated?</span><span aria-hidden="true">→</span>
                 </Link>
               </div>
-              <button data-tour="analytics-close" type="button" onClick={() => setAnalyticsOpen(false)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">
-                Close
-              </button>
+              <div className="flex w-full shrink-0 flex-wrap items-end justify-between gap-2 sm:w-auto sm:justify-end">
+                <label>
+                  <span className="sr-only">Time window for all analytics</span>
+                  <select aria-label="Time window for all analytics" value={analyticsWindowValue} onChange={(event) => {
+                    const value = event.target.value
+                    setAnalyticsWindowError(null)
+                    if (value === 'all') setAnalyticsWindow(allSessionWindow())
+                    else if (value === 'custom') applyAnalyticsCustomRange(analyticsStartDate, analyticsEndDate)
+                    else setAnalyticsWindow(hoursSessionWindow(Number(value) as SessionPointWindowHours))
+                  }} className="block min-h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900">
+                    {ANALYTICS_TIME_WINDOWS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </label>
+                {analyticsWindow.mode === 'range' ? <>
+                  <label className="text-[10px] font-black uppercase tracking-[.1em] text-slate-500">From<input type="date" value={analyticsStartDate} max={analyticsEndDate} onChange={(event) => { setAnalyticsStartDate(event.target.value); applyAnalyticsCustomRange(event.target.value, analyticsEndDate) }} className="mt-1 block min-h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm font-bold normal-case tracking-normal text-slate-900" /></label>
+                  <label className="text-[10px] font-black uppercase tracking-[.1em] text-slate-500">To<input type="date" value={analyticsEndDate} min={analyticsStartDate} max={today} onChange={(event) => { setAnalyticsEndDate(event.target.value); applyAnalyticsCustomRange(analyticsStartDate, event.target.value) }} className="mt-1 block min-h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm font-bold normal-case tracking-normal text-slate-900" /></label>
+                </> : null}
+                <button data-tour="analytics-close" type="button" onClick={() => setAnalyticsOpen(false)} className="min-h-10 rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">
+                  Close
+                </button>
+              </div>
+              {analyticsWindowError ? <p role="alert" className="w-full text-right text-xs font-bold text-rose-700">{analyticsWindowError}</p> : null}
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-slate-50 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
               <div className="space-y-5">
-                <DashboardContent clubId={clubId} seasonNumber={activeSeasonNumber} />
+                <DashboardContent clubId={clubId} clubName={club?.name ?? membership.clubName} seasonNumber={selectedSeasonNumber} initialPlayerId={analyticsPlayerId} linkedPlayerId={linkedPlayerForUser?.id ?? null} analyticsWindow={analyticsWindow} players={players} stats={playerStats} statsReady={playerStatsReady} />
               </div>
             </div>
           </div>
@@ -829,7 +835,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         <GameLogsModal
           clubId={clubId}
           seasons={seasons}
-          currentSeason={activeSeasonNumber}
+          currentSeason={selectedSeasonNumber}
           userId={user.uid}
           isManager={isManager}
           onClose={() => setGameLogsOpen(false)}
@@ -841,7 +847,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           clubId={clubId}
           players={players}
           seasons={seasons}
-          currentSeason={activeSeasonNumber}
+          currentSeason={selectedSeasonNumber}
           onClose={() => setNetworkOpen(false)}
         />
       ) : null}

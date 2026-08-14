@@ -241,6 +241,10 @@ export default function GameLogsModal({
 
   const sortMark = (column: string) => tableSort === column ? (tableSortDirection === 'asc' ? '▲' : '▼') : '↕'
   const tableFilterCount = [Boolean(tableSearch.trim()), Boolean(scoreFilterPlayerId), Boolean(minimumScore), Boolean(maximumScore)].filter(Boolean).length
+  const toggleMobileFilters = () => {
+    if (mobileFiltersOpen) setAdvancedTableFiltersOpen(false)
+    setMobileFiltersOpen((current) => !current)
+  }
   const canEditGame = (game: GameDoc) => {
     if (isManager) return true
     const createdAt = game.createdAt?.toMillis?.() ?? 0
@@ -468,44 +472,46 @@ export default function GameLogsModal({
   return (
     <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
       <div role="dialog" aria-modal="true" aria-labelledby="game-logs-title" data-tour="logs-modal" className="responsive-modal-panel flex max-h-[calc(100dvh-3rem)] w-full max-w-7xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
-        <div className="flex flex-col gap-4 border-b border-slate-200 p-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex items-center justify-between gap-2 border-b border-slate-200 p-2.5 sm:items-start sm:p-5 lg:items-start">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-600">Game logs</p>
-            <h3 id="game-logs-title" className="mt-2 text-xl font-black text-slate-950">Club game logs</h3>
-            <p className="mt-1 text-sm text-slate-500">One record per game. {isManager ? 'Managers can edit or delete any record.' : 'You can edit games you created for 24 hours.'}</p>
+            <p className="hidden text-xs font-bold uppercase tracking-[0.18em] text-sky-600 sm:block">Game logs</p>
+            <h3 id="game-logs-title" className="text-lg font-black text-slate-950 sm:mt-2 sm:text-xl"><span className="sm:hidden">Game logs</span><span className="hidden sm:inline">Club game logs</span></h3>
+            <p className="mt-1 hidden text-sm text-slate-500 sm:block">One record per game. {isManager ? 'Managers can edit or delete any record.' : 'You can edit games you created for 24 hours.'}</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={exportCsv} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-500">
-              Export CSV
+          <div className="flex shrink-0 gap-1.5 sm:gap-2">
+            <button type="button" onClick={exportCsv} className="rounded-lg bg-emerald-600 px-2.5 py-2 text-xs font-bold text-white hover:bg-emerald-500 sm:px-3 sm:text-sm">
+              <span className="sm:hidden">Export</span><span className="hidden sm:inline">Export CSV</span>
             </button>
-            {isManager ? <button type="button" onClick={() => fileInputRef.current?.click()} disabled={importing} className="rounded-lg bg-sky-600 px-3 py-2 text-sm font-bold text-white hover:bg-sky-500 disabled:opacity-50">
-              {importing ? 'Importing...' : 'Import CSV'}
+            {isManager ? <button type="button" onClick={() => fileInputRef.current?.click()} disabled={importing} className="rounded-lg bg-sky-600 px-2.5 py-2 text-xs font-bold text-white hover:bg-sky-500 disabled:opacity-50 sm:px-3 sm:text-sm">
+              <span className="sm:hidden">{importing ? 'Importing…' : 'Import'}</span><span className="hidden sm:inline">{importing ? 'Importing...' : 'Import CSV'}</span>
             </button> : null}
-            <button data-tour="logs-close" type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">
-              Close
+            <button data-tour="logs-close" type="button" onClick={onClose} aria-label="Close game logs" className="grid h-9 w-9 place-items-center rounded-lg border border-slate-300 text-lg font-bold text-slate-600 sm:h-auto sm:w-auto sm:px-3 sm:py-2 sm:text-sm">
+              <span className="sm:hidden">×</span><span className="hidden sm:inline">Close</span>
             </button>
             <input ref={fileInputRef} type="file" accept=".csv,text/csv" onChange={handleImport} className="hidden" />
           </div>
         </div>
 
-        <div className="modal-controls shrink-0 border-b border-slate-200 bg-slate-50 p-4">
-          <div className="flex items-center justify-between gap-4 md:hidden">
-            <div className="min-w-0">
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-700">Filters</p>
-              <p className="mt-1 truncate text-xs font-semibold text-slate-500">{filterSummary}</p>
-            </div>
+        <div className="modal-controls shrink-0 border-b border-slate-200 bg-slate-50 p-2 sm:p-4">
+          <div className="md:hidden">
             <button
               type="button"
               aria-expanded={mobileFiltersOpen}
               aria-controls="game-log-filters"
-              onClick={() => setMobileFiltersOpen((current) => !current)}
-              className="flex min-h-11 shrink-0 items-center gap-2 rounded border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700"
+              onClick={toggleMobileFilters}
+              className="flex min-h-10 w-full items-center gap-2 rounded border border-slate-300 bg-white px-2.5 py-1.5 text-slate-700"
             >
-              {mobileFiltersOpen ? 'Hide' : 'Change'}
-              <span aria-hidden="true" className={`transition-transform ${mobileFiltersOpen ? 'rotate-180' : ''}`}>⌄</span>
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 shrink-0"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+              <span className="shrink-0 text-xs font-black">Filters{tableFilterCount ? ` · ${tableFilterCount}` : ''}</span>
+              <span className="min-w-0 flex-1 truncate text-left text-[11px] font-semibold text-slate-500">{filterSummary}</span>
+              <span aria-hidden="true" className={`shrink-0 transition-transform ${mobileFiltersOpen ? 'rotate-180' : ''}`}>⌄</span>
             </button>
+            <div className="mt-1.5 flex min-h-7 items-center justify-between gap-2 px-0.5 text-[10px] font-semibold text-slate-500">
+              <span>{loadingGames ? 'Loading…' : `${displayedGames.length.toLocaleString()} shown · ${games.length.toLocaleString()} loaded`}</span>
+              {hasOlderGames && !loadingGames ? <button type="button" onClick={loadOlderGames} disabled={loadingOlderGames} className="shrink-0 rounded border border-slate-300 bg-white px-2 py-1 font-bold text-slate-700 disabled:opacity-50">{loadingOlderGames ? 'Loading…' : '+100 older'}</button> : null}
+            </div>
           </div>
-          <div id="game-log-filters" className={`${mobileFiltersOpen ? 'mt-4 block' : 'hidden'} md:block`}>
+          <div id="game-log-filters" className={`${mobileFiltersOpen ? 'mt-2 block' : 'hidden'} md:block`}>
             <div className="flex flex-wrap items-end gap-3">
               <label className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
                 Season
@@ -541,13 +547,14 @@ export default function GameLogsModal({
                 <button type="button" aria-pressed={layoutMode === 'table'} onClick={() => setLayoutMode('table')} className={`relative z-10 min-h-8 rounded-full px-3 text-xs font-bold transition-colors ${layoutMode === 'table' ? 'text-slate-900' : 'text-slate-500'}`}>Table</button>
               </div>
             </div>
+            <button type="button" aria-expanded={advancedTableFiltersOpen} onClick={() => setAdvancedTableFiltersOpen((current) => !current)} className={`mt-2 min-h-9 w-full rounded border px-3 py-1.5 text-xs font-bold md:hidden ${tableFilterCount ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-300 bg-white text-slate-700'}`}>Table filters{tableFilterCount ? ` (${tableFilterCount})` : ''}</button>
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-500">
+          <div className="mt-3 hidden flex-wrap items-center gap-3 text-xs font-semibold text-slate-500 md:flex">
             <span>{loadingGames ? 'Loading recent games…' : `${displayedGames.length.toLocaleString()} shown · ${games.length.toLocaleString()} loaded`}</span>
             {hasOlderGames && !loadingGames ? <button type="button" onClick={loadOlderGames} disabled={loadingOlderGames} className="rounded border border-slate-300 bg-white px-3 py-1.5 font-bold text-slate-700 disabled:opacity-50">{loadingOlderGames ? 'Loading…' : 'Load 100 older games'}</button> : null}
             <button type="button" aria-expanded={advancedTableFiltersOpen} onClick={() => setAdvancedTableFiltersOpen((current) => !current)} className={`rounded border px-3 py-1.5 font-bold ${tableFilterCount ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-300 bg-white text-slate-700'}`}>Table filters{tableFilterCount ? ` (${tableFilterCount})` : ''}</button>
           </div>
-          {advancedTableFiltersOpen ? <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+          {advancedTableFiltersOpen ? <div className={`${mobileFiltersOpen ? 'grid' : 'hidden'} mt-3 gap-2 sm:grid-cols-2 md:grid lg:grid-cols-6`}>
             <label className="text-xs font-bold text-slate-600 lg:col-span-2">Search table<input type="search" value={tableSearch} onChange={(event) => setTableSearch(event.target.value)} placeholder="Date, player, season, or notes…" className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm font-medium text-slate-800" /></label>
             <label className="text-xs font-bold text-slate-600">Score player<select value={scoreFilterPlayerId} onChange={(event) => setScoreFilterPlayerId(event.target.value)} className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-2 text-sm font-medium text-slate-800"><option value="">Any player</option>{players.map((player) => <option key={player.id} value={player.id}>{player.displayName}</option>)}</select></label>
             <label className="text-xs font-bold text-slate-600">Minimum score<input type="number" value={minimumScore} onChange={(event) => setMinimumScore(event.target.value)} disabled={!scoreFilterPlayerId} placeholder="Any" className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm font-medium text-slate-800 disabled:bg-slate-100" /></label>
@@ -557,14 +564,14 @@ export default function GameLogsModal({
           {importMessage ? <p role="status" className="mt-3 text-sm font-semibold text-slate-600">{importMessage}</p> : null}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-auto p-3 sm:p-4">
+        <div className="min-h-0 flex-1 overflow-auto p-2 sm:p-4">
           <div className={`grid grid-cols-1 gap-3 ${layoutMode === 'table' ? 'md:hidden' : ''}`}>
             {displayedGames.map((game) => (
               <article key={game.id} className="game-log-card group w-full overflow-hidden rounded border border-slate-200 bg-white text-left shadow-sm transition hover:border-[rgb(var(--bamboo)/.55)]">
-                <span className="flex items-center justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-5 sm:py-4">
+                <span className="flex items-center justify-between gap-3 border-b border-slate-200 px-3 py-2 sm:px-5 sm:py-4">
                   <span className="min-w-0">
                     <strong className="block truncate text-sm text-slate-900 sm:text-base">{formatDate(game)}</strong>
-                    <span className="mt-1 inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[.08em] text-slate-500">Season {game.seasonNumber ?? 1}</span>
+                    <span className="mt-0.5 inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[.08em] text-slate-500 sm:mt-1 sm:text-[11px]">Season {game.seasonNumber ?? 1}</span>
                   </span>
                   {canEditGame(game) ? <button type="button" onClick={() => openGame(game)} className="min-h-11 shrink-0 rounded border border-[rgb(var(--bamboo)/.4)] px-3 text-xs font-bold text-[rgb(var(--bamboo))] transition-transform group-hover:translate-x-0.5">Review record →</button> : <span className="shrink-0 text-xs font-bold text-slate-500">Read only</span>}
                 </span>
@@ -572,7 +579,7 @@ export default function GameLogsModal({
                   {game.entries.map((entry) => {
                     const player = playerById.get(entry.playerId)
                     return (
-                      <span key={entry.playerId} className="flex min-h-16 items-center justify-between gap-3 bg-slate-50 px-4 py-3 sm:min-h-20 sm:flex-col sm:items-start sm:justify-center sm:gap-1">
+                      <span key={entry.playerId} className="flex min-h-12 items-center justify-between gap-2 bg-slate-50 px-3 py-2 sm:min-h-20 sm:flex-col sm:items-start sm:justify-center sm:gap-1 sm:px-4 sm:py-3">
                         <span className="flex min-w-0 items-center gap-2">
                           <span className="text-base" aria-hidden="true">{player?.icon ?? '🀄'}</span>
                           <span className="truncate text-xs font-bold text-slate-700 sm:text-sm">{player?.displayName ?? 'Player'}</span>

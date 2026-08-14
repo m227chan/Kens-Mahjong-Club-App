@@ -35,9 +35,10 @@ export type SessionPointGameRow = {
 }
 
 function windowFilterSql(window: SessionPointWindow, paramOffset: number) {
+  if (window.mode === 'all') return { clause: 'true', params: [] as unknown[] }
   if (window.mode === 'hours') {
     return {
-      clause: `g.played_at >= now() - make_interval(hours => $${paramOffset})`,
+      clause: `g.played_at >= now() - make_interval(hours => $${paramOffset}) and g.played_at <= now()`,
       params: [window.hours] as unknown[],
     }
   }

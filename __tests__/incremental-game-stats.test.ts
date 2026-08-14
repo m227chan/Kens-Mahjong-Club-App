@@ -40,7 +40,7 @@ describe('incremental game stats', () => {
     applyNewGame(stats, game('game-1', '2026-07-14T20:00:00Z'), {})
     applyNewGame(stats, game('game-2', '2026-07-14T21:00:00Z'), {})
 
-    expect(stats.get('a')).toMatchObject({ totalPoints: 48, gamesPlayed: 2, gamesWon: 2, skillGamesPlayed: 2, daysAttended: 1 })
+    expect(stats.get('a')).toMatchObject({ totalPoints: 48, gamesPlayed: 2, gamesWon: 2, skillGamesPlayed: 2, daysAttended: 1, recentPointTrend: [24, 48] })
     expect(stats.get('a')?.recentEloDeltas).toHaveLength(2)
     expect(stats.get('a')?.recentSkillDeltas).toHaveLength(2)
   })

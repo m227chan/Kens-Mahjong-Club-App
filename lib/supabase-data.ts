@@ -33,6 +33,12 @@ import {
   type TitleRules,
 } from '@/lib/title-rules'
 import {
+  activitySettingsFromRow,
+  DEFAULT_ACTIVITY_SETTINGS,
+  type ActivitySettings,
+} from '@/lib/activity-settings'
+import {
+  sessionWindowDateBounds,
   sessionWindowRequestBody,
   type SessionPointWindow,
 } from '@/lib/session-point-window'
@@ -167,6 +173,7 @@ function mapStats(row: Row): PlayerStatsDoc & { id: string } {
     skillRank: Number(row.skill_rank ?? 0),
     last5SkillDelta: Number(row.last5_skill_delta ?? 0),
     recentSkillDeltas: (row.recent_skill_deltas as number[] | null) ?? [],
+    recentPointTrend: ((row.recent_point_trend as Array<number | string> | null) ?? []).map(Number),
     daysAttended: Number(row.days_attended),
     lastPlayedAt: row.last_played_at as string | null,
     updatedAt: ts(row.updated_at),
@@ -237,6 +244,7 @@ function realtime<T>(
   load: () => Promise<T>,
   callback: (value: T) => void,
   onError?: (error: Error) => void,
+  onChange?: () => void,
 ) {
   let active = true
   let running = false
@@ -275,7 +283,10 @@ function realtime<T>(
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table, filter },
-      refresh,
+      () => {
+        onChange?.()
+        refresh()
+      },
     )
     .subscribe()
   return () => {
@@ -456,6 +467,8 @@ export const updateScoringRules = (clubId: string, rules: ScoringRules) =>
   serverAction<void>('updateScoringRules', { clubId, rules })
 export const updateTitleRules = (clubId: string, rules: TitleRules) =>
   serverAction<void>('updateTitleRules', { clubId, rules })
+export const updateActivitySettings = (clubId: string, settings: ActivitySettings) =>
+  serverAction<void>('updateActivitySettings', { clubId, settings })
 export const deleteClub = (clubId: string) =>
   serverAction<void>('deleteClub', { clubId })
 export async function createGame(clubId: string, input: Row) {
@@ -532,18 +545,60 @@ export function subscribeTitleRules(
     callback,
   )
 }
-const historyCache = new Map<string, { expires: number; value: unknown[] }>()
+export function subscribeActivitySettings(
+  clubId: string,
+  callback: (settings: ActivitySettings) => void,
+) {
+  const load = async () => {
+    const { data, error } = await client()
+      .from('app_configs')
+      .select('active_player_months')
+      .eq('club_id', clubId)
+      .maybeSingle()
+    if (error) throw error
+    return data ? activitySettingsFromRow(data as Row) : DEFAULT_ACTIVITY_SETTINGS
+  }
+  return realtime(
+    `activity-settings:${clubId}`,
+    'app_configs',
+    `club_id=eq.${clubId}`,
+    load,
+    callback,
+  )
+}
+const historyCache = new Map<
+  string,
+  { expires: number; value?: unknown; pending?: Promise<unknown> }
+>()
 const DATABASE_PAGE_SIZE = 1000
-async function cached<T>(key: string, load: () => Promise<T[]>) {
+async function cached<T>(
+  key: string,
+  load: () => Promise<T>,
+  ttl = 300_000,
+) {
   const hit = historyCache.get(key)
-  if (hit && hit.expires > Date.now()) return hit.value as T[]
-  const value = await load()
-  historyCache.set(key, { expires: Date.now() + 300_000, value })
-  return value
+  if (hit?.pending) return hit.pending as Promise<T>
+  if (hit?.value !== undefined && hit.expires > Date.now())
+    return hit.value as T
+  const pending = load()
+  const pendingEntry = { expires: 0, pending: pending as Promise<unknown> }
+  historyCache.set(key, pendingEntry)
+  try {
+    const value = await pending
+    if (historyCache.get(key) === pendingEntry)
+      historyCache.set(key, { expires: Date.now() + ttl, value })
+    return value
+  } catch (error) {
+    historyCache.delete(key)
+    throw error
+  }
 }
 export function invalidateClubHistoryCache(clubId: string) {
   for (const key of historyCache.keys())
     if (key.startsWith(`${clubId}:`)) historyCache.delete(key)
+  window.dispatchEvent(
+    new CustomEvent('club-history-invalidated', { detail: { clubId } }),
+  )
 }
 async function fetchGames(
   clubId: string,
@@ -591,21 +646,87 @@ export function loadGamesPage(
 export function loadAllGames(clubId: string) {
   return cached(`${clubId}:all`, () => fetchGames(clubId))
 }
-export async function loadAnalyticsGames(
+async function fetchGamesInRange(
   clubId: string,
-  gameCount: number,
+  options: {
+    startAt?: string | null
+    endAt?: string | null
+    endInclusive?: boolean
+    seasonNumber?: number
+  },
+) {
+  const makeQuery = () => {
+    let query = client()
+      .from('games')
+      .select('*, game_entries(player_id,score)')
+      .eq('club_id', clubId)
+      .order('played_at', { ascending: true })
+      .order('id', { ascending: true })
+    if (options.seasonNumber)
+      query = query.eq('season_number', options.seasonNumber)
+    if (options.startAt) query = query.gte('played_at', options.startAt)
+    if (options.endAt)
+      query = options.endInclusive
+        ? query.lte('played_at', options.endAt)
+        : query.lt('played_at', options.endAt)
+    return query
+  }
+  const rows: Row[] = []
+  for (let from = 0; ; from += DATABASE_PAGE_SIZE) {
+    const { data, error } = await makeQuery().range(
+      from,
+      from + DATABASE_PAGE_SIZE - 1,
+    )
+    if (error) throw error
+    rows.push(...((data ?? []) as Row[]))
+    if ((data?.length ?? 0) < DATABASE_PAGE_SIZE) break
+  }
+  return rows.map(mapGame)
+}
+
+export function loadGamesInDateRange(
+  clubId: string,
+  start: Date | null,
+  end: Date | null,
   seasonNumber?: number,
 ) {
-  const games = gameCount
-    ? await loadGamesPage(clubId, Math.max(gameCount * 2, gameCount + 25))
-    : await loadAllGames(clubId)
-  return games
-    .filter((game) => !seasonNumber || game.seasonNumber === seasonNumber)
-    .slice(gameCount ? -gameCount : 0)
+  const startAt = start?.toISOString() ?? null
+  const endAt = end?.toISOString() ?? null
+  const key = `${clubId}:range:${seasonNumber ?? 'all'}:${startAt ?? ''}:${endAt ?? ''}`
+  return cached(
+    key,
+    () =>
+      fetchGamesInRange(clubId, {
+        startAt,
+        endAt,
+        endInclusive: true,
+        seasonNumber,
+      }),
+    60_000,
+  )
+}
+export async function loadAnalyticsGames(
+  clubId: string,
+  window: SessionPointWindow,
+  seasonNumber?: number,
+) {
+  if (window.mode === 'all') {
+    const games = await loadAllGames(clubId)
+    return games.filter(
+      (game) => !seasonNumber || game.seasonNumber === seasonNumber,
+    )
+  }
+  const { startAt, endAt } = sessionWindowDateBounds(window)
+  const key = `${clubId}:analytics-games:${seasonNumber ?? 'all'}:${window.mode === 'hours' ? `${window.hours}h` : `${window.startAt}:${window.endAt}`}`
+  return cached(
+    key,
+    () => fetchGamesInRange(clubId, { startAt, endAt, seasonNumber }),
+    60_000,
+  )
 }
 export async function loadAnalyticsSkillEvents(
   clubId: string,
-  gameCount: number,
+  window: SessionPointWindow,
   seasonNumber?: number,
 ) {
   const makeQuery = (ascending: boolean) => {
@@ -616,16 +737,21 @@ export async function loadAnalyticsSkillEvents(
       .order('occurred_at', { ascending })
       .order('id', { ascending })
     if (seasonNumber) query = query.eq('season_number', seasonNumber)
+    if (window.mode !== 'all') {
+      const { startAt, endAt } = sessionWindowDateBounds(window)
+      if (startAt) query = query.gte('occurred_at', startAt)
+      if (endAt) query = query.lt('occurred_at', endAt)
+    }
     return query
   }
-  let rows: Row[] = []
-  if (gameCount) {
-    const { data, error } = await makeQuery(false).limit(
-      Math.max(gameCount * 8, 200),
-    )
-    if (error) throw error
-    rows = (data ?? []) as Row[]
-  } else {
+  const windowKey =
+    window.mode === 'all'
+      ? 'all'
+      : window.mode === 'hours'
+        ? `${window.hours}h`
+        : `${window.startAt}:${window.endAt}`
+  return cached(`${clubId}:analytics-skills:${seasonNumber ?? 'all'}:${windowKey}`, async () => {
+    const rows: Row[] = []
     for (let from = 0; ; from += DATABASE_PAGE_SIZE) {
       const { data, error } = await makeQuery(true).range(
         from,
@@ -635,9 +761,8 @@ export async function loadAnalyticsSkillEvents(
       rows.push(...((data ?? []) as Row[]))
       if ((data?.length ?? 0) < DATABASE_PAGE_SIZE) break
     }
-  }
-  const values = rows.map(mapSkill)
-  return gameCount ? values.reverse() : values
+    return rows.map(mapSkill)
+  }, 60_000)
 }
 export async function getClubGameCount(clubId: string) {
   const { count, error } = await client()
@@ -679,6 +804,8 @@ export function subscribePlayerStats(
     `club_id=eq.${clubId}`,
     load,
     callback,
+    undefined,
+    () => invalidateClubHistoryCache(clubId),
   )
 }
 export function subscribeSeasons(
@@ -823,11 +950,15 @@ export const loadSessionPointTotals = (
     typeof window === 'number'
       ? { mode: 'hours' as const, hours: window }
       : sessionWindowRequestBody(window)
-  return serverAction<{
-    window: SessionPointWindow
-    hours: SessionPointWindowHours | null
-    totals: SessionPointTotal[]
-  }>('sessionPointTotals', { clubId, ...body })
+  return cached(
+    `${clubId}:session-totals:${JSON.stringify(body)}`,
+    () => serverAction<{
+      window: SessionPointWindow
+      hours: SessionPointWindowHours | null
+      totals: SessionPointTotal[]
+    }>('sessionPointTotals', { clubId, ...body }),
+    30_000,
+  )
 }
 
 export const loadSessionPointBreakdown = (
@@ -839,12 +970,16 @@ export const loadSessionPointBreakdown = (
     typeof window === 'number'
       ? { mode: 'hours' as const, hours: window }
       : sessionWindowRequestBody(window)
-  return serverAction<{
-    window: SessionPointWindow
-    hours: SessionPointWindowHours | null
-    playerId: string
-    games: SessionPointGameRow[]
-  }>('sessionPointBreakdown', { clubId, playerId, ...body })
+  return cached(
+    `${clubId}:session-breakdown:${playerId}:${JSON.stringify(body)}`,
+    () => serverAction<{
+      window: SessionPointWindow
+      hours: SessionPointWindowHours | null
+      playerId: string
+      games: SessionPointGameRow[]
+    }>('sessionPointBreakdown', { clubId, playerId, ...body }),
+    30_000,
+  )
 }
 
 export async function getSoundPreference(uid: string) {

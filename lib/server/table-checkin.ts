@@ -5,6 +5,7 @@ import type { PoolClient } from 'pg'
 import { normalizeSessionLayout } from '@/lib/session-layout'
 import { verifyTableQr } from '@/lib/qr-signing'
 import { scoringRulesFromRow } from '@/lib/scoring-rules'
+import { addPlayerToActiveSession } from '@/lib/server/roster-session'
 import type { AuthCaller } from '@/lib/server/auth-caller'
 import { assertGuestTableScope } from '@/lib/server/auth-caller'
 
@@ -413,6 +414,7 @@ export async function createSelfPlayer(
       caller.uid,
     ],
   )
+  await addPlayerToActiveSession(db, clubId, String(created.rows[0].id))
   return {
     id: String(created.rows[0].id),
     displayName: String(created.rows[0].display_name),

@@ -30,6 +30,7 @@ function formatNet(points: number) {
 }
 
 function windowScopePhrase(window: SessionPointWindow) {
+  if (window.mode === 'all') return 'across all recorded games'
   if (window.mode === 'hours') {
     return `over the last ${sessionWindowPhrase(window)}`
   }

@@ -53,6 +53,10 @@ describe('createPlayer authorization', () => {
 
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({ result: expect.any(String) })
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('update sessions'),
+      expect.arrayContaining(['CLUB01', expect.any(String)]),
+    )
     const membershipQuery = query.mock.calls.find(([sql]) =>
       String(sql).includes('from club_members'),
     )?.[0]
@@ -62,6 +66,22 @@ describe('createPlayer authorization', () => {
       expect.stringContaining('insert into players'),
       expect.arrayContaining(['CLUB01', 'New player', '🀄']),
     )
+  })
+
+  it('still creates the roster player when there is no active session', async () => {
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('from club_members')) return { rowCount: 1, rows: [] }
+      if (sql.includes('update sessions')) return { rowCount: 0, rows: [] }
+      return { rowCount: 1, rows: [] }
+    })
+    mocks.withTransaction.mockImplementation(async (operation) =>
+      operation({ query } as never),
+    )
+
+    const response = await POST(createRequest())
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ result: expect.any(String) })
   })
 
   it('does not allow someone who has not joined the club to add a player', async () => {

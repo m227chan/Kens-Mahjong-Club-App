@@ -7,6 +7,7 @@ import { useFloatingSessionTracker } from '@/contexts/FloatingSessionTrackerCont
 import { useGameSync } from '@/contexts/GameSyncContext'
 import { loadSessionPointTotals } from '@/lib/data'
 import {
+  allSessionWindow,
   buildCustomSessionWindow,
   hoursSessionWindow,
   sessionWindowTag,
@@ -78,6 +79,7 @@ export default function FloatingSessionTracker() {
 
     let cancelled = false
     const refresh = () => {
+      if (document.visibilityState === 'hidden') return
       void loadSessionPointTotals(state.clubId, state.window)
         .then((result) => {
           if (cancelled) return
@@ -98,12 +100,25 @@ export default function FloatingSessionTracker() {
     }
 
     refresh()
-    const timer = window.setInterval(refresh, 30_000)
+    const timer = window.setInterval(refresh, 180_000)
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') refresh()
+    }
+    const refreshAfterGameChange = (event: Event) => {
+      const changedClubId = (event as CustomEvent<{ clubId?: string }>).detail?.clubId
+      if (changedClubId === state.clubId) refresh()
+    }
+    window.addEventListener('focus', refresh)
+    window.addEventListener('club-history-invalidated', refreshAfterGameChange)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
     return () => {
       cancelled = true
       window.clearInterval(timer)
+      window.removeEventListener('focus', refresh)
+      window.removeEventListener('club-history-invalidated', refreshAfterGameChange)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
     }
-  }, [state, visible])
+  }, [attentionCount, online, pendingCount, state, visible])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -229,6 +244,24 @@ export default function FloatingSessionTracker() {
                 {option.label}
               </button>
             ))}
+            <button
+              type="button"
+              role="option"
+              aria-selected={state.window.mode === 'all'}
+              data-tour="floating-session-window-all"
+              className={`floating-session-tracker-menu-option${
+                state.window.mode === 'all'
+                  ? ' floating-session-tracker-menu-option-active'
+                  : ''
+              }`}
+              onClick={() => {
+                setCustomError(null)
+                setFloatWindow(allSessionWindow())
+                setMenuOpen(false)
+              }}
+            >
+              All
+            </button>
             <button
               type="button"
               role="option"

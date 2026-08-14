@@ -77,6 +77,7 @@ type Stats = {
   skillRank: number
   last5SkillDelta: number
   recentSkillDeltas: number[]
+  recentPointTrend: number[]
   daysAttended: number
   lastPlayedAt: string | null
 }
@@ -391,6 +392,7 @@ function baselineStats(row: Record<string, unknown>): Stats {
     skillRank: 0,
     last5SkillDelta: 0,
     recentSkillDeltas: [],
+    recentPointTrend: [],
     daysAttended: Number(row.days_attended),
     lastPlayedAt: toDateOnly(row.last_played_at),
   }
@@ -422,6 +424,7 @@ const statsColumns = [
   'skill_rank',
   'last5_skill_delta',
   'recent_skill_deltas',
+  'recent_point_trend',
   'days_attended',
   'last_played_at',
 ]
@@ -453,6 +456,7 @@ function statsRow(clubId: string, value: Stats) {
     value.skillRank,
     value.last5SkillDelta,
     value.recentSkillDeltas,
+    value.recentPointTrend,
     value.daysAttended,
     value.lastPlayedAt,
   ]
@@ -520,6 +524,7 @@ export function storedStats(
     skillRank: Number(row.skill_rank ?? 0),
     last5SkillDelta: Number(row.last5_skill_delta ?? 0),
     recentSkillDeltas: (row.recent_skill_deltas as number[] | null) ?? [],
+    recentPointTrend: ((row.recent_point_trend as Array<number | string> | null) ?? []).map(Number),
     daysAttended: Number(row.days_attended ?? 0),
     lastPlayedAt: toDateOnly(row.last_played_at),
   }
@@ -596,6 +601,7 @@ export function applyNewGame(
       skillGamesPlayed: skill.gamesPlayed,
       last5SkillDelta: recentSkillDeltas.reduce((sum, value) => sum + value, 0),
       recentSkillDeltas,
+      recentPointTrend: [...previous.recentPointTrend, previous.totalPoints + entry.score].slice(-10),
       daysAttended:
         previous.daysAttended + (previous.lastPlayedAt === day ? 0 : 1),
       lastPlayedAt: day,
@@ -846,6 +852,7 @@ export async function rebuild(client: QueryClient, clubId: string) {
     skillRank: 0,
     last5SkillDelta: 0,
     recentSkillDeltas: [],
+    recentPointTrend: [],
     daysAttended: 0,
     lastPlayedAt: null,
   })
@@ -895,6 +902,10 @@ export async function rebuild(client: QueryClient, clubId: string) {
         eloGamesPlayed: current.eloGamesPlayed + 1,
         last5EloDelta: recent.reduce((sum, value) => sum + value, 0),
         recentEloDeltas: recent,
+        recentPointTrend: [
+          ...current.recentPointTrend,
+          current.totalPoints + entry.score,
+        ].slice(-10),
         daysAttended:
           current.daysAttended + (current.lastPlayedAt === day ? 0 : 1),
         lastPlayedAt: day,
@@ -1007,6 +1018,37 @@ export async function rebuild(client: QueryClient, clubId: string) {
         key,
         mergeSkill(make(value.playerId, value.seasonNumber), value),
       )
+  // Historical baselines do not retain individual recent games. Rebuild the
+  // small trend arrays from the complete ordered game list so edits, imports,
+  // and explicit repairs preserve the same sparkline as incremental saves.
+  const allTrendTotals = new Map<string, number>()
+  const allTrends = new Map<string, number[]>()
+  const seasonTrendTotals = new Map<string, number>()
+  const seasonTrends = new Map<string, number[]>()
+  for (const game of skillGames) {
+    for (const entry of game.entries) {
+      const allTotal = (allTrendTotals.get(entry.playerId) ?? 0) + entry.score
+      allTrendTotals.set(entry.playerId, allTotal)
+      allTrends.set(
+        entry.playerId,
+        [...(allTrends.get(entry.playerId) ?? []), allTotal].slice(-10),
+      )
+      const seasonKey = `${game.seasonNumber}_${entry.playerId}`
+      const seasonTotal = (seasonTrendTotals.get(seasonKey) ?? 0) + entry.score
+      seasonTrendTotals.set(seasonKey, seasonTotal)
+      seasonTrends.set(
+        seasonKey,
+        [...(seasonTrends.get(seasonKey) ?? []), seasonTotal].slice(-10),
+      )
+    }
+  }
+  for (const [key, value] of all)
+    all.set(key, { ...value, recentPointTrend: allTrends.get(key) ?? [] })
+  for (const [key, value] of seasonal)
+    seasonal.set(key, {
+      ...value,
+      recentPointTrend: seasonTrends.get(key) ?? [],
+    })
   const rank = (values: Stats[]) => {
     const ranks = computeGlobalRanks(values)
     const skillOrder = [...values].sort((a, b) => b.skillRating - a.skillRating)

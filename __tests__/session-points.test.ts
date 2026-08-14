@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  allSessionWindow,
   buildCustomSessionWindow,
+  dateIsInSessionWindow,
+  hoursSessionWindow,
   normalizeSessionPointHours,
   normalizeSessionPointWindow,
+  sessionWindowDateBounds,
 } from '@/lib/session-point-window'
 
 /** Mirrors the intended window math: sum of per-game deltas only. */
@@ -42,6 +46,29 @@ describe('session point windows', () => {
         endAt: window.endAt,
       }),
     ).toEqual(window)
+  })
+
+  it('supports all-time and consistently filters hourly and custom windows', () => {
+    expect(normalizeSessionPointWindow({ mode: 'all' })).toEqual(allSessionWindow())
+    const now = new Date('2026-08-13T12:00:00Z')
+    expect(dateIsInSessionWindow(new Date('2020-01-01T00:00:00Z'), allSessionWindow(), now)).toBe(true)
+    expect(dateIsInSessionWindow(new Date('2026-08-12T13:00:00Z'), { mode: 'hours', hours: 24 }, now)).toBe(true)
+    expect(dateIsInSessionWindow(new Date('2026-08-12T11:59:59Z'), { mode: 'hours', hours: 24 }, now)).toBe(false)
+    const custom = buildCustomSessionWindow('2026-08-10', '2026-08-11')
+    expect(dateIsInSessionWindow(new Date(custom.startAt), custom, now)).toBe(true)
+    expect(dateIsInSessionWindow(new Date(custom.endAt), custom, now)).toBe(false)
+  })
+
+  it('builds database query bounds for time windows', () => {
+    const now = new Date('2026-08-13T12:00:00.000Z')
+    expect(sessionWindowDateBounds(hoursSessionWindow(24), now)).toEqual({
+      startAt: '2026-08-12T12:00:00.000Z',
+      endAt: '2026-08-13T12:00:00.000Z',
+    })
+    expect(sessionWindowDateBounds(allSessionWindow(), now)).toEqual({
+      startAt: null,
+      endAt: null,
+    })
   })
 
   it('rejects inverted or oversized custom ranges', () => {

@@ -15,12 +15,18 @@ import {
 } from '@/lib/club-limits'
 import { validateScoringRules } from '@/lib/scoring-rules'
 import { DEFAULT_TITLE_RULES, validateTitleRules } from '@/lib/title-rules'
+import { validateActivitySettings } from '@/lib/activity-settings'
 import { isGuestTableToken } from '@/lib/guest-table-token'
 import {
   loadSessionPointBreakdown,
   loadSessionPointTotals,
   normalizeSessionPointWindow,
 } from '@/lib/server/session-points'
+import {
+  setClubActiveSeason,
+  startNewClubSeason,
+} from '@/lib/server/season-management'
+import { addPlayerToActiveSession } from '@/lib/server/roster-session'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -378,6 +384,7 @@ export async function POST(request: NextRequest) {
             "insert into players(id,club_id,display_name,title,icon,icon_key,auth_uid) values($1,$2,$3,'Monk',$4,$5,$6)",
             [id, body.clubId, name, icon, key, authUid],
           )
+          await addPlayerToActiveSession(db, body.clubId, id)
         } catch (error) {
           if ((error as { code?: string }).code === '23505')
             throw new Error('That emoji is already in use in this club.')
@@ -491,6 +498,17 @@ export async function POST(request: NextRequest) {
           throw new Error('Club settings are still initializing. Try again.')
         return null
       }
+      if (action === 'updateActivitySettings') {
+        await requireManager(body.clubId)
+        const settings = validateActivitySettings(body.settings)
+        const updated = await db.query(
+          'update app_configs set active_player_months=$1,updated_at=now() where club_id=$2',
+          [settings.activePlayerMonths, body.clubId],
+        )
+        if (!updated.rowCount)
+          throw new Error('Club settings are still initializing. Try again.')
+        return null
+      }
       if (action === 'deleteClub') {
         await requireManager(body.clubId)
         await db.query('select public.delete_club_permanently($1)', [
@@ -508,45 +526,11 @@ export async function POST(request: NextRequest) {
       }
       if (action === 'startNewSeason') {
         await requireManager(body.clubId)
-        await db.query('select pg_advisory_xact_lock(hashtext($1))', [
-          `session:${body.clubId}`,
-        ])
-        const next = Number(
-          (
-            await db.query(
-              'select coalesce(max(season_number),0)+1 next from seasons where club_id=$1',
-              [body.clubId],
-            )
-          ).rows[0].next,
-        )
-        await db.query(
-          'update sessions set is_active=false,closed_at=coalesce(closed_at,now()) where club_id=$1 and is_active',
-          [body.clubId],
-        )
-        await db.query('update seasons set active=false where club_id=$1', [
-          body.clubId,
-        ])
-        await db.query(
-          'insert into seasons(club_id,season_number,name,created_by) values($1,$2,$3,$4)',
-          [body.clubId, next, `Season ${next}`, caller.uid],
-        )
-        await db.query('update clubs set active_season_number=$1 where id=$2', [
-          next,
-          body.clubId,
-        ])
-        return next
+        return startNewClubSeason(db, body.clubId, caller.uid)
       }
       if (action === 'setActiveSeason') {
         await requireManager(body.clubId)
-        const updated = await db.query(
-          `update clubs set active_season_number=$1
-           where id=$2 and exists(
-             select 1 from seasons where club_id=$2 and season_number=$1
-           ) returning id`,
-          [body.seasonNumber, body.clubId],
-        )
-        if (!updated.rowCount)
-          throw new Error('That season does not exist in this club.')
+        await setClubActiveSeason(db, body.clubId, Number(body.seasonNumber))
         return null
       }
       if (action === 'createSession') {

@@ -1,69 +1,33 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { subscribePlayerStats, subscribePlayers } from '@/lib/data'
-import type { PlayerDoc, PlayerStatsDoc } from '@/lib/types'
+import { loadGamesInDateRange, subscribePlayerStats, subscribePlayers } from '@/lib/data'
+import type { GameDoc, PlayerDoc, PlayerStatsDoc } from '@/lib/types'
 import { titleForStanding } from '@/lib/players'
 import { DEFAULT_TITLE_RULES, type TitleRules } from '@/lib/title-rules'
+import { aggregatePlayerGames, boundsForPreset, competitionRanks, gamesInBounds, subtractCalendarMonths, type StandingsDatePreset } from '@/lib/standings-analytics'
 
-function formatSigned(value: number) {
-  if (value > 0) return `+${value}`
-  return String(value)
-}
-
-function formatWinRate(wins: number, games: number) {
-  if (!games) return '0%'
-  return `${Math.round((wins / games) * 100)}%`
-}
-
-type SortKey =
-  | 'rank'
-  | 'name'
-  | 'points'
-  | 'skill'
-  | 'games'
-  | 'wins'
-  | 'losses'
-  | 'winRate'
+type SortKey = 'rank' | 'name' | 'points' | 'skill' | 'games' | 'wins' | 'losses' | 'winRate'
 type SortDirection = 'asc' | 'desc'
 
-function SortHeader({
-  label,
-  column,
-  active,
-  direction,
-  onSort,
-}: {
-  label: string
-  column: SortKey
-  active: SortKey
-  direction: SortDirection
-  onSort: (column: SortKey) => void
-}) {
-  const isActive = active === column
-  return (
-    <div
-      role="columnheader"
-      aria-sort={isActive ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'}
-    >
-      <button
-        type="button"
-        onClick={() => onSort(column)}
-        aria-pressed={isActive}
-        aria-label={`Sort by ${label}${isActive ? `, currently ${direction === 'asc' ? 'ascending' : 'descending'}` : ''}`}
-        className="group flex w-full items-center gap-1 text-left hover:text-[rgb(var(--bamboo))]"
-        title={`Sort ${label}`}
-      >
-        <span>{label}</span>
-        <span
-          aria-hidden="true"
-          className={`transition-opacity ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-        >
-          {isActive ? (direction === 'asc' ? '▲' : '▼') : '↕'}
-        </span>
-      </button>
-    </div>
-  )
+function formatWinRate(wins: number, games: number) {
+  return games ? `${Math.round((wins / games) * 100)}%` : '0%'
+}
+
+function Sparkline({ values }: { values: number[] }) {
+  const width = 84
+  const height = 30
+  const points = values.length === 1 ? [values[0], values[0]] : values
+  const min = Math.min(...points)
+  const max = Math.max(...points)
+  const span = max - min || 1
+  const path = points.map((value, index) => `${(index / Math.max(1, points.length - 1)) * width},${height - 2 - ((value - min) / span) * (height - 4)}`).join(' ')
+  const positive = (values.at(-1) ?? 0) >= (values[0] ?? 0)
+  return values.length ? (
+    <svg viewBox={`0 0 ${width} ${height}`} className={`h-8 w-[84px] ${positive ? 'text-emerald-600' : 'text-rose-600'}`} role="img" aria-label={`Last ${values.length} game trend moved from ${values[0]} to ${values.at(-1)}`}>
+      <polyline points={path} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ) : <span className="text-xs text-slate-400">No trend</span>
 }
 
 export function LeaderboardPanel({
@@ -71,430 +35,147 @@ export function LeaderboardPanel({
   seasonNumber,
   compact = false,
   players: suppliedPlayers,
+  stats: suppliedStats,
   titleRules = DEFAULT_TITLE_RULES,
+  activePlayerMonths = 3,
+  onPlayerAnalytics,
 }: {
   clubId: string
   seasonNumber?: number
   compact?: boolean
   players?: PlayerDoc[]
+  stats?: PlayerStatsDoc[]
   titleRules?: TitleRules
+  activePlayerMonths?: number
+  onPlayerAnalytics?: (playerId: string) => void
 }) {
   const [subscribedPlayers, setSubscribedPlayers] = useState<PlayerDoc[]>([])
-  const [stats, setStats] = useState<PlayerStatsDoc[]>([])
+  const [subscribedStats, setSubscribedStats] = useState<PlayerStatsDoc[]>([])
+  const [games, setGames] = useState<GameDoc[]>([])
+  const [gamesLoading, setGamesLoading] = useState(false)
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({})
   const [mobileExpanded, setMobileExpanded] = useState(false)
-  const [expandedMobileRows, setExpandedMobileRows] = useState<Record<string, boolean>>({})
   const [sortKey, setSortKey] = useState<SortKey>('points')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [nameFilter, setNameFilter] = useState('')
   const [minimumGames, setMinimumGames] = useState('')
-  const [minimumSkill, setMinimumSkill] = useState('')
-  const [pointsFilter, setPointsFilter] = useState<
-    'all' | 'positive' | 'negative'
-  >('all')
+  const [activeOnly, setActiveOnly] = useState(true)
+  const [preset, setPreset] = useState<StandingsDatePreset>('all')
+  const [customStart, setCustomStart] = useState('')
+  const [customEnd, setCustomEnd] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
   const players = suppliedPlayers ?? subscribedPlayers
+  const stats = suppliedStats ?? subscribedStats
+  const statsUpdatedKey = stats.map((stat) => stat.updatedAt?.toMillis?.() ?? 0).sort().join(',')
 
-  useEffect(
-    () =>
-      suppliedPlayers
-        ? undefined
-        : subscribePlayers(clubId, setSubscribedPlayers),
-    [clubId, suppliedPlayers],
-  )
-  useEffect(
-    () =>
-      subscribePlayerStats(
-        clubId,
-        (nextStats) => setStats(nextStats),
-        seasonNumber,
-      ),
-    [clubId, seasonNumber],
-  )
+  useEffect(() => suppliedPlayers ? undefined : subscribePlayers(clubId, setSubscribedPlayers), [clubId, suppliedPlayers])
+  useEffect(() => suppliedStats ? undefined : subscribePlayerStats(clubId, setSubscribedStats, seasonNumber), [clubId, seasonNumber, suppliedStats])
+  useEffect(() => {
+    if (preset === 'all') {
+      setGames([])
+      setGamesLoading(false)
+      return
+    }
+    let cancelled = false
+    setGamesLoading(true)
+    const bounds = boundsForPreset(preset, new Date(), customStart, customEnd)
+    void loadGamesInDateRange(clubId, bounds.start, bounds.end, seasonNumber).then((value) => { if (!cancelled) setGames(value) }).finally(() => { if (!cancelled) setGamesLoading(false) })
+    return () => { cancelled = true }
+  }, [clubId, customEnd, customStart, preset, seasonNumber, statsUpdatedKey])
+
+  const seasonGames = useMemo(() => games.filter((game) => !seasonNumber || game.seasonNumber === seasonNumber), [games, seasonNumber])
+  const boundedGames = useMemo(() => gamesInBounds(seasonGames, boundsForPreset(preset, new Date(), customStart, customEnd)), [customEnd, customStart, preset, seasonGames])
+  const aggregate = useMemo(() => aggregatePlayerGames(boundedGames), [boundedGames])
+  const activeIds = useMemo(() => {
+    const cutoff = subtractCalendarMonths(new Date(), activePlayerMonths).getTime()
+    return new Set(stats.filter((stat) => stat.lastPlayedAt && new Date(`${stat.lastPlayedAt}T23:59:59.999`).getTime() >= cutoff).map((stat) => stat.playerId))
+  }, [activePlayerMonths, stats])
+  const dateFiltered = preset !== 'all'
 
   const rows = useMemo(() => {
+    const base = stats.map((stat) => {
+      const player = players.find((item) => item.id === stat.playerId)
+      const period = aggregate.get(stat.playerId)
+      return {
+        ...stat,
+        totalPoints: dateFiltered ? period?.totalPoints ?? 0 : stat.totalPoints,
+        gamesPlayed: dateFiltered ? period?.gamesPlayed ?? 0 : stat.gamesPlayed,
+        gamesWon: dateFiltered ? period?.gamesWon ?? 0 : stat.gamesWon,
+        gamesLost: dateFiltered ? period?.gamesLost ?? 0 : stat.gamesLost,
+        pointTrend: dateFiltered ? period?.pointTrend ?? [] : stat.recentPointTrend ?? [],
+        displayName: player?.displayName ?? stat.playerId,
+        icon: player?.icon ?? '🀄',
+      }
+    }).filter((row) => !dateFiltered || row.gamesPlayed > 0)
+      .filter((row) => !activeOnly || activeIds.has(row.playerId))
+    const ranks = competitionRanks(base, (row) => row.totalPoints)
     const direction = sortDirection === 'asc' ? 1 : -1
-    const valueFor = (
-      row: PlayerStatsDoc & { displayName: string },
-      key: SortKey,
-    ): string | number => {
-      if (key === 'rank') return row.pointsRank || Number.MAX_SAFE_INTEGER
-      if (key === 'name') return row.displayName.toLocaleLowerCase()
-      if (key === 'points') return row.totalPoints
-      if (key === 'skill') return row.skillRating
-      if (key === 'games') return row.gamesPlayed
-      if (key === 'wins') return row.gamesWon
-      if (key === 'losses') return row.gamesLost
+    const value = (row: typeof base[number]) => {
+      if (sortKey === 'rank') return ranks.get(row) ?? Number.MAX_SAFE_INTEGER
+      if (sortKey === 'name') return row.displayName.toLocaleLowerCase()
+      if (sortKey === 'points') return row.totalPoints
+      if (sortKey === 'skill') return row.skillRating
+      if (sortKey === 'games') return row.gamesPlayed
+      if (sortKey === 'wins') return row.gamesWon
+      if (sortKey === 'losses') return row.gamesLost
       return row.gamesPlayed ? row.gamesWon / row.gamesPlayed : 0
     }
-    return stats
-      .map((entry) => {
-        const player = players.find((item) => item.id === entry.playerId)
-        return {
-          ...entry,
-          displayName: player?.displayName ?? entry.playerId,
-          icon: player?.icon ?? 'M',
-          title: player?.title ?? 'Player',
-        }
-      })
-      .filter((row) =>
-        row.displayName
-          .toLocaleLowerCase()
-          .includes(nameFilter.trim().toLocaleLowerCase()),
-      )
+    return base.map((row) => ({ ...row, visibleRank: ranks.get(row) ?? 0 }))
+      .filter((row) => row.displayName.toLocaleLowerCase().includes(nameFilter.trim().toLocaleLowerCase()))
       .filter((row) => !minimumGames || row.gamesPlayed >= Number(minimumGames))
-      .filter((row) => !minimumSkill || row.skillRating >= Number(minimumSkill))
-      .filter(
-        (row) =>
-          pointsFilter === 'all' ||
-          (pointsFilter === 'positive'
-            ? row.totalPoints >= 0
-            : row.totalPoints < 0),
-      )
       .sort((a, b) => {
-        const left = valueFor(a, sortKey),
-          right = valueFor(b, sortKey)
-        const comparison =
-          typeof left === 'string' && typeof right === 'string'
-            ? left.localeCompare(right)
-            : Number(left) - Number(right)
-        return comparison * direction || a.playerId.localeCompare(b.playerId)
+        const left = value(a), right = value(b)
+        const result = typeof left === 'string' && typeof right === 'string' ? left.localeCompare(right) : Number(left) - Number(right)
+        return result * direction || a.playerId.localeCompare(b.playerId)
       })
-  }, [
-    minimumGames,
-    minimumSkill,
-    nameFilter,
-    players,
-    pointsFilter,
-    sortDirection,
-    sortKey,
-    stats,
-  ])
+  }, [activeIds, activeOnly, aggregate, dateFiltered, minimumGames, nameFilter, players, sortDirection, sortKey, stats])
 
-  const handleSort = (column: SortKey) => {
-    if (sortKey === column)
-      setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))
-    else {
-      setSortKey(column)
-      setSortDirection(column === 'name' || column === 'rank' ? 'asc' : 'desc')
-    }
+  const setSort = (key: SortKey) => {
+    if (key === sortKey) setSortDirection((value) => value === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDirection(key === 'name' || key === 'rank' ? 'asc' : 'desc') }
   }
-  const activeFilterCount = [
-    Boolean(nameFilter.trim()),
-    Boolean(minimumGames),
-    Boolean(minimumSkill),
-    pointsFilter !== 'all',
-  ].filter(Boolean).length
-
   const visibleRows = compact ? rows.slice(0, 8) : rows
   const mobileRows = mobileExpanded ? visibleRows : visibleRows.slice(0, 5)
+  const filterCount = [activeOnly, preset !== 'all', Boolean(nameFilter), Boolean(minimumGames)].filter(Boolean).length
+  const presets: Array<{ value: StandingsDatePreset; label: string }> = [{ value: 'all', label: 'All time' }, { value: '30d', label: '30 days' }, { value: '3m', label: '3 months' }, { value: 'ytd', label: 'This year' }, { value: 'custom', label: 'Custom' }]
 
   return (
-    <section
-      data-tour="leaderboard"
-      className="leaderboard-board overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"
-    >
+    <section data-tour="leaderboard" className="leaderboard-board overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
       <header className="leaderboard-board-header border-b border-slate-200 px-5 py-4">
         <div className="leaderboard-board-header-row flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-2xl font-black leading-none text-slate-900">Leaderboard</h2>
-            <p className="mt-2 text-sm font-medium text-slate-500">
-              {rows.length} ranked players
-            </p>
+          <div><h2 className="text-2xl font-black leading-none text-slate-900">Leaderboard</h2><p className="mt-2 text-sm font-medium text-slate-500">{gamesLoading ? 'Loading date history…' : `${rows.length} ranked players · ${preset === 'all' ? 'all time' : presets.find((item) => item.value === preset)?.label}`}</p></div>
+          <div className="flex items-center gap-2">
+            <button type="button" aria-expanded={filtersOpen} aria-label={`Filter leaderboard${filterCount ? `, ${filterCount} active` : ''}`} onClick={() => setFiltersOpen((value) => !value)} className="relative grid h-10 w-10 place-items-center rounded border border-slate-300 bg-slate-50 text-slate-700">
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" className="h-4 w-4"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+            </button>
           </div>
-          <button
-            type="button"
-            aria-expanded={filtersOpen}
-            aria-label={`Filter leaderboard${activeFilterCount ? `, ${activeFilterCount} active` : ''}`}
-            title="Filter leaderboard"
-            onClick={() => setFiltersOpen((current) => !current)}
-            className={`relative grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[3px] border p-0 shadow-[2px_2px_0_rgb(var(--shadow)/.07)] transition-colors ${activeFilterCount ? 'border-[rgb(var(--bamboo))] bg-[rgb(var(--bamboo)/.10)] text-[rgb(var(--bamboo))]' : 'border-[rgb(var(--line))] bg-[rgb(var(--surface-2))] text-[rgb(var(--ink))] hover:border-[rgb(var(--cinnabar))] hover:bg-[rgb(var(--cinnabar)/.06)] hover:text-[rgb(var(--cinnabar))]'}`}
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M4 6h16" /><path d="M7 12h10" /><path d="M10 18h4" /></svg>
-            {activeFilterCount ? <span aria-hidden="true" className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-[rgb(var(--cinnabar))] px-1 text-[9px] font-black text-white">{activeFilterCount}</span> : null}
-          </button>
         </div>
       </header>
-      {filtersOpen ? (
-        <div className="leaderboard-filter-grid grid gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 sm:grid-cols-2">
-          <label className="text-xs font-bold text-slate-600">
-            Player
-            <input
-              type="search"
-              value={nameFilter}
-              onChange={(event) => setNameFilter(event.target.value)}
-              placeholder="Filter names…"
-              className="mt-1 block min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm font-medium text-slate-800"
-            />
-          </label>
-          <label className="text-xs font-bold text-slate-600">
-            Minimum games
-            <input
-              type="number"
-              min="0"
-              value={minimumGames}
-              onChange={(event) => setMinimumGames(event.target.value)}
-              placeholder="Any"
-              className="mt-1 block min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm font-medium text-slate-800"
-            />
-          </label>
-          <label className="text-xs font-bold text-slate-600">
-            Minimum Skill
-            <input
-              type="number"
-              value={minimumSkill}
-              onChange={(event) => setMinimumSkill(event.target.value)}
-              placeholder="Any"
-              className="mt-1 block min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm font-medium text-slate-800"
-            />
-          </label>
-          <label className="text-xs font-bold text-slate-600">
-            Points
-            <select
-              value={pointsFilter}
-              onChange={(event) =>
-                setPointsFilter(event.target.value as typeof pointsFilter)
-              }
-              className="mt-1 block min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm font-medium text-slate-800"
-            >
-              <option value="all">All</option>
-              <option value="positive">Zero or above</option>
-              <option value="negative">Below zero</option>
-            </select>
-          </label>
-          <label className="text-xs font-bold text-slate-600">
-            Sort by
-            <select
-              value={sortKey}
-              onChange={(event) => handleSort(event.target.value as SortKey)}
-              className="mt-1 block min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm font-medium text-slate-800"
-            >
-              <option value="rank">Rank</option>
-              <option value="name">Name</option>
-              <option value="points">Points</option>
-              <option value="skill">Skill</option>
-              <option value="games">Games</option>
-              <option value="wins">Wins</option>
-              <option value="losses">Losses</option>
-              <option value="winRate">Win ratio</option>
-            </select>
-          </label>
-          <label className="text-xs font-bold text-slate-600">
-            Direction
-            <select
-              value={sortDirection}
-              onChange={(event) =>
-                setSortDirection(event.target.value as SortDirection)
-              }
-              className="mt-1 block min-h-10 w-full rounded border border-slate-300 bg-white py-2 pl-3 pr-8 text-sm font-medium text-slate-800"
-            >
-              <option value="desc">Descending</option>
-              <option value="asc">Ascending</option>
-            </select>
-          </label>
-          <button
-            type="button"
-            onClick={() => {
-              setNameFilter('')
-              setMinimumGames('')
-              setMinimumSkill('')
-              setPointsFilter('all')
-              setSortKey('points')
-              setSortDirection('desc')
-            }}
-            className="min-h-10 self-end rounded border border-slate-300 bg-white px-3 text-sm font-bold text-slate-700"
-          >
-            Reset filters
-          </button>
-        </div>
-      ) : null}
+      {filtersOpen ? <div className="grid gap-3 border-b border-slate-200 bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-4">
+        <label className="text-xs font-bold text-slate-600">Date range<select value={preset} onChange={(event) => setPreset(event.target.value as StandingsDatePreset)} className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm"><option value="all">All time</option><option value="30d">Last 30 days</option><option value="3m">Last 3 months</option><option value="ytd">Year to date</option><option value="custom">Custom dates</option></select></label>
+        <label className="text-xs font-bold text-slate-600">Player<input type="search" value={nameFilter} onChange={(event) => setNameFilter(event.target.value)} placeholder="Filter names…" className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm" /></label>
+        <label className="text-xs font-bold text-slate-600">Minimum games<input type="number" min="0" value={minimumGames} onChange={(event) => setMinimumGames(event.target.value)} placeholder="Any" className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm" /></label>
+        <label className="text-xs font-bold text-slate-600">Sort<select value={sortKey} onChange={(event) => setSort(event.target.value as SortKey)} className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm"><option value="points">Points</option><option value="rank">Rank</option><option value="name">Name</option><option value="skill">Skill</option><option value="games">Games</option><option value="wins">Wins</option><option value="winRate">Win ratio</option></select></label>
+        <div className="text-xs font-bold text-slate-600"><span>Players shown</span><label className="mt-1 flex min-h-10 cursor-pointer items-center gap-2 rounded border border-slate-300 bg-white px-3 text-sm font-bold text-slate-700"><input type="checkbox" checked={activeOnly} onChange={(event) => setActiveOnly(event.target.checked)} className="h-4 w-4 accent-emerald-700" />Active</label></div>
+        {preset === 'custom' ? <><label className="text-xs font-bold text-slate-600">From<input type="date" value={customStart} max={customEnd || undefined} onChange={(event) => setCustomStart(event.target.value)} className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm" /></label><label className="text-xs font-bold text-slate-600">To<input type="date" value={customEnd} min={customStart || undefined} onChange={(event) => setCustomEnd(event.target.value)} className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm" /></label></> : null}
+        <p className="self-end text-xs font-semibold leading-5 text-slate-500">Active means played within {activePlayerMonths} calendar month{activePlayerMonths === 1 ? '' : 's'}. Date filters recalculate points and results; Skill remains the selected season’s current rating.</p>
+        <button type="button" onClick={() => { setPreset('all'); setCustomStart(''); setCustomEnd(''); setNameFilter(''); setMinimumGames(''); setActiveOnly(true); setSortKey('points'); setSortDirection('desc') }} className="min-h-10 self-end rounded border border-slate-300 bg-white px-3 text-sm font-bold">Reset</button>
+      </div> : null}
 
-      {visibleRows.length > 0 ? (
-        <>
-          <div className="mobile-leaderboard md:hidden">
-            <div className="grid grid-cols-[42px_minmax(0,1fr)_76px] items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">
-              <span>Rank</span>
-              <span>Player</span>
-              <span>Points</span>
-            </div>
-            <div className="divide-y divide-slate-200">
-              {mobileRows.map((row, index) => (
-                <article key={row.playerId}>
-                  <button
-                    type="button"
-                    onClick={() => setExpandedMobileRows((current) => ({ ...current, [row.playerId]: !current[row.playerId] }))}
-                    aria-expanded={Boolean(expandedMobileRows[row.playerId])}
-                    aria-controls={`mobile-player-stats-${row.playerId}`}
-                    className="grid min-h-16 w-full grid-cols-[42px_minmax(0,1fr)_76px] items-center gap-2 px-3 py-2.5 text-left"
-                  >
-                    <span className="font-mono text-base font-black text-[rgb(var(--cinnabar))]">
-                      #{row.pointsRank || index + 1}
-                    </span>
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="flex h-9 w-8 shrink-0 items-center justify-center rounded border border-slate-200 bg-slate-50 text-base">
-                        {row.icon}
-                      </span>
-                      <div className="min-w-0">
-                        <h3 className="truncate text-sm font-extrabold text-slate-950">
-                          {row.displayName}
-                        </h3>
-                        <p className="truncate text-xs leading-5 text-slate-500">
-                          {titleForStanding(
-                            Math.max(1, row.pointsRank),
-                            stats.length,
-                            row.gamesPlayed,
-                            titleRules,
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="flex items-center justify-between gap-1 font-mono text-sm font-bold text-slate-900">
-                      {row.totalPoints}<span aria-hidden="true" className="text-[rgb(var(--muted))]">{expandedMobileRows[row.playerId] ? '⌃' : '⌄'}</span>
-                    </span>
-                  </button>
-                  {expandedMobileRows[row.playerId] ? (
-                    <div id={`mobile-player-stats-${row.playerId}`} className="border-t border-slate-200 bg-slate-50 px-3 py-3 text-center">
-                      <div className="grid grid-cols-5 gap-2">
-                        <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Skill</p><p className="mt-1 font-mono text-sm font-bold text-slate-900">{row.skillRating}</p></div>
-                        <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Games</p><p className="mt-1 font-mono text-sm font-bold text-slate-900">{row.gamesPlayed}</p></div>
-                        <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Wins</p><p className="mt-1 font-mono text-sm font-bold text-slate-900">{row.gamesWon}</p></div>
-                        <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Losses</p><p className="mt-1 font-mono text-sm font-bold text-slate-900">{row.gamesLost}</p></div>
-                        <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Win ratio</p><p className="mt-1 font-mono text-sm font-bold text-slate-900">{formatWinRate(row.gamesWon, row.gamesPlayed)}</p></div>
-                      </div>
-                    </div>
-                  ) : null}
-                </article>
-              ))}
-            </div>
-            {visibleRows.length > 5 ? (
-              <button
-                type="button"
-                onClick={() => setMobileExpanded((current) => !current)}
-                className="mobile-leaderboard-toggle w-full border-t border-slate-200 px-4 py-3 text-sm font-bold text-[rgb(var(--bamboo))]"
-              >
-                {mobileExpanded ? 'Show fewer players' : 'Show all ' + visibleRows.length + ' players'}
-              </button>
-            ) : null}
-          </div>
-          <div className="hidden overflow-x-auto md:block">
-            <div className="min-w-[646px]" role="table" aria-label="Club leaderboard">
-              <div role="row" className="grid grid-cols-[56px_minmax(150px,1.7fr)_minmax(64px,.7fr)_minmax(64px,.7fr)_minmax(52px,.55fr)_minmax(52px,.55fr)_minmax(56px,.6fr)_minmax(72px,.8fr)] gap-2 border-b border-slate-200 bg-slate-50 px-3 py-3 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
-                <SortHeader
-                  label="Rank"
-                  column="rank"
-                  active={sortKey}
-                  direction={sortDirection}
-                  onSort={handleSort}
-                />
-                <SortHeader
-                  label="Name"
-                  column="name"
-                  active={sortKey}
-                  direction={sortDirection}
-                  onSort={handleSort}
-                />
-                <SortHeader
-                  label="Points"
-                  column="points"
-                  active={sortKey}
-                  direction={sortDirection}
-                  onSort={handleSort}
-                />
-                <SortHeader
-                  label="Skill"
-                  column="skill"
-                  active={sortKey}
-                  direction={sortDirection}
-                  onSort={handleSort}
-                />
-                <SortHeader
-                  label="Games"
-                  column="games"
-                  active={sortKey}
-                  direction={sortDirection}
-                  onSort={handleSort}
-                />
-                <SortHeader
-                  label="Wins"
-                  column="wins"
-                  active={sortKey}
-                  direction={sortDirection}
-                  onSort={handleSort}
-                />
-                <SortHeader
-                  label="Losses"
-                  column="losses"
-                  active={sortKey}
-                  direction={sortDirection}
-                  onSort={handleSort}
-                />
-                <SortHeader
-                  label="Win ratio"
-                  column="winRate"
-                  active={sortKey}
-                  direction={sortDirection}
-                  onSort={handleSort}
-                />
-              </div>
-              {visibleRows.map((row, index) => (
-                <div
-                  key={row.playerId}
-                  role="row"
-                  className="leaderboard-row grid grid-cols-[56px_minmax(150px,1.7fr)_minmax(64px,.7fr)_minmax(64px,.7fr)_minmax(52px,.55fr)_minmax(52px,.55fr)_minmax(56px,.6fr)_minmax(72px,.8fr)] gap-2 border-b border-slate-200/70 px-3 py-4 last:border-b-0 hover:bg-[rgb(var(--bamboo)/0.045)]"
-                >
-                  <div role="cell" className="flex items-center font-display text-xl font-black text-[rgb(var(--cinnabar))]">
-                    #{row.pointsRank || '-'}
-                  </div>
-                  <div role="rowheader" className="flex min-w-0 items-start gap-2.5">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-sm font-bold text-slate-700">
-                      {row.icon}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-bold text-slate-900">
-                        {row.displayName}
-                      </p>
-                      <p className="truncate text-xs leading-5 text-slate-500">
-                        {titleForStanding(
-                          Math.max(1, row.pointsRank),
-                          stats.length,
-                          row.gamesPlayed,
-                          titleRules,
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                  <div role="cell" className="flex items-center text-sm font-semibold text-slate-700">
-                    {row.totalPoints}
-                  </div>
-                  <div role="cell" className="flex items-center text-sm font-semibold text-slate-700">
-                    {row.skillRating}
-                  </div>
-                  <div role="cell" className="flex items-center text-sm font-semibold text-slate-700">
-                    {row.gamesPlayed}
-                  </div>
-                  <div role="cell" className="flex items-center text-sm font-semibold text-slate-700">
-                    {row.gamesWon}
-                  </div>
-                  <div role="cell" className="flex items-center text-sm font-semibold text-slate-700">
-                    {row.gamesLost}
-                  </div>
-                  <div role="cell" className="flex items-center text-sm font-semibold text-slate-700">
-                    {formatWinRate(row.gamesWon, row.gamesPlayed)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </>
-      ) : (
-        <div className="px-5 py-10 text-center">
-          <p className="text-sm font-bold text-slate-700">
-            No leaderboard data yet.
-          </p>
-          <p className="mt-1 text-sm text-slate-500">
-            Record a game in the session manager to create standings.
-          </p>
+      {visibleRows.length ? <>
+        <div className="md:hidden">
+          <div className="grid grid-cols-[42px_minmax(0,1fr)_72px] gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold uppercase text-slate-500"><span>Rank</span><span>Player</span><span>Points</span></div>
+          {mobileRows.map((row) => <article key={row.playerId} className="border-b border-slate-200">
+            <button type="button" onClick={() => setExpandedRows((current) => ({ ...current, [row.playerId]: !current[row.playerId] }))} className="grid min-h-16 w-full grid-cols-[42px_minmax(0,1fr)_72px] items-center gap-2 px-3 text-left"><strong className="font-mono text-rose-700">#{row.visibleRank}</strong><span className="min-w-0"><span className="block truncate text-sm font-extrabold">{row.icon} {row.displayName}</span><span className="block truncate text-xs text-slate-500">{titleForStanding(row.visibleRank, rows.length, row.gamesPlayed, titleRules)}</span></span><strong className="font-mono text-sm">{row.totalPoints}</strong></button>
+            {expandedRows[row.playerId] ? <div className="bg-slate-50 px-3 py-3"><div className="grid grid-cols-4 gap-2 text-center text-xs"><span>Skill<strong className="mt-1 block">{row.skillRating}</strong></span><span>Games<strong className="mt-1 block">{row.gamesPlayed}</strong></span><span>Wins<strong className="mt-1 block">{row.gamesWon}</strong></span><span>Win %<strong className="mt-1 block">{formatWinRate(row.gamesWon, row.gamesPlayed)}</strong></span></div><div className="mt-3 flex items-end justify-between gap-3"><div><p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Last 10 trend</p><Sparkline values={row.pointTrend} /></div>{onPlayerAnalytics ? <button type="button" onClick={() => onPlayerAnalytics(row.playerId)} className="rounded bg-emerald-700 px-3 py-2 text-xs font-bold text-white">See more</button> : null}</div></div> : null}
+          </article>)}
+          {visibleRows.length > 5 ? <button type="button" onClick={() => setMobileExpanded((value) => !value)} className="w-full px-4 py-3 text-sm font-bold text-emerald-700">{mobileExpanded ? 'Show fewer' : `Show all ${visibleRows.length} players`}</button> : null}
         </div>
-      )}
+        <div className="hidden overflow-x-auto md:block"><div className="min-w-[850px]" role="table" aria-label="Club leaderboard">
+          <div role="row" className="grid grid-cols-[52px_minmax(150px,1.5fr)_75px_75px_55px_55px_65px_95px_78px] gap-2 border-b bg-slate-50 px-3 py-3 text-[11px] font-bold uppercase text-slate-500">{[['Rank','rank'],['Player','name'],['Points','points'],['Skill','skill'],['Games','games'],['Wins','wins'],['Win %','winRate']].map(([label,key], index) => <button key={key} type="button" onClick={() => setSort(key as SortKey)} className={`text-left ${index === 1 ? '' : ''}`}>{label}{sortKey === key ? (sortDirection === 'asc' ? ' ↑' : ' ↓') : ''}</button>)}<span>Last 10 trend</span><span aria-label="Player details" /></div>
+          {visibleRows.map((row) => <div key={row.playerId} role="row" tabIndex={onPlayerAnalytics ? 0 : undefined} onClick={() => onPlayerAnalytics?.(row.playerId)} onKeyDown={(event) => { if (onPlayerAnalytics && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onPlayerAnalytics(row.playerId) } }} aria-label={onPlayerAnalytics ? `Open analytics for ${row.displayName}` : undefined} className={`leaderboard-row grid grid-cols-[52px_minmax(150px,1.5fr)_75px_75px_55px_55px_65px_95px_78px] items-center gap-2 border-b px-3 py-3 ${onPlayerAnalytics ? 'cursor-pointer outline-none hover:ring-1 hover:ring-inset hover:ring-emerald-400 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500' : ''}`}><strong className="text-lg text-rose-700">#{row.visibleRank}</strong><span className="min-w-0"><strong className="block truncate text-sm">{row.icon} {row.displayName}</strong><span className="block truncate text-xs text-slate-500">{titleForStanding(row.visibleRank, rows.length, row.gamesPlayed, titleRules)}</span></span><span className="font-mono font-bold">{row.totalPoints}</span><span>{row.skillRating}</span><span>{row.gamesPlayed}</span><span>{row.gamesWon}</span><span>{formatWinRate(row.gamesWon, row.gamesPlayed)}</span><Sparkline values={row.pointTrend} />{onPlayerAnalytics ? <button type="button" onClick={(event) => { event.stopPropagation(); onPlayerAnalytics(row.playerId) }} className="rounded-full border border-emerald-300 bg-white px-2.5 py-1 text-[11px] font-bold text-emerald-800 hover:bg-emerald-50">See more</button> : <span />}</div>)}
+        </div></div>
+      </> : <div className="px-5 py-10 text-center text-sm font-semibold text-slate-500">No players have games matching these standings filters.</div>}
     </section>
   )
 }

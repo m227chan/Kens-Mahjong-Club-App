@@ -128,10 +128,10 @@ export default function AnalyticsPanel({
   ]
 
   const pointsDistribution = useMemo(() => {
-    return playerStats
+    return top
       .map((stat) => ({ id: stat.playerId, name: playerNames.get(stat.playerId) ?? stat.playerId, points: stat.totalPoints }))
       .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name))
-  }, [playerNames, playerStats])
+  }, [playerNames, top])
 
   const pointsChartHeight = Math.max(280, pointsDistribution.length * 38 + 56)
 

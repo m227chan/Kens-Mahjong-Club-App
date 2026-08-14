@@ -6,13 +6,11 @@ type ClubToolSidebarProps = {
   expanded: boolean
   onExpandedChange: (value: boolean) => void
   rosterOpen: boolean
-  sessionTrackerOpen: boolean
   analyticsOpen: boolean
   gameLogsOpen: boolean
   networkOpen: boolean
   settingsOpen: boolean
   onRoster: () => void
-  onSessionTracker: () => void
   onAnalytics: () => void
   onGameLogs: () => void
   onNetwork: () => void
@@ -48,13 +46,11 @@ export default function ClubToolSidebar({
   expanded,
   onExpandedChange,
   rosterOpen,
-  sessionTrackerOpen,
   analyticsOpen,
   gameLogsOpen,
   networkOpen,
   settingsOpen,
   onRoster,
-  onSessionTracker,
   onAnalytics,
   onGameLogs,
   onNetwork,
@@ -77,7 +73,6 @@ export default function ClubToolSidebar({
 
   const tools = [
     { label: 'Roster', icon: 'users' as const, tour: 'roster-open', open: rosterOpen, onClick: onRoster, dialog: 'club-roster-dialog' },
-    { label: 'Session tracker', icon: 'activity' as const, tour: 'session-tracker-open', open: sessionTrackerOpen, onClick: onSessionTracker, dialog: 'club-session-tracker-dialog' },
     { label: 'Analytics', icon: 'chart' as const, tour: 'analytics-open', open: analyticsOpen, onClick: onAnalytics, dialog: 'club-analytics-dialog' },
     { label: 'Game logs', icon: 'list' as const, tour: 'logs-open', open: gameLogsOpen, onClick: onGameLogs },
     { label: 'Network', icon: 'network' as const, tour: 'network-open', open: networkOpen, onClick: onNetwork },

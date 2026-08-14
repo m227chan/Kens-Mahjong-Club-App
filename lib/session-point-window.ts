@@ -17,7 +17,12 @@ export type SessionPointRangeWindow = {
   endAt: string
 }
 
-export type SessionPointWindow = SessionPointHoursWindow | SessionPointRangeWindow
+export type SessionPointAllWindow = { mode: 'all' }
+
+export type SessionPointWindow =
+  | SessionPointHoursWindow
+  | SessionPointRangeWindow
+  | SessionPointAllWindow
 
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/
 const MAX_RANGE_MS = 366 * 24 * 60 * 60 * 1000
@@ -125,6 +130,10 @@ export function hoursSessionWindow(
   return { mode: 'hours', hours }
 }
 
+export function allSessionWindow(): SessionPointAllWindow {
+  return { mode: 'all' }
+}
+
 function normalizeIsoInstant(value: unknown, label: string) {
   const raw = String(value ?? '').trim()
   const ms = Date.parse(raw)
@@ -142,6 +151,8 @@ export function normalizeSessionPointWindow(input: {
   startAt?: unknown
   endAt?: unknown
 }): SessionPointWindow {
+  if (input.mode === 'all') return allSessionWindow()
+
   const wantsRange =
     input.mode === 'range' ||
     (input.startAt != null &&
@@ -186,6 +197,7 @@ export function sessionWindowsEqual(
   if (left.mode === 'hours' && right.mode === 'hours') {
     return left.hours === right.hours
   }
+  if (left.mode === 'all' && right.mode === 'all') return true
   if (left.mode === 'range' && right.mode === 'range') {
     return left.startDate === right.startDate && left.endDate === right.endDate
   }
@@ -193,6 +205,7 @@ export function sessionWindowsEqual(
 }
 
 export function sessionWindowPhrase(window: SessionPointWindow) {
+  if (window.mode === 'all') return 'all time'
   if (window.mode === 'hours') {
     if (window.hours === 168) return '7 days'
     return `${window.hours} hours`
@@ -202,6 +215,7 @@ export function sessionWindowPhrase(window: SessionPointWindow) {
 }
 
 export function sessionWindowTag(window: SessionPointWindow) {
+  if (window.mode === 'all') return 'all'
   if (window.mode === 'hours') {
     if (window.hours === 168) return '7d'
     return `${window.hours}h`
@@ -213,6 +227,7 @@ export function sessionWindowTag(window: SessionPointWindow) {
 }
 
 export function sessionWindowRequestBody(window: SessionPointWindow) {
+  if (window.mode === 'all') return { mode: 'all' as const }
   if (window.mode === 'hours') {
     return { mode: 'hours' as const, hours: window.hours }
   }
@@ -223,4 +238,33 @@ export function sessionWindowRequestBody(window: SessionPointWindow) {
     startAt: window.startAt,
     endAt: window.endAt,
   }
+}
+
+export function dateIsInSessionWindow(
+  date: Date,
+  window: SessionPointWindow,
+  now = new Date(),
+) {
+  const time = date.getTime()
+  if (!Number.isFinite(time)) return false
+  if (window.mode === 'all') return true
+  if (window.mode === 'hours')
+    return time >= now.getTime() - window.hours * 60 * 60 * 1000 && time <= now.getTime()
+  return time >= Date.parse(window.startAt) && time < Date.parse(window.endAt)
+}
+
+export function sessionWindowDateBounds(
+  window: SessionPointWindow,
+  now = new Date(),
+) {
+  if (window.mode === 'all') return { startAt: null, endAt: null }
+  if (window.mode === 'hours') {
+    return {
+      startAt: new Date(
+        now.getTime() - window.hours * 60 * 60 * 1000,
+      ).toISOString(),
+      endAt: now.toISOString(),
+    }
+  }
+  return { startAt: window.startAt, endAt: window.endAt }
 }

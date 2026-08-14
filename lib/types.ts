@@ -131,6 +131,7 @@ export interface PlayerStatsDoc {
   skillRank: number
   last5SkillDelta: number
   recentSkillDeltas?: number[]
+  recentPointTrend?: number[]
   daysAttended: number
   lastPlayedAt?: string | null
   updatedAt: Timestamp
