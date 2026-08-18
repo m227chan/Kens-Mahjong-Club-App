@@ -143,6 +143,12 @@ describe('club season navigation', () => {
     render(<ClubWorkspace clubId="CLUB1" membership={managerMembership} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Open settings' }))
+    const manageControls = screen.getByRole('button', { name: 'Manage season controls' })
+    expect(manageControls.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByLabelText(/Tournament name/)).toBeNull()
+
+    fireEvent.click(manageControls)
+    expect(screen.getByRole('button', { name: 'Collapse season controls' }).getAttribute('aria-expanded')).toBe('true')
     const nameInput = screen.getByLabelText(/Tournament name/)
     expect(nameInput.getAttribute('placeholder')).toBe('Tournament 2')
 

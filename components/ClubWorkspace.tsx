@@ -114,6 +114,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [gameLogsOpen, setGameLogsOpen] = useState(false)
   const [networkOpen, setNetworkOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [seasonControlsOpen, setSeasonControlsOpen] = useState(false)
   const [clubToolsExpanded, setClubToolsExpanded] = useState(false)
   const [summaryDefinition, setSummaryDefinition] = useState<keyof typeof CLUB_SUMMARY_DEFINITIONS | null>(null)
   const [seasons, setSeasons] = useState<SeasonDoc[]>([])
@@ -516,7 +517,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           onAnalytics={() => { setAnalyticsPlayerId(null); setAnalyticsOpen(true) }}
           onGameLogs={() => setGameLogsOpen(true)}
           onNetwork={() => setNetworkOpen(true)}
-          onSettings={() => setSettingsOpen(true)}
+          onSettings={() => { setSeasonControlsOpen(false); setSettingsOpen(true) }}
         />
         <div className="club-workspace-content">
       <div data-tour="club-header" className="club-workspace-header mb-5 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
@@ -603,60 +604,76 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                 <span aria-hidden="true">←</span> Back to homepage
               </Link>
               <section aria-labelledby="competition-settings-heading" className="club-settings-card rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
                     <p className="club-settings-kicker">Competition</p>
-                    <h4 id="competition-settings-heading" className="mt-1 text-base font-black text-slate-900">Season controls</h4>
-                    <p className="mt-1 max-w-xl text-sm leading-6 text-slate-500">Seasons build regular club history. Tournaments use separate scores, ratings, and standings.</p>
+                    <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                      <h4 id="competition-settings-heading" className="text-base font-black text-slate-900">Season controls</h4>
+                      <p className="truncate text-xs font-semibold text-[rgb(var(--muted))]">
+                        <span className="font-black uppercase tracking-[.08em]">Current:</span>{' '}
+                        {activeCompetition?.name ?? `Season ${activeSeasonNumber}`} · {activeCompetition?.kind === 'tournament' ? 'Tournament' : 'Regular season'}
+                      </p>
+                    </div>
                   </div>
-                  <div className="club-settings-current rounded-lg border border-[rgb(var(--bamboo)/.35)] bg-[rgb(var(--bamboo)/.08)] px-3 py-2">
-                    <span className="block text-[.65rem] font-black uppercase tracking-[.12em] text-[rgb(var(--muted))]">Current</span>
-                    <strong className="mt-0.5 block text-sm text-[rgb(var(--ink))]">{activeCompetition?.name ?? `Season ${activeSeasonNumber}`}</strong>
-                    <span className="mt-0.5 block text-xs text-[rgb(var(--muted))]">{activeCompetition?.kind === 'tournament' ? 'Tournament' : 'Regular season'}</span>
-                  </div>
+                  <button
+                    type="button"
+                    aria-expanded={seasonControlsOpen}
+                    aria-controls="season-controls-content"
+                    aria-label={seasonControlsOpen ? 'Collapse season controls' : 'Manage season controls'}
+                    onClick={() => setSeasonControlsOpen((open) => !open)}
+                    className="inline-flex min-h-10 w-full shrink-0 items-center justify-center gap-2 rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] px-3 text-sm font-black text-[rgb(var(--ink))] transition hover:border-[rgb(var(--bamboo))] hover:bg-[rgb(var(--bamboo)/.07)] sm:w-auto"
+                  >
+                    {seasonControlsOpen ? 'Hide' : 'Manage'}
+                    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" className={`h-4 w-4 transition-transform ${seasonControlsOpen ? 'rotate-180' : ''}`}><path d="m5 7.5 5 5 5-5" /></svg>
+                  </button>
                 </div>
-                {isManager ? (
-                  <div className="mt-5 grid gap-3 md:grid-cols-2">
-                    <div className="club-competition-choice rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] p-4">
-                      <h5 className="text-sm font-black text-[rgb(var(--ink))]">Start a regular season</h5>
-                      <p className="mt-1 text-xs leading-5 text-[rgb(var(--muted))]">Creates Season {seasons.filter((season) => season.kind !== 'tournament').length + 1} and resets the active table session.</p>
-                      <button
-                        type="button"
-                        onClick={createNextSeason}
-                        disabled={seasonAction !== null}
-                        className="mt-4 min-h-11 w-full rounded-lg border border-[rgb(var(--bamboo))] bg-[rgb(var(--bamboo))] px-4 text-sm font-bold text-white transition hover:bg-[rgb(var(--bamboo-bright))] disabled:opacity-50"
-                      >
-                        {seasonAction === 'season' ? 'Starting season…' : 'Start new season'}
-                      </button>
-                    </div>
-                    <div className="club-competition-choice club-competition-choice-tournament rounded-lg border border-[rgb(var(--gold)/.55)] bg-[rgb(var(--gold)/.07)] p-4">
-                      <h5 className="text-sm font-black text-[rgb(var(--ink))]">Start a tournament</h5>
-                      <p className="mt-1 text-xs leading-5 text-[rgb(var(--muted))]">Keeps tournament results separate from regular season totals.</p>
-                      <label className="mt-3 block text-xs font-bold text-[rgb(var(--muted))]">
-                        Tournament name <span className="font-normal">(optional)</span>
-                        <input
-                          value={tournamentName}
-                          maxLength={80}
-                          onChange={(event) => setTournamentName(event.target.value)}
-                          placeholder={`Tournament ${nextTournamentNumber}`}
-                          className="mt-1 min-h-11 w-full rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] px-3 text-[rgb(var(--ink))] outline-none"
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        onClick={createTournament}
-                        disabled={seasonAction !== null}
-                        className="mt-3 min-h-11 w-full rounded-lg border border-[rgb(var(--gold))] bg-[rgb(var(--gold)/.15)] px-4 text-sm font-black text-[rgb(var(--ink))] transition hover:bg-[rgb(var(--gold)/.25)] disabled:opacity-50"
-                      >
-                        {seasonAction === 'tournament' ? 'Starting tournament…' : 'Start tournament'}
-                      </button>
-                    </div>
+                {seasonControlsOpen ? (
+                  <div id="season-controls-content" className="mt-4 border-t border-slate-200 pt-4">
+                    <p className="max-w-xl text-sm leading-6 text-slate-500">Seasons build regular club history. Tournaments use separate scores, ratings, and standings.</p>
+                    {isManager ? (
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        <div className="club-competition-choice rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] p-4">
+                          <h5 className="text-sm font-black text-[rgb(var(--ink))]">Start a regular season</h5>
+                          <p className="mt-1 text-xs leading-5 text-[rgb(var(--muted))]">Creates Season {seasons.filter((season) => season.kind !== 'tournament').length + 1} and resets the active table session.</p>
+                          <button
+                            type="button"
+                            onClick={createNextSeason}
+                            disabled={seasonAction !== null}
+                            className="mt-4 min-h-11 w-full rounded-lg border border-[rgb(var(--bamboo))] bg-[rgb(var(--bamboo))] px-4 text-sm font-bold text-white transition hover:bg-[rgb(var(--bamboo-bright))] disabled:opacity-50"
+                          >
+                            {seasonAction === 'season' ? 'Starting season…' : 'Start new season'}
+                          </button>
+                        </div>
+                        <div className="club-competition-choice club-competition-choice-tournament rounded-lg border border-[rgb(var(--gold)/.55)] bg-[rgb(var(--gold)/.07)] p-4">
+                          <h5 className="text-sm font-black text-[rgb(var(--ink))]">Start a tournament</h5>
+                          <p className="mt-1 text-xs leading-5 text-[rgb(var(--muted))]">Keeps tournament results separate from regular season totals.</p>
+                          <label className="mt-3 block text-xs font-bold text-[rgb(var(--muted))]">
+                            Tournament name <span className="font-normal">(optional)</span>
+                            <input
+                              value={tournamentName}
+                              maxLength={80}
+                              onChange={(event) => setTournamentName(event.target.value)}
+                              placeholder={`Tournament ${nextTournamentNumber}`}
+                              className="mt-1 min-h-11 w-full rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] px-3 text-[rgb(var(--ink))] outline-none"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={createTournament}
+                            disabled={seasonAction !== null}
+                            className="mt-3 min-h-11 w-full rounded-lg border border-[rgb(var(--gold))] bg-[rgb(var(--gold)/.15)] px-4 text-sm font-black text-[rgb(var(--ink))] transition hover:bg-[rgb(var(--gold)/.25)] disabled:opacity-50"
+                          >
+                            {seasonAction === 'tournament' ? 'Starting tournament…' : 'Start tournament'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600">
+                        Only the club manager can start seasons or tournaments.
+                      </p>
+                    )}
                   </div>
-                ) : (
-                  <p className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600">
-                    Only the club manager can start seasons or tournaments.
-                  </p>
-                )}
+                ) : null}
               </section>
               <div className="club-settings-group-heading">
                 <p className="club-settings-kicker">Club rules</p>
