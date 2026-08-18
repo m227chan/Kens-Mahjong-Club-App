@@ -1320,6 +1320,7 @@ html.dark .club-tool-sidebar-panel { box-shadow: inset 0 1px 0 rgb(238 231 207 /
 @media (max-width: 767px) {
   .club-workspace-main { padding-inline: .75rem; }
   .club-workspace-shell,.club-workspace-shell[data-sidebar-expanded="true"] { display: block; }
+  .club-tool-sidebar:not(.is-expanded) { display: none; }
   .club-tool-sidebar { position: relative; top: auto; z-index: 35; width: max-content; margin-bottom: .65rem; }
   .club-tool-sidebar.is-expanded { z-index: 70; }
   .club-tool-sidebar-panel { overflow: visible; }

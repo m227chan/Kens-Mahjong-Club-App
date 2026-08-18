@@ -102,6 +102,21 @@ describe('club season navigation', () => {
     expect(window.localStorage.getItem('club-tools-sidebar')).toBe('collapsed')
   })
 
+  it('keeps Club Tools available in the sticky mobile workspace bar', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })))
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+
+    await waitFor(() => expect(screen.getByTestId('club-sidebar-expanded').textContent).toBe('false'))
+    fireEvent.click(screen.getByRole('button', { name: 'Open club tools' }))
+
+    expect(screen.getByTestId('club-sidebar-expanded').textContent).toBe('true')
+  })
+
   it('lets any member view a historical season without changing the live club season', async () => {
     render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
 

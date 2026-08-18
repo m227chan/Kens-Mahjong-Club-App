@@ -721,7 +721,19 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         </div>
       ) : null}
 
-      <nav className="mobile-workspace-tabs sticky top-0 z-30 mx-auto mb-4 grid w-full grid-cols-2 rounded-lg border border-slate-200 bg-white/95 p-2 backdrop-blur md:hidden" aria-label="Club workspace">
+      <nav className="mobile-workspace-tabs sticky top-0 z-30 mx-auto mb-4 grid w-full grid-cols-3 rounded-lg border border-slate-200 bg-white/95 p-2 backdrop-blur md:hidden" aria-label="Club workspace">
+        <button
+          data-tour="club-tools-toggle"
+          type="button"
+          aria-label="Open club tools"
+          aria-expanded={clubToolsExpanded}
+          aria-controls="club-tool-sidebar-panel"
+          onClick={() => changeClubToolsExpanded(true)}
+          className="mobile-workspace-tab inline-flex items-center justify-center gap-1.5"
+        >
+          <span aria-hidden="true" className="text-base leading-none">☰</span>
+          <span>Tools</span>
+        </button>
         {([
           ['session', 'Session'],
           ['standings', 'Leaderboard'],
