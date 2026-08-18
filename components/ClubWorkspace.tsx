@@ -60,6 +60,8 @@ const ANALYTICS_TIME_WINDOWS = [
   { label: 'Custom dates', value: 'custom' },
 ]
 
+const CLUB_SIDEBAR_PREFERENCE_KEY = 'club-tools-sidebar'
+
 const CLUB_SUMMARY_DEFINITIONS = {
   players: {
     label: 'Players',
@@ -130,6 +132,28 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [managerMessage, setManagerMessage] = useState<string | null>(null)
   const [promotingManager, setPromotingManager] = useState(false)
   const [linkingPlayerId, setLinkingPlayerId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const desktop = window.matchMedia?.('(min-width: 768px)')
+    if (!desktop) return
+    const syncSidebarForViewport = () => {
+      if (!desktop.matches) {
+        setClubToolsExpanded(false)
+        return
+      }
+      setClubToolsExpanded(window.localStorage.getItem(CLUB_SIDEBAR_PREFERENCE_KEY) !== 'collapsed')
+    }
+    syncSidebarForViewport()
+    desktop.addEventListener?.('change', syncSidebarForViewport)
+    return () => desktop.removeEventListener?.('change', syncSidebarForViewport)
+  }, [])
+
+  const changeClubToolsExpanded = (value: boolean) => {
+    setClubToolsExpanded(value)
+    if (window.matchMedia?.('(min-width: 768px)').matches) {
+      window.localStorage.setItem(CLUB_SIDEBAR_PREFERENCE_KEY, value ? 'expanded' : 'collapsed')
+    }
+  }
 
   const isManager = membership.role === 'manager'
   const { play } = useSound()
@@ -469,7 +493,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
       <div className="club-workspace-shell" data-sidebar-expanded={clubToolsExpanded}>
         <ClubToolSidebar
           expanded={clubToolsExpanded}
-          onExpandedChange={setClubToolsExpanded}
+          onExpandedChange={changeClubToolsExpanded}
           rosterOpen={rosterOpen}
           analyticsOpen={analyticsOpen}
           gameLogsOpen={gameLogsOpen}

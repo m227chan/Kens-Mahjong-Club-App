@@ -471,7 +471,7 @@ export default function GameLogsModal({
 
   return (
     <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
-      <div role="dialog" aria-modal="true" aria-labelledby="game-logs-title" data-tour="logs-modal" className="responsive-modal-panel flex max-h-[calc(100dvh-3rem)] w-full max-w-7xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
+      <div id="game-logs-dialog" role="dialog" aria-modal="true" aria-labelledby="game-logs-title" data-tour="logs-modal" className="responsive-modal-panel flex max-h-[calc(100dvh-3rem)] w-full max-w-7xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-center justify-between gap-2 border-b border-slate-200 p-2.5 sm:items-start sm:p-5 lg:items-start">
           <div>
             <p className="hidden text-xs font-bold uppercase tracking-[0.18em] text-sky-600 sm:block">Game logs</p>
