@@ -9,6 +9,7 @@ import {
   normalizeSessionLayout,
 } from '@/lib/session-layout'
 import { computeGlobalRanks } from '@/lib/stats-engine'
+import { aggregateAllCompetitionStats } from '@/lib/standings-analytics'
 import type {
   AccountDeletionPlan,
   AccountManagerResolution,
@@ -803,6 +804,20 @@ export function subscribePlayerStats(
     table,
     `club_id=eq.${clubId}`,
     load,
+    callback,
+    undefined,
+    () => invalidateClubHistoryCache(clubId),
+  )
+}
+export function subscribeAllCompetitionStats(
+  clubId: string,
+  callback: (stats: PlayerStatsDoc[]) => void,
+) {
+  return realtime(
+    `all-competition-stats:${clubId}`,
+    'season_player_stats',
+    `club_id=eq.${clubId}`,
+    async () => aggregateAllCompetitionStats(await fetchGames(clubId)),
     callback,
     undefined,
     () => invalidateClubHistoryCache(clubId),

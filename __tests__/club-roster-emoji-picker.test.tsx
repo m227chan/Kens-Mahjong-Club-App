@@ -17,6 +17,7 @@ const dataMocks = vi.hoisted(() => ({
     return vi.fn()
   }),
   subscribePlayerStats: vi.fn((_clubId: string, callback: (stats: unknown[]) => void) => { callback([]); return vi.fn() }),
+  subscribeAllCompetitionStats: vi.fn((_clubId: string, callback: (stats: unknown[]) => void) => { callback([]); return vi.fn() }),
   subscribeScoringRules: vi.fn(() => vi.fn()),
   subscribeTitleRules: vi.fn(() => vi.fn()),
   subscribeActivitySettings: vi.fn(() => vi.fn()),

@@ -5,7 +5,7 @@ import { Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, T
 import { loadAnalyticsGames, loadAnalyticsSkillEvents } from '@/lib/data'
 import type { GameDoc, PlayerDoc, PlayerStatsDoc, SkillEventDoc } from '@/lib/types'
 import AnalyticsPanel from '@/components/AnalyticsPanel'
-import { aggregatePlayerGames, competitionRanks, defaultComparedPlayerIds, gameDate, playerCompetitionRecords, toggleComparedPlayerId } from '@/lib/standings-analytics'
+import { aggregatePlayerGames, combinedCompetitionSkillEvents, competitionRanks, defaultComparedPlayerIds, gameDate, playerCompetitionRecords, toggleComparedPlayerId } from '@/lib/standings-analytics'
 import { allSessionWindow, dateIsInSessionWindow, type SessionPointWindow } from '@/lib/session-point-window'
 import { useFloatingSessionTracker } from '@/contexts/FloatingSessionTrackerContext'
 
@@ -62,13 +62,23 @@ export default function DashboardContent({
   const [comparedPlayerIds, setComparedPlayerIds] = useState<string[]>([])
   const [playerSearch, setPlayerSearch] = useState('')
   const comparisonInitialized = useRef(false)
-  const statsUpdatedKey = stats.map((stat) => stat.updatedAt?.toMillis?.() ?? 0).sort().join(',')
+  const statsUpdatedKey = stats.map((stat) => [
+    stat.playerId,
+    stat.updatedAt?.toMillis?.() ?? 0,
+    stat.totalPoints,
+    stat.gamesPlayed,
+    stat.skillRating,
+  ].join(':')).sort().join(',')
 
   useEffect(() => {
     let cancelled = false
     setLoading(true); setError(null)
-    void Promise.all([loadAnalyticsGames(clubId, analyticsWindow, seasonNumber), loadAnalyticsSkillEvents(clubId, analyticsWindow, seasonNumber)])
-      .then(([value, events]) => { if (!cancelled) { setLoadedGames(value); setLoadedSkillEvents(events) } })
+    const gamesPromise = loadAnalyticsGames(clubId, seasonNumber == null ? allSessionWindow() : analyticsWindow, seasonNumber)
+    const eventsPromise = seasonNumber == null
+      ? Promise.resolve([] as SkillEventDoc[])
+      : loadAnalyticsSkillEvents(clubId, analyticsWindow, seasonNumber)
+    void Promise.all([gamesPromise, eventsPromise])
+      .then(([value, events]) => { if (!cancelled) { setLoadedGames(value); setLoadedSkillEvents(seasonNumber == null ? combinedCompetitionSkillEvents(value) : events) } })
       .catch((nextError) => { if (!cancelled) setError(nextError instanceof Error ? nextError.message : 'Unable to load analytics.') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
@@ -77,8 +87,12 @@ export default function DashboardContent({
     let cancelled = false
     setRecordsLoading(true); setRecordsError(null)
     const allTime = allSessionWindow()
-    void Promise.all([loadAnalyticsGames(clubId, allTime, seasonNumber), loadAnalyticsSkillEvents(clubId, allTime, seasonNumber)])
-      .then(([value, events]) => { if (!cancelled) { setRecordGames(value); setRecordSkillEvents(events) } })
+    const gamesPromise = loadAnalyticsGames(clubId, allTime, seasonNumber)
+    const eventsPromise = seasonNumber == null
+      ? Promise.resolve([] as SkillEventDoc[])
+      : loadAnalyticsSkillEvents(clubId, allTime, seasonNumber)
+    void Promise.all([gamesPromise, eventsPromise])
+      .then(([value, events]) => { if (!cancelled) { setRecordGames(value); setRecordSkillEvents(seasonNumber == null ? combinedCompetitionSkillEvents(value) : events) } })
       .catch((nextError) => { if (!cancelled) setRecordsError(nextError instanceof Error ? nextError.message : 'Unable to load player records.') })
       .finally(() => { if (!cancelled) setRecordsLoading(false) })
     return () => { cancelled = true }
@@ -234,7 +248,7 @@ export default function DashboardContent({
           <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-xs font-black uppercase tracking-[.16em] text-amber-700">Competition records</p>
             <h3 className="mt-1 text-lg font-black text-slate-950">All-time highs and lows</h3>
-            <p className="mt-1 text-sm text-slate-500">Across every recorded game in this Season or Tournament. These records do not change with the date filter.</p>
+            <p className="mt-1 text-sm text-slate-500">{seasonNumber == null ? 'Across every recorded game in all seasons and tournaments.' : 'Across every recorded game in this Season or Tournament.'} These records do not change with the date filter.</p>
             {recordsError ? <p role="alert" className="mt-4 rounded border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-700">{recordsError}</p> : null}
             <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-3">
               <Metric label="Max ever points" value={recordsLoading ? '…' : playerRecords.maximumCumulativePoints == null ? '—' : signed(playerRecords.maximumCumulativePoints)} detail="Highest cumulative total" />

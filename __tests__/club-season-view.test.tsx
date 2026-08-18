@@ -11,6 +11,7 @@ const dataMocks = vi.hoisted(() => ({
   subscribeClubMembers: vi.fn((_clubId: string, callback: (members: unknown[]) => void) => { callback([]); return vi.fn() }),
   subscribePlayers: vi.fn((_clubId: string, callback: (players: unknown[]) => void) => { callback([]); return vi.fn() }),
   subscribePlayerStats: vi.fn((_clubId: string, callback: (stats: unknown[]) => void) => { callback([]); return vi.fn() }),
+  subscribeAllCompetitionStats: vi.fn((_clubId: string, callback: (stats: unknown[]) => void) => { callback([]); return vi.fn() }),
   subscribeScoringRules: vi.fn(() => vi.fn()),
   subscribeTitleRules: vi.fn(() => vi.fn()),
   subscribeActivitySettings: vi.fn(() => vi.fn()),
@@ -43,9 +44,9 @@ vi.mock('@/lib/data', () => dataMocks)
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }) }))
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { uid: 'member-1', email: 'member@example.com' } }) }))
 vi.mock('@/contexts/SoundContext', () => ({ useSound: () => ({ play: vi.fn() }) }))
-vi.mock('@/components/Leaderboard', () => ({ LeaderboardPanel: ({ seasonNumber }: { seasonNumber: number }) => <div data-testid="leaderboard-season">{seasonNumber}</div> }))
+vi.mock('@/components/Leaderboard', () => ({ LeaderboardPanel: ({ seasonNumber }: { seasonNumber?: number }) => <div data-testid="leaderboard-season">{seasonNumber ?? 'all'}</div> }))
 vi.mock('@/components/SessionManager', () => ({ default: ({ seasonNumber }: { seasonNumber: number }) => <div data-testid="session-season">{seasonNumber}</div> }))
-vi.mock('@/components/DashboardContent', () => ({ default: () => null }))
+vi.mock('@/components/DashboardContent', () => ({ default: ({ seasonNumber }: { seasonNumber?: number }) => <div data-testid="analytics-season">{seasonNumber ?? 'all'}</div> }))
 vi.mock('@/components/GameLogsModal', () => ({ default: () => null }))
 vi.mock('@/components/NetworkGraphModal', () => ({ default: () => null }))
 vi.mock('@/components/ScoringRulesSettings', () => ({ default: () => null }))
@@ -118,6 +119,23 @@ describe('club season navigation', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Return to current' }))
     await waitFor(() => expect(screen.getByTestId('session-season').textContent).toBe('2'))
+  })
+
+  it('combines every season and tournament in leaderboard and analytics', async () => {
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+
+    await waitFor(() => expect((screen.getByLabelText('Season') as HTMLSelectElement).value).toBe('2'))
+    expect(screen.getByRole('option', { name: 'All seasons' })).toBeTruthy()
+
+    fireEvent.change(screen.getByLabelText('Season'), { target: { value: 'all' } })
+
+    await waitFor(() => expect(screen.getByTestId('leaderboard-season').textContent).toBe('all'))
+    expect(dataMocks.subscribeAllCompetitionStats).toHaveBeenCalledWith('CLUB1', expect.any(Function))
+    expect(screen.getByText('All seasons combined')).toBeTruthy()
+    expect(screen.queryByTestId('session-season')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open analytics' }))
+    expect(screen.getByTestId('analytics-season').textContent).toBe('all')
   })
 
   it('lets a manager start a custom-named tournament from season controls', async () => {

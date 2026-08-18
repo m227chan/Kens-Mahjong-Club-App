@@ -47,6 +47,7 @@ export const loadAnalyticsGames = backend.loadAnalyticsGames
 export const loadAnalyticsSkillEvents = backend.loadAnalyticsSkillEvents
 export const getClubGameCount = backend.getClubGameCount
 export const subscribePlayerStats = backend.subscribePlayerStats
+export const subscribeAllCompetitionStats = backend.subscribeAllCompetitionStats
 export const subscribeActiveSession = backend.subscribeActiveSession
 export const createSession = backend.createSession
 export const updateSession = backend.updateSession
