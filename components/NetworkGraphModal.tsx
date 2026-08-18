@@ -238,7 +238,7 @@ export default function NetworkGraphModal({
 
   const egoName = egoPlayerId ? labels[egoPlayerId] ?? 'Selected player' : null
   const seasonName = seasonFilter === 'all'
-    ? 'All seasons'
+    ? 'All seasons & tournaments'
     : seasons.find((season) => season.seasonNumber === seasonFilter)?.name ?? `Season ${seasonFilter}`
   const fullDateRange = Boolean(
     seasonBounds
@@ -333,7 +333,7 @@ export default function NetworkGraphModal({
                 }}
                 className="mt-2 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900"
               >
-                <option value="all">All seasons</option>
+                <option value="all">All seasons &amp; tournaments</option>
                 {seasons.map((season) => (
                   <option key={season.id} value={season.seasonNumber}>
                     {season.name}

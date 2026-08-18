@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('server-only', () => ({}))
 
-import { applyNewGame, storedStats } from '@/lib/server/supabase-game-management'
+import { appendNewGame, applyNewGame, storedStats } from '@/lib/server/supabase-game-management'
 
 describe('incremental game stats', () => {
   const entries = [
@@ -43,5 +43,29 @@ describe('incremental game stats', () => {
     expect(stats.get('a')).toMatchObject({ totalPoints: 48, gamesPlayed: 2, gamesWon: 2, skillGamesPlayed: 2, daysAttended: 1, recentPointTrend: [24, 48] })
     expect(stats.get('a')?.recentEloDeltas).toHaveLength(2)
     expect(stats.get('a')?.recentSkillDeltas).toHaveLength(2)
+  })
+
+  it('writes tournament results only to tournament stats', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [] })
+    query.mockResolvedValueOnce({
+      rows: [{ config: {}, competition_type: 'tournament', all_stats: [], season_stats: [] }],
+    })
+    const game = {
+      id: 'tournament-game',
+      datetime: new Date('2026-07-14T20:00:00Z'),
+      createdAt: new Date('2026-07-14T20:00:00Z'),
+      createdBy: 'member',
+      seasonNumber: 9,
+      entries,
+      winnerPlayerId: 'a',
+      isHistorical: false,
+      winType: 'self_draw' as const,
+    } as Parameters<typeof applyNewGame>[1]
+
+    await appendNewGame({ query } as never, 'CLUB1', game)
+
+    const writes = query.mock.calls.slice(1).map(([sql]) => String(sql))
+    expect(writes.some((sql) => sql.includes('insert into season_player_stats'))).toBe(true)
+    expect(writes.some((sql) => /insert into player_stats\b/.test(sql))).toBe(false)
   })
 })

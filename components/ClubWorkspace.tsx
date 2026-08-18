@@ -25,6 +25,7 @@ import {
   resolveJoinRequest,
   setPlayerAuthLink,
   startNewSeason,
+  startNewTournament,
   updatePlayerIcon,
   updatePlayerName,
   subscribeClub,
@@ -38,7 +39,7 @@ import {
   subscribeSeasons
 } from '@/lib/data'
 import type { ClubDoc, ClubMembershipDoc, JoinRequestDoc, PlayerDoc, PlayerStatsDoc, SeasonDoc } from '@/lib/types'
-import { PLAYER_EMOJIS, randomUnusedPlayerEmoji } from '@/lib/players'
+import { randomUnusedPlayerEmoji, randomUnusedPlayerEmojiOptions } from '@/lib/players'
 import { DEFAULT_SCORING_RULES, type ScoringRules } from '@/lib/scoring-rules'
 import { DEFAULT_TITLE_RULES, type TitleRules } from '@/lib/title-rules'
 import { DEFAULT_ACTIVITY_SETTINGS, type ActivitySettings as ActivitySettingsValue } from '@/lib/activity-settings'
@@ -51,7 +52,6 @@ import {
   type SessionPointWindowHours,
 } from '@/lib/session-point-window'
 
-const iconChoices = PLAYER_EMOJIS
 const ANALYTICS_TIME_WINDOWS = [
   { label: 'Last 24 hours', value: '24' },
   { label: 'Last 48 hours', value: '48' },
@@ -94,6 +94,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [playerName, setPlayerName] = useState('')
   const [playerIcon, setPlayerIcon] = useState(() => randomUnusedPlayerEmoji(new Set()))
   const [iconPickerOpen, setIconPickerOpen] = useState(false)
+  const [newPlayerEmojiChoices, setNewPlayerEmojiChoices] = useState<string[]>([])
   const [linkToMe, setLinkToMe] = useState(false)
   const [playerMessage, setPlayerMessage] = useState<string | null>(null)
   const [joiningAction, setJoiningAction] = useState<string | null>(null)
@@ -114,8 +115,10 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [summaryDefinition, setSummaryDefinition] = useState<keyof typeof CLUB_SUMMARY_DEFINITIONS | null>(null)
   const [seasons, setSeasons] = useState<SeasonDoc[]>([])
   const [viewedSeasonNumber, setViewedSeasonNumber] = useState<number | null>(null)
-  const [seasonAction, setSeasonAction] = useState(false)
+  const [seasonAction, setSeasonAction] = useState<'season' | 'tournament' | null>(null)
+  const [tournamentName, setTournamentName] = useState('')
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null)
+  const [editingPlayerEmojiChoices, setEditingPlayerEmojiChoices] = useState<string[]>([])
   const [customEmojiValue, setCustomEmojiValue] = useState('')
   const [renamingPlayerId, setRenamingPlayerId] = useState<string | null>(null)
   const [renamingPlayerValue, setRenamingPlayerValue] = useState('')
@@ -134,13 +137,49 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const latestSeasonNumber = seasons.length ? seasons[seasons.length - 1].seasonNumber : club?.activeSeasonNumber ?? 1
   const activeSeasonNumber = club?.activeSeasonNumber ?? latestSeasonNumber
   const selectedSeasonNumber = viewedSeasonNumber ?? activeSeasonNumber
-  const viewingHistoricalSeason = selectedSeasonNumber !== activeSeasonNumber
+  const activeCompetition = seasons.find((season) => season.seasonNumber === activeSeasonNumber) ?? null
+  const selectedCompetition = seasons.find((season) => season.seasonNumber === selectedSeasonNumber) ?? null
+  const viewingHistoricalCompetition = selectedSeasonNumber !== activeSeasonNumber
+  const nextTournamentNumber = seasons.filter((season) => season.kind === 'tournament').length + 1
   const linkedPlayerForUser = user ? players.find((player) => player.authUid === user.uid) ?? null : null
   const analyticsWindowValue = analyticsWindow.mode === 'all'
     ? 'all'
     : analyticsWindow.mode === 'range'
       ? 'custom'
       : String(analyticsWindow.hours)
+
+  const closeEmojiPickers = () => {
+    setIconPickerOpen(false)
+    setEditingPlayerId(null)
+    setEditingPlayerEmojiChoices([])
+    setCustomEmojiValue('')
+  }
+
+  const closeRoster = () => {
+    closeEmojiPickers()
+    setRosterOpen(false)
+  }
+
+  const openNewPlayerEmojiPicker = () => {
+    setEditingPlayerId(null)
+    setEditingPlayerEmojiChoices([])
+    setNewPlayerEmojiChoices(randomUnusedPlayerEmojiOptions(usedIconKeys))
+    setIconPickerOpen(true)
+  }
+
+  const togglePlayerEmojiPicker = (player: PlayerDoc, customValue = player.icon) => {
+    setIconPickerOpen(false)
+    setNewPlayerEmojiChoices([])
+    if (editingPlayerId === player.id) {
+      setEditingPlayerId(null)
+      setEditingPlayerEmojiChoices([])
+      setCustomEmojiValue('')
+      return
+    }
+    setEditingPlayerEmojiChoices(randomUnusedPlayerEmojiOptions(usedIconKeys))
+    setCustomEmojiValue(customValue)
+    setEditingPlayerId(player.id)
+  }
 
   const applyAnalyticsCustomRange = (startDate: string, endDate: string) => {
     try {
@@ -199,11 +238,37 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
     return () => window.clearTimeout(timer)
   }, [seasonMessage])
 
+  useEffect(() => {
+    if (!rosterOpen || (!iconPickerOpen && editingPlayerId === null)) return
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target
+      if (target instanceof Element && target.closest('[data-emoji-picker-control]')) return
+      closeEmojiPickers()
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeEmojiPickers()
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [editingPlayerId, iconPickerOpen, rosterOpen])
+
   const addPlayer = async () => {
     setPlayerMessage(null)
     if (!playerName.trim()) {
       play('error')
       setPlayerMessage('Enter a player name.')
+      return
+    }
+
+    if (!playerIcon.trim()) {
+      play('error')
+      setPlayerMessage('Enter an emoji.')
       return
     }
 
@@ -349,29 +414,53 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
 
   const changeSeason = (value: string) => {
     const seasonNumber = Number(value)
-    if (!seasonNumber || !seasons.some((season) => season.seasonNumber === seasonNumber)) return
+    const competition = seasons.find((season) => season.seasonNumber === seasonNumber)
+    if (!seasonNumber || !competition) return
     setViewedSeasonNumber(seasonNumber === activeSeasonNumber ? null : seasonNumber)
     setSeasonMessage(seasonNumber === activeSeasonNumber
-      ? `Showing current Season ${seasonNumber}.`
-      : `Viewing Season ${seasonNumber} history.`)
+      ? `Showing current ${competition.name}.`
+      : `Viewing ${competition.name} history.`)
   }
 
   const createNextSeason = async () => {
     if (!user) return
     if (!window.confirm('Start a new season? Current season data will remain available, and the active session will reset.')) return
-    setSeasonAction(true)
+    setSeasonAction('season')
     setSeasonMessage(null)
     try {
-      const nextSeason = await startNewSeason(clubId, { createdBy: user.uid })
+      await startNewSeason(clubId, { createdBy: user.uid })
       setViewedSeasonNumber(null)
-      setSeasonMessage(`Season ${nextSeason} started.`)
+      const regularSeasonNumber = seasons.filter((season) => season.kind !== 'tournament').length + 1
+      setSeasonMessage(`Season ${regularSeasonNumber} started.`)
       setSettingsOpen(false)
-      window.location.reload()
     } catch (error) {
       setSeasonMessage(error instanceof Error ? error.message : 'Unable to start a new season.')
       play('error')
     } finally {
-      setSeasonAction(false)
+      setSeasonAction(null)
+    }
+  }
+
+  const createTournament = async () => {
+    if (!user) return
+    const proposedName = tournamentName.trim() || `Tournament ${nextTournamentNumber}`
+    if (!window.confirm(`Start ${proposedName}? The active session will reset, and its scores and stats will stay separate from regular seasons.`)) return
+    setSeasonAction('tournament')
+    setSeasonMessage(null)
+    try {
+      const tournament = await startNewTournament(clubId, {
+        createdBy: user.uid,
+        ...(tournamentName.trim() ? { name: tournamentName.trim() } : {}),
+      })
+      setViewedSeasonNumber(null)
+      setTournamentName('')
+      setSeasonMessage(`${tournament.name} started.`)
+      setSettingsOpen(false)
+    } catch (error) {
+      setSeasonMessage(error instanceof Error ? error.message : 'Unable to start the tournament.')
+      play('error')
+    } finally {
+      setSeasonAction(null)
     }
   }
 
@@ -409,15 +498,15 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
             <select
               value={selectedSeasonNumber}
               onChange={(event) => changeSeason(event.target.value)}
-              disabled={seasonAction}
+              disabled={seasonAction !== null}
               className="bg-transparent text-sm font-black text-slate-900 outline-none disabled:opacity-50"
               aria-label="Season"
             >
               {seasons.some((season) => season.seasonNumber === selectedSeasonNumber) ? null : (
-                <option value={selectedSeasonNumber}>{selectedSeasonNumber}</option>
+                <option value={selectedSeasonNumber}>Season {selectedSeasonNumber}</option>
               )}
               {seasons.map((season) => (
-                <option key={season.id} value={season.seasonNumber}>{season.seasonNumber}{season.seasonNumber === activeSeasonNumber ? ' (current)' : ''}</option>
+                <option key={season.id} value={season.seasonNumber}>{season.name}{season.kind === 'tournament' ? ' · Tournament' : ''}{season.seasonNumber === activeSeasonNumber ? ' (current)' : ''}</option>
               ))}
             </select>
           </label>
@@ -450,13 +539,13 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
 
       {settingsOpen ? (
         <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
-          <div id="club-settings-dialog" data-tour="settings-modal" role="dialog" aria-modal="true" aria-labelledby="club-settings-title" className="responsive-modal-panel flex max-h-[calc(100dvh-3rem)] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl">
-            <div className="shrink-0 border-b border-slate-200 p-5">
+          <div id="club-settings-dialog" data-tour="settings-modal" role="dialog" aria-modal="true" aria-labelledby="club-settings-title" className="club-settings-dialog responsive-modal-panel flex max-h-[calc(100dvh-3rem)] min-h-0 w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+            <div className="club-settings-header shrink-0 border-b border-slate-200 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Club settings</p>
                   <h3 id="club-settings-title" className="mt-2 text-xl font-black text-slate-950">{club?.name ?? membership.clubName}</h3>
-                  <p className="mt-1 text-sm text-slate-500">Manage navigation and season controls for this club.</p>
+                  <p className="mt-1 text-sm text-slate-500">Manage competitions, scoring, standings, and club access.</p>
                 </div>
                 <button
                   data-tour="settings-close"
@@ -468,36 +557,80 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                 </button>
               </div>
             </div>
-            <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto overscroll-contain p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            <div className="club-settings-body grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
               <Link
                 href="/"
-                className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-black text-blue-800 transition hover:bg-blue-100"
+                className="club-settings-home-link inline-flex min-h-11 items-center gap-2 rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] px-4 py-3 text-sm font-black text-[rgb(var(--ink))] transition hover:border-[rgb(var(--bamboo))] hover:bg-[rgb(var(--bamboo)/.07)]"
               >
-                Back to homepage
+                <span aria-hidden="true">←</span> Back to homepage
               </Link>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-black text-slate-900">Season controls</p>
-                <p className="mt-1 text-sm text-slate-500">
-                  Active season: Season {activeSeasonNumber}. New clubs start at Season 1 by default.
-                </p>
+              <section aria-labelledby="competition-settings-heading" className="club-settings-card rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="club-settings-kicker">Competition</p>
+                    <h4 id="competition-settings-heading" className="mt-1 text-base font-black text-slate-900">Season controls</h4>
+                    <p className="mt-1 max-w-xl text-sm leading-6 text-slate-500">Seasons build regular club history. Tournaments use separate scores, ratings, and standings.</p>
+                  </div>
+                  <div className="club-settings-current rounded-lg border border-[rgb(var(--bamboo)/.35)] bg-[rgb(var(--bamboo)/.08)] px-3 py-2">
+                    <span className="block text-[.65rem] font-black uppercase tracking-[.12em] text-[rgb(var(--muted))]">Current</span>
+                    <strong className="mt-0.5 block text-sm text-[rgb(var(--ink))]">{activeCompetition?.name ?? `Season ${activeSeasonNumber}`}</strong>
+                    <span className="mt-0.5 block text-xs text-[rgb(var(--muted))]">{activeCompetition?.kind === 'tournament' ? 'Tournament' : 'Regular season'}</span>
+                  </div>
+                </div>
                 {isManager ? (
-                  <button
-                    type="button"
-                    onClick={createNextSeason}
-                    disabled={seasonAction}
-                    className="mt-4 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-500 disabled:opacity-50"
-                  >
-                    {seasonAction ? 'Starting season...' : 'Start new season'}
-                  </button>
+                  <div className="mt-5 grid gap-3 md:grid-cols-2">
+                    <div className="club-competition-choice rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] p-4">
+                      <h5 className="text-sm font-black text-[rgb(var(--ink))]">Start a regular season</h5>
+                      <p className="mt-1 text-xs leading-5 text-[rgb(var(--muted))]">Creates Season {seasons.filter((season) => season.kind !== 'tournament').length + 1} and resets the active table session.</p>
+                      <button
+                        type="button"
+                        onClick={createNextSeason}
+                        disabled={seasonAction !== null}
+                        className="mt-4 min-h-11 w-full rounded-lg border border-[rgb(var(--bamboo))] bg-[rgb(var(--bamboo))] px-4 text-sm font-bold text-white transition hover:bg-[rgb(var(--bamboo-bright))] disabled:opacity-50"
+                      >
+                        {seasonAction === 'season' ? 'Starting season…' : 'Start new season'}
+                      </button>
+                    </div>
+                    <div className="club-competition-choice club-competition-choice-tournament rounded-lg border border-[rgb(var(--gold)/.55)] bg-[rgb(var(--gold)/.07)] p-4">
+                      <h5 className="text-sm font-black text-[rgb(var(--ink))]">Start a tournament</h5>
+                      <p className="mt-1 text-xs leading-5 text-[rgb(var(--muted))]">Keeps tournament results separate from regular season totals.</p>
+                      <label className="mt-3 block text-xs font-bold text-[rgb(var(--muted))]">
+                        Tournament name <span className="font-normal">(optional)</span>
+                        <input
+                          value={tournamentName}
+                          maxLength={80}
+                          onChange={(event) => setTournamentName(event.target.value)}
+                          placeholder={`Tournament ${nextTournamentNumber}`}
+                          className="mt-1 min-h-11 w-full rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] px-3 text-[rgb(var(--ink))] outline-none"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={createTournament}
+                        disabled={seasonAction !== null}
+                        className="mt-3 min-h-11 w-full rounded-lg border border-[rgb(var(--gold))] bg-[rgb(var(--gold)/.15)] px-4 text-sm font-black text-[rgb(var(--ink))] transition hover:bg-[rgb(var(--gold)/.25)] disabled:opacity-50"
+                      >
+                        {seasonAction === 'tournament' ? 'Starting tournament…' : 'Start tournament'}
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   <p className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600">
-                    Only the club manager can start a new season.
+                    Only the club manager can start seasons or tournaments.
                   </p>
                 )}
+              </section>
+              <div className="club-settings-group-heading">
+                <p className="club-settings-kicker">Club rules</p>
+                <p>Scoring, activity, and leaderboard titles apply across the club.</p>
               </div>
               <ScoringRulesSettings clubId={clubId} rules={scoringRules} isManager={isManager} />
               <ActivitySettings clubId={clubId} settings={activitySettings} isManager={isManager} />
               <TitleRulesSettings clubId={clubId} rules={titleRules} isManager={isManager} />
+              <div className="club-settings-group-heading club-settings-danger-heading">
+                <p className="club-settings-kicker">Club access</p>
+                <p>Permanent club-level actions are kept separate from everyday settings.</p>
+              </div>
               {isManager && !club?.universal ? (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
                   <p className="text-sm font-black text-rose-700">Delete club</p>
@@ -588,12 +721,12 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         </div>
 
         <aside className={mobileView === 'session' ? 'club-session-panel order-first block md:block xl:order-none' : 'club-session-panel order-first hidden md:block xl:order-none'}>
-          {viewingHistoricalSeason ? (
+          {viewingHistoricalCompetition ? (
             <section className="rounded-lg border border-amber-200 bg-amber-50 p-5 text-amber-950">
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-700">Historical season</p>
-              <h2 className="mt-2 text-lg font-black">Season {selectedSeasonNumber} is read-only</h2>
-              <p className="mt-1 text-sm leading-6 text-amber-900">Standings and analytics show Season {selectedSeasonNumber}. Return to Season {activeSeasonNumber} to manage the current session.</p>
-              <button type="button" onClick={() => changeSeason(String(activeSeasonNumber))} className="mt-4 min-h-10 rounded border border-amber-300 bg-white px-3 text-sm font-bold text-amber-900">Return to current season</button>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-700">Historical {selectedCompetition?.kind === 'tournament' ? 'tournament' : 'season'}</p>
+              <h2 className="mt-2 text-lg font-black">{selectedCompetition?.name ?? `Season ${selectedSeasonNumber}`} is read-only</h2>
+              <p className="mt-1 text-sm leading-6 text-amber-900">Standings and analytics show {selectedCompetition?.name ?? `Season ${selectedSeasonNumber}`}. Return to {activeCompetition?.name ?? `Season ${activeSeasonNumber}`} to manage the current session.</p>
+              <button type="button" onClick={() => changeSeason(String(activeSeasonNumber))} className="mt-4 min-h-10 rounded border border-amber-300 bg-white px-3 text-sm font-bold text-amber-900">Return to current</button>
             </section>
           ) : (
             <SessionManager clubId={clubId} seasonNumber={activeSeasonNumber} players={players} isManager={isManager} scoringRules={scoringRules} />
@@ -613,7 +746,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                 <h3 id="club-roster-title" className="mt-2 text-xl font-black text-slate-950">Players and linked users</h3>
                 <p className="mt-1 text-sm text-slate-500">{players.length} tracked players in {club?.name ?? membership.clubName}</p>
               </div>
-              <button data-tour="roster-close" type="button" onClick={() => setRosterOpen(false)} className="mr-5 mt-5 rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">
+              <button data-tour="roster-close" type="button" onClick={closeRoster} className="mr-5 mt-5 rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">
                 Close
               </button>
             </div>
@@ -656,38 +789,36 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                     <div className="relative mt-2">
                       <input
                         value={playerIcon}
-                        onClick={() => setIconPickerOpen(true)}
-                        onFocus={() => setIconPickerOpen(true)}
+                        onClick={openNewPlayerEmojiPicker}
+                        onFocus={() => { if (!iconPickerOpen) openNewPlayerEmojiPicker() }}
                         onChange={(event) => {
                           setPlayerIcon(event.target.value.slice(0, 12))
                           setPlayerMessage(null)
                         }}
+                        data-emoji-picker-control
                         className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-teal-500"
                       />
                       {iconPickerOpen ? (
-                        <div className="emoji-menu absolute right-0 top-[calc(100%+8px)] z-20 w-56 rounded border border-slate-200 bg-white p-3 shadow-xl">
-                          <div className="emoji-picker grid grid-cols-4 gap-1">
-                            {iconChoices.map((choice) => {
-                              const used = usedIconKeys.has(choice.trim().toLocaleLowerCase())
-                              return (
-                                <button
-                                  key={choice}
-                                  type="button"
-                                  disabled={used}
-                                  onClick={() => {
-                                    setPlayerIcon(choice)
-                                    setPlayerMessage(null)
-                                    setIconPickerOpen(false)
-                                  }}
-                                  className={`flex h-11 w-11 items-center justify-center rounded border text-xl ${used ? 'cursor-not-allowed border-transparent opacity-20' : 'border-transparent bg-transparent hover:border-[rgb(var(--bamboo))] hover:bg-[rgb(var(--bamboo)/0.08)]'}`}
-                                  title={used ? 'Already in use' : 'Use this icon'}
-                                >
-                                  {choice}
-                                </button>
-                              )
-                            })}
+                        <div data-emoji-picker-control className="emoji-menu absolute right-0 top-[calc(100%+8px)] z-20 w-56 rounded border border-slate-200 bg-white p-3 shadow-xl">
+                          <div className="emoji-picker grid grid-cols-4 gap-1" role="group" aria-label="Available emoji options">
+                            {newPlayerEmojiChoices.filter((choice) => !usedIconKeys.has(choice.trim().toLocaleLowerCase())).map((choice) => (
+                              <button
+                                key={choice}
+                                type="button"
+                                onClick={() => {
+                                  setPlayerIcon(choice)
+                                  setPlayerMessage(null)
+                                  setIconPickerOpen(false)
+                                }}
+                                className="flex h-11 w-11 items-center justify-center rounded border border-transparent bg-transparent text-xl hover:border-[rgb(var(--bamboo))] hover:bg-[rgb(var(--bamboo)/0.08)]"
+                                title="Use this emoji"
+                                aria-label={`Use ${choice} emoji`}
+                              >
+                                {choice}
+                              </button>
+                            ))}
                           </div>
-                          <p className="mt-2 text-xs font-medium text-slate-500">Choose a unique emoji for this player.</p>
+                          <p className="mt-2 text-xs font-medium text-slate-500">Choose an available emoji for this player.</p>
                         </div>
                       ) : null}
                     </div>
@@ -717,10 +848,11 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                         {isManager || player.authUid === user?.uid ? (
                           <button
                             type="button"
-                            onClick={() => { setEditingPlayerId(editingPlayerId === player.id ? null : player.id); setCustomEmojiValue(player.icon) }}
-                            onContextMenu={(event) => { event.preventDefault(); setEditingPlayerId(player.id); setCustomEmojiValue('') }}
+                            onClick={() => togglePlayerEmojiPicker(player)}
+                            onContextMenu={(event) => { event.preventDefault(); togglePlayerEmojiPicker(player, '') }}
                             aria-label={`Change ${player.displayName} emoji`}
                             title="Change emoji. Right-click to enter a custom emoji."
+                            data-emoji-picker-control
                             className="flex h-11 w-11 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-lg text-slate-700 shadow-sm transition hover:scale-105 hover:border-[rgb(var(--bamboo))] hover:bg-[rgb(var(--bamboo)/0.12)] hover:ring-2 hover:ring-[rgb(var(--bamboo)/0.25)] focus-visible:ring-2 focus-visible:ring-[rgb(var(--bamboo))]"
                           >
                             {player.icon}
@@ -759,11 +891,12 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                         </form>
                       ) : null}
                       {(isManager || player.authUid === user?.uid) && editingPlayerId === player.id ? (
-                        <div className="emoji-menu absolute right-2 top-full z-20 mt-2 w-64 max-w-[calc(100vw-3rem)] rounded border border-slate-200 bg-white p-3 shadow-xl">
-                          <div className="emoji-picker grid grid-cols-4 gap-1">{iconChoices.map((choice) => {
-                            const used = usedIconKeys.has(choice.toLocaleLowerCase()) && choice !== player.icon
-                            return <button key={choice} type="button" disabled={used} onClick={() => changePlayerIcon(player, choice)} className="flex h-11 w-11 items-center justify-center rounded border border-transparent bg-transparent text-xl hover:border-[rgb(var(--bamboo))] hover:bg-[rgb(var(--bamboo)/0.08)] disabled:opacity-20">{choice}</button>
-                          })}</div>
+                        <div data-emoji-picker-control className="emoji-menu absolute right-2 top-full z-20 mt-2 w-64 max-w-[calc(100vw-3rem)] rounded border border-slate-200 bg-white p-3 shadow-xl">
+                          <div className="emoji-picker grid grid-cols-4 gap-1" role="group" aria-label={`Available emoji options for ${player.displayName}`}>
+                            {editingPlayerEmojiChoices.filter((choice) => !usedIconKeys.has(choice.trim().toLocaleLowerCase())).map((choice) => (
+                              <button key={choice} type="button" onClick={() => changePlayerIcon(player, choice)} aria-label={`Use ${choice} emoji for ${player.displayName}`} className="flex h-11 w-11 items-center justify-center rounded border border-transparent bg-transparent text-xl hover:border-[rgb(var(--bamboo))] hover:bg-[rgb(var(--bamboo)/0.08)]">{choice}</button>
+                            ))}
+                          </div>
                           <form className="mt-3 border-t border-slate-200 pt-3" onSubmit={(event) => { event.preventDefault(); void changePlayerIcon(player, customEmojiValue) }}>
                             <label className="text-xs font-bold text-slate-600">Custom emoji</label>
                             <div className="mt-1 flex gap-2">

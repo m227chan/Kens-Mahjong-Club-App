@@ -370,6 +370,10 @@ html.dark .real-tour-actions button:last-child { color: rgb(7 28 21); }
 html.dark .home-summary { background-image: linear-gradient(115deg,rgb(var(--bamboo)/.09),transparent 50%),radial-gradient(circle at 90% 0%,rgb(var(--gold)/.08),transparent 19rem); }
 /* Cross-platform interaction and layout safeguards */
 @media (max-width: 767px) {
+  /* iPhone Safari zooms the visual viewport when a focused field is below 16px. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea { font-size: 16px !important; }
   .club-header { padding: .75rem 1rem; }
   .responsive-modal { align-items:stretch!important; padding:0!important; }
   .responsive-modal-panel { max-height:100dvh!important; height:100dvh; max-width:none!important; border:0!important; border-radius:0!important; }
@@ -1557,6 +1561,74 @@ div.rounded-lg.border.bg-white {
   min-height: 0;
   border-radius: 10px !important;
   box-shadow: 0 26px 90px rgb(0 8 5 / .38) !important;
+}
+
+/* Club settings: clear groups, restrained surfaces, and mobile-first actions. */
+.club-settings-dialog { background: rgb(var(--surface-1)); }
+.club-settings-header {
+  background:
+    linear-gradient(120deg, rgb(var(--bamboo) / .075), transparent 55%),
+    rgb(var(--surface-1));
+}
+.club-settings-body { background: rgb(var(--surface-2) / .42); }
+.club-settings-home-link { width: max-content; max-width: 100%; }
+.club-settings-kicker {
+  margin: 0;
+  color: rgb(var(--cinnabar));
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: .65rem;
+  font-weight: 900;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+}
+.club-settings-group-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: .25rem 0 -.25rem;
+  padding: 0 .15rem;
+}
+.club-settings-group-heading > p:last-child {
+  margin: 0;
+  color: rgb(var(--muted));
+  font-size: .72rem;
+  line-height: 1.4;
+  text-align: right;
+}
+.club-settings-card {
+  border-color: rgb(var(--line)) !important;
+  background: rgb(var(--surface-1)) !important;
+  box-shadow: 0 7px 20px rgb(var(--shadow) / .055) !important;
+}
+.club-settings-current { min-width: 9.5rem; }
+.club-competition-choice {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.club-competition-choice > button { margin-top: auto; }
+.club-competition-choice-tournament > button { margin-top: .75rem; }
+.club-settings-danger-heading { margin-top: .5rem; }
+
+@media (max-width: 767px) {
+  .club-settings-dialog { padding-bottom: 0 !important; }
+  .club-settings-header { padding: max(1rem, env(safe-area-inset-top)) 1rem 1rem !important; }
+  .club-settings-header h3 { margin-top: .35rem; font-size: 1.1rem; }
+  .club-settings-header p:last-child { font-size: .78rem; line-height: 1.35; }
+  .club-settings-header button { min-width: 4.25rem; min-height: 2.75rem; }
+  .club-settings-body {
+    gap: .85rem !important;
+    padding: 1rem max(1rem, env(safe-area-inset-right)) max(1.25rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left)) !important;
+  }
+  .club-settings-home-link { width: 100%; justify-content: center; }
+  .club-settings-current { width: 100%; min-width: 0; }
+  .club-settings-group-heading { display: block; margin-top: .5rem; }
+  .club-settings-group-heading > p:last-child { margin-top: .25rem; font-size: .7rem; text-align: left; }
+  .club-settings-card { padding: 1rem !important; }
+  .club-competition-choice { padding: .9rem !important; }
+  .club-settings-body > .border-rose-200 button,
+  .club-settings-body > .border-amber-200 button { width: 100%; min-height: 44px; }
 }
 .modal-panel-scroll { overflow-y: auto !important; overscroll-behavior: contain; }
 .modal-controls { min-height: 0; }

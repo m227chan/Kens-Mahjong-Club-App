@@ -312,8 +312,15 @@ async function adjustHistoricalBaseline(
   direction: 1 | -1,
 ) {
   const counted = countsTowardMetrics(clubId, game)
+  const competition = await client.query(
+    'select competition_type from seasons where club_id=$1 and season_number=$2',
+    [clubId, game.seasonNumber],
+  )
+  const targetSeasonNumbers = competition.rows[0]?.competition_type === 'tournament'
+    ? [game.seasonNumber]
+    : [0, game.seasonNumber]
   for (const entry of game.entries) {
-    for (const seasonNumber of [0, game.seasonNumber]) {
+    for (const seasonNumber of targetSeasonNumbers) {
       await client.query(
         `insert into stat_baselines(club_id,season_number,player_id) values($1,$2,$3)
         on conflict(club_id,season_number,player_id) do nothing`,
@@ -333,13 +340,14 @@ async function adjustHistoricalBaseline(
   }
   if (!counted) return
   for (const playerId of new Set(game.entries.map((entry) => entry.playerId))) {
-    const extrema = await client.query(
-      `select max(e.score) best, min(e.score) worst, count(distinct g.played_at::date)::int days, max(g.played_at)::date last_played
-      from games g join game_entries e on e.game_id=g.id where g.club_id=$1 and g.is_historical=true and e.player_id=$2
-      and ($1 <> 'KEN' or g.season_number <> 2 or g.played_at >= to_timestamp($3 / 1000.0))`,
-      [clubId, playerId, KEN_STATS_CUTOFF],
-    )
-    for (const seasonNumber of [0, game.seasonNumber])
+    for (const seasonNumber of targetSeasonNumbers) {
+      const extrema = await client.query(
+        `select max(e.score) best, min(e.score) worst, count(distinct g.played_at::date)::int days, max(g.played_at)::date last_played
+        from games g join game_entries e on e.game_id=g.id where g.club_id=$1 and g.is_historical=true and e.player_id=$2
+        and ($1 <> 'KEN' or g.season_number <> 2 or g.played_at >= to_timestamp($3 / 1000.0))
+        and (($4::int=0 and exists(select 1 from seasons s where s.club_id=g.club_id and s.season_number=g.season_number and s.competition_type='season')) or g.season_number=$4)`,
+        [clubId, playerId, KEN_STATS_CUTOFF, seasonNumber],
+      )
       await client.query(
         `update stat_baselines set best_single_game=$1,worst_single_game=$2,days_attended=$3,last_played_at=$4,updated_at=now()
       where club_id=$5 and season_number=$6 and player_id=$7`,
@@ -353,6 +361,7 @@ async function adjustHistoricalBaseline(
           playerId,
         ],
       )
+    }
   }
 }
 
@@ -658,6 +667,7 @@ export async function appendNewGame(
          select * from season_player_stats where club_id=$1 and season_number=$3 and player_id=any($2::text[]) order by player_id for update
        )
        select coalesce((select to_jsonb(c) from app_configs c where c.club_id=$1),'{}'::jsonb) config,
+         coalesce((select competition_type from seasons where club_id=$1 and season_number=$3),'season') competition_type,
          coalesce((select jsonb_agg(to_jsonb(a)) from all_stats a),'[]'::jsonb) all_stats,
          coalesce((select jsonb_agg(to_jsonb(s)) from season_stats s),'[]'::jsonb) season_stats`,
       [clubId, playerIds, game.seasonNumber],
@@ -673,6 +683,7 @@ export async function appendNewGame(
     eloNewPlayerGamesThreshold: raw.elo_new_player_games_threshold,
   }
   const startingElo = config.eloStartingRating ?? 1500
+  const isTournament = state.competition_type === 'tournament'
   const all = new Map(
     (state.all_stats as Record<string, unknown>[]).map((row) => [
       String(row.player_id),
@@ -685,14 +696,16 @@ export async function appendNewGame(
       storedStats(row, startingElo, game.seasonNumber),
     ]),
   )
-  const allResults = applyNewGame(all, game, config)
+  const allResults = isTournament ? null : applyNewGame(all, game, config)
   const seasonResults = applyNewGame(seasonal, game, config)
-  await writeStats(
-    client,
-    clubId,
-    game.entries.map((entry) => all.get(entry.playerId)!),
-    undefined,
-  )
+  if (!isTournament) {
+    await writeStats(
+      client,
+      clubId,
+      game.entries.map((entry) => all.get(entry.playerId)!),
+      undefined,
+    )
+  }
   await writeStats(
     client,
     clubId,
@@ -763,10 +776,18 @@ export async function appendNewGame(
       event.sigma,
     ]),
   )
-  return allResults
+  return allResults ?? seasonResults
 }
 
 export async function rebuild(client: QueryClient, clubId: string) {
+  const tournamentSeasonNumbers = new Set(
+    (
+      await client.query(
+        "select season_number from seasons where club_id=$1 and competition_type='tournament'",
+        [clubId],
+      )
+    ).rows.map((row) => Number(row.season_number)),
+  )
   const gameRows = await client.query(
     `select g.*, coalesce(json_agg(json_build_object('playerId',e.player_id,'score',e.score)) filter(where e.player_id is not null),'[]') entries
     from games g left join game_entries e on e.game_id=g.id where g.club_id=$1 and g.is_historical=false group by g.id order by g.played_at,g.id`,
@@ -914,7 +935,8 @@ export async function rebuild(client: QueryClient, clubId: string) {
     return results
   }
   for (const game of games) {
-    apply(all, (playerId) => playerId, game)
+    if (!tournamentSeasonNumbers.has(game.seasonNumber))
+      apply(all, (playerId) => playerId, game)
     const results = apply(
       seasonal,
       (playerId) => `${game.seasonNumber}_${playerId}`,
@@ -975,7 +997,8 @@ export async function rebuild(client: QueryClient, clubId: string) {
     return results
   }
   for (const game of skillGames) {
-    applySkill(skillAll, (playerId) => playerId, game)
+    if (!tournamentSeasonNumbers.has(game.seasonNumber))
+      applySkill(skillAll, (playerId) => playerId, game)
     const results = applySkill(
       skillSeasonal,
       (playerId) => `${game.seasonNumber}_${playerId}`,
@@ -1027,12 +1050,14 @@ export async function rebuild(client: QueryClient, clubId: string) {
   const seasonTrends = new Map<string, number[]>()
   for (const game of skillGames) {
     for (const entry of game.entries) {
-      const allTotal = (allTrendTotals.get(entry.playerId) ?? 0) + entry.score
-      allTrendTotals.set(entry.playerId, allTotal)
-      allTrends.set(
-        entry.playerId,
-        [...(allTrends.get(entry.playerId) ?? []), allTotal].slice(-10),
-      )
+      if (!tournamentSeasonNumbers.has(game.seasonNumber)) {
+        const allTotal = (allTrendTotals.get(entry.playerId) ?? 0) + entry.score
+        allTrendTotals.set(entry.playerId, allTotal)
+        allTrends.set(
+          entry.playerId,
+          [...(allTrends.get(entry.playerId) ?? []), allTotal].slice(-10),
+        )
+      }
       const seasonKey = `${game.seasonNumber}_${entry.playerId}`
       const seasonTotal = (seasonTrendTotals.get(seasonKey) ?? 0) + entry.score
       seasonTrendTotals.set(seasonKey, seasonTotal)

@@ -171,7 +171,7 @@ export default function GameLogsModal({
 
   const filterSummary = useMemo(() => {
     const seasonLabel = seasonFilter === 'all'
-      ? 'All seasons'
+      ? 'All seasons & tournaments'
       : seasons.find((season) => season.seasonNumber === seasonFilter)?.name ?? `Season ${seasonFilter}`
     const viewLabel = viewMode === 'session'
       ? 'Session players'
@@ -516,7 +516,7 @@ export default function GameLogsModal({
               <label className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
                 Season
                 <select value={seasonFilter} onChange={(event) => setSeasonFilter(event.target.value === 'all' ? 'all' : Number(event.target.value))} className="mt-2 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-slate-700">
-                  <option value="all">All seasons</option>
+                  <option value="all">All seasons &amp; tournaments</option>
                   {seasons.map((season) => (
                     <option key={season.id} value={season.seasonNumber}>{season.name}</option>
                   ))}

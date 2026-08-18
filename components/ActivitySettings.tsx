@@ -33,7 +33,7 @@ export default function ActivitySettings({
   }
 
   return (
-    <section aria-labelledby="activity-settings-heading" className="rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface-2))] p-4 text-[rgb(var(--ink))]">
+    <section aria-labelledby="activity-settings-heading" className="club-settings-card rounded-xl border border-[rgb(var(--line))] bg-[rgb(var(--surface-2))] p-4 text-[rgb(var(--ink))] sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h4 id="activity-settings-heading" className="text-sm font-black">Active players</h4>
@@ -41,8 +41,8 @@ export default function ActivitySettings({
             A player is active when they have played at least one club game within this many calendar months. Standings still default to all players.
           </p>
         </div>
-        <div className="flex items-end gap-2">
-          <label className="text-xs font-bold text-[rgb(var(--muted))]">
+        <div className="flex w-full items-end gap-2 sm:w-auto">
+          <label className="min-w-0 flex-1 text-xs font-bold text-[rgb(var(--muted))] sm:flex-none">
             Activity window
             <span className="mt-1 flex items-center gap-2">
               <input
@@ -53,7 +53,7 @@ export default function ActivitySettings({
                 value={months}
                 disabled={!isManager || saving}
                 onChange={(event) => setMonths(Number(event.target.value))}
-                className="min-h-11 w-20 rounded border border-[rgb(var(--line))] bg-[rgb(var(--surface))] px-3 text-[rgb(var(--ink))] disabled:opacity-60"
+                className="min-h-11 w-full min-w-20 rounded border border-[rgb(var(--line))] bg-[rgb(var(--surface))] px-3 text-[rgb(var(--ink))] disabled:opacity-60 sm:w-20"
               />
               <span>months</span>
             </span>

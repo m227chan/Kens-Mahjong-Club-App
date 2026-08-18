@@ -32,6 +32,7 @@ export const createGame = backend.createGame
 export const subscribeSeasons = backend.subscribeSeasons
 export const ensureSeasons = backend.ensureSeasons
 export const startNewSeason = backend.startNewSeason
+export const startNewTournament = backend.startNewTournament
 export const setActiveSeason = backend.setActiveSeason
 export const importGames = backend.importGames
 export const subscribePlayers = backend.subscribePlayers

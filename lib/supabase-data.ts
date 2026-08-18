@@ -411,7 +411,7 @@ export function subscribeJoinRequests(
       .eq('status', 'pending')
       .order('created_at')
     if (error) throw error
-    return (data ?? []).map((row: Row) => ({
+    return (data ?? []).map((row: Row): JoinRequestDoc => ({
       id: String(row.firebase_uid),
       clubId: String(row.club_id),
       uid: String(row.firebase_uid),
@@ -819,10 +819,11 @@ export function subscribeSeasons(
       .eq('club_id', clubId)
       .order('season_number')
     if (error) throw error
-    return (data ?? []).map((row: Row) => ({
+    return (data ?? []).map((row: Row): SeasonDoc => ({
       id: String(row.season_number),
       seasonNumber: Number(row.season_number),
       name: String(row.name),
+      kind: row.competition_type === 'tournament' ? 'tournament' : 'season',
       createdAt: ts(row.created_at),
       createdBy: String(row.created_by),
       active: Boolean(row.active),
@@ -840,6 +841,8 @@ export const ensureSeasons = (clubId: string, userId = 'system') =>
   serverAction<void>('ensureSeasons', { clubId, userId })
 export const startNewSeason = (clubId: string, input: { createdBy: string }) =>
   serverAction<number>('startNewSeason', { clubId, input })
+export const startNewTournament = (clubId: string, input: { createdBy: string; name?: string }) =>
+  serverAction<{ seasonNumber: number; name: string; kind: 'tournament' }>('startNewTournament', { clubId, input })
 export const setActiveSeason = (clubId: string, seasonNumber: number) =>
   serverAction<void>('setActiveSeason', { clubId, seasonNumber })
 export function subscribeActiveSession(

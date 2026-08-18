@@ -23,15 +23,42 @@ export const PLAYER_COLORS = [
   '#94A3B8', // slate
 ]
 
+// A broad, platform-safe catalog keeps the picker useful without relying on a
+// network request or offering code points that do not render as emoji.
 export const PLAYER_EMOJIS = [
   '🀄', '🎴', '🏆', '⭐', '🔥', '🌙', '🍀', '🐉',
-  '🧧', '💎', '🦊', '🐼', '🐯', '🌸', '🌊', '🎲'
+  '🧧', '💎', '🦊', '🐼', '🐯', '🌸', '🌊', '🎲',
+  '🎯', '🎳', '🥇', '🥈', '🥉', '👑', '⚡', '☀️',
+  '🌈', '❄️', '☄️', '✨', '🌟', '💫', '🌻', '🌺',
+  '🪷', '🌵', '🍁', '🍄', '🐲', '🦁', '🐸', '🐙',
+  '🦋', '🐝', '🦄', '🦅', '🦉', '🐺', '🐬', '🦈',
+  '🐢', '🐘', '🦒', '🦓', '🦜', '🦚', '🐿️', '🦔',
+  '🐾', '🍎', '🍊', '🍋', '🍉', '🍇', '🍓', '🍒',
+  '🍑', '🥝', '🍍', '🥑', '🌽', '🍜', '🍣', '🍙',
+  '🥟', '🍪', '🍩', '🍿', '☕', '🧋', '🥁', '🎸',
+  '🎺', '🎻', '🎨', '🎭', '🚲', '🚀', '✈️', '⛵',
+  '🗻', '🏝️', '🏮', '🪭', '🎏', '🧩', '🪁', '🔮',
+  '🪄', '🧿', '🪙', '🗝️', '💡', '😀', '😎', '🤠',
+  '🤖', '👻', '👾', '❤️', '💚', '💙', '💜', '🤍',
 ]
+
+export function randomUnusedPlayerEmojiOptions(
+  used: ReadonlySet<string>,
+  count = 16,
+  random: () => number = Math.random,
+) {
+  const choices = PLAYER_EMOJIS.filter((emoji) => !used.has(emoji.trim().toLocaleLowerCase()))
+  for (let index = choices.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1))
+    ;[choices[index], choices[swapIndex]] = [choices[swapIndex], choices[index]]
+  }
+  return choices.slice(0, Math.max(0, Math.floor(count)))
+}
 
 export function randomUnusedPlayerEmoji(used: Set<string>) {
   const available = PLAYER_EMOJIS.filter((emoji) => !used.has(emoji.toLocaleLowerCase()))
-  const pool = available.length ? available : PLAYER_EMOJIS
-  const emoji = pool[Math.floor(Math.random() * pool.length)]
+  if (!available.length) return ''
+  const emoji = available[Math.floor(Math.random() * available.length)]
   used.add(emoji.toLocaleLowerCase())
   return emoji
 }
