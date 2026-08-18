@@ -75,7 +75,7 @@ const fromTableSession = (next: TableSession): SessionState => ({
   sideline: next.sideline,
 })
 
-export default function SessionManager({ clubId, seasonNumber, players: suppliedPlayers, isManager = false, scoringRules = DEFAULT_SCORING_RULES }: { clubId: string; seasonNumber: number; players?: PlayerDoc[]; isManager?: boolean; scoringRules?: ScoringRules }) {
+export default function SessionManager({ clubId, seasonNumber, players: suppliedPlayers, isManager = false, scoringRules = DEFAULT_SCORING_RULES, onAddPlayer }: { clubId: string; seasonNumber: number; players?: PlayerDoc[]; isManager?: boolean; scoringRules?: ScoringRules; onAddPlayer?: () => void }) {
   const { user, loading, isAdmin } = useAuth()
   const { play } = useSound()
   const { saveGame } = useGameSync()
@@ -1934,6 +1934,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
               }}
             >
               <button type="button" onClick={() => { setPage('setup'); setHeaderMenuOpen(false) }} className="menu-item">⚙️ Edit Session</button>
+              {onAddPlayer ? <button type="button" onClick={() => { setHeaderMenuOpen(false); onAddPlayer() }} className="menu-item">➕ Add player</button> : null}
               <Link href={`/club/${encodeURIComponent(clubId)}/session/qr-print`} target="_blank" onClick={() => setHeaderMenuOpen(false)} className="menu-item">▦ Print table QR codes</Link>
               {isManager ? <div className="qr-enrollment-setting"><div className="qr-enrollment-row"><span className="qr-enrollment-label">Automatic club enrollment</span><button type="button" role="switch" aria-checked={qrAutoEnroll === true} aria-label="Automatic club enrollment through table QR codes" disabled={qrAutoEnroll === null || savingQrEnrollment} onClick={() => void toggleQrEnrollment()} className="qr-enrollment-switch"><span /></button></div><p className="qr-enrollment-help">When on, anyone with a table QR can join this club immediately. When off, new people must be approved by a manager first.</p></div> : null}
               <button type="button" onClick={() => { clearAllTables(); setHeaderMenuOpen(false) }} className="menu-item">⬇️ Clear All Tables</button>

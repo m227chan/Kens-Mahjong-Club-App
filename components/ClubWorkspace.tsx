@@ -105,6 +105,8 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [seasonMessage, setSeasonMessage] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [rosterOpen, setRosterOpen] = useState(false)
+  const [rosterSearch, setRosterSearch] = useState('')
+  const [scrollToAddPlayer, setScrollToAddPlayer] = useState(false)
   const [analyticsOpen, setAnalyticsOpen] = useState(false)
   const [analyticsPlayerId, setAnalyticsPlayerId] = useState<string | null>(null)
   const [analyticsWindow, setAnalyticsWindow] = useState<SessionPointWindow>(() => allSessionWindow())
@@ -134,6 +136,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [managerMessage, setManagerMessage] = useState<string | null>(null)
   const [promotingManager, setPromotingManager] = useState(false)
   const [linkingPlayerId, setLinkingPlayerId] = useState<string | null>(null)
+  const addPlayerSectionRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     const desktop = window.matchMedia?.('(min-width: 768px)')
@@ -175,6 +178,10 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
     : analyticsWindow.mode === 'range'
       ? 'custom'
       : String(analyticsWindow.hours)
+  const normalizedRosterSearch = rosterSearch.trim().toLocaleLowerCase()
+  const filteredRosterPlayers = normalizedRosterSearch
+    ? players.filter((player) => player.displayName.toLocaleLowerCase().includes(normalizedRosterSearch))
+    : players
 
   const closeEmojiPickers = () => {
     setIconPickerOpen(false)
@@ -185,8 +192,25 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
 
   const closeRoster = () => {
     closeEmojiPickers()
+    setRosterSearch('')
+    setScrollToAddPlayer(false)
     setRosterOpen(false)
   }
+
+  const openRoster = (showAddPlayer = false) => {
+    setPlayerMessage(null)
+    setRosterOpen(true)
+    setScrollToAddPlayer(showAddPlayer)
+  }
+
+  useEffect(() => {
+    if (!rosterOpen || !scrollToAddPlayer) return
+    const frame = window.requestAnimationFrame(() => {
+      addPlayerSectionRef.current?.scrollIntoView?.({ block: 'start' })
+      setScrollToAddPlayer(false)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [rosterOpen, scrollToAddPlayer])
 
   const openNewPlayerEmojiPicker = () => {
     setEditingPlayerId(null)
@@ -513,7 +537,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           gameLogsOpen={gameLogsOpen}
           networkOpen={networkOpen}
           settingsOpen={settingsOpen}
-          onRoster={() => { setPlayerMessage(null); setRosterOpen(true) }}
+          onRoster={() => openRoster()}
           onAnalytics={() => { setAnalyticsPlayerId(null); setAnalyticsOpen(true) }}
           onGameLogs={() => setGameLogsOpen(true)}
           onNetwork={() => setNetworkOpen(true)}
@@ -796,7 +820,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
               <button type="button" onClick={() => changeSeason(String(activeSeasonNumber))} className="mt-4 min-h-10 rounded border border-amber-300 bg-white px-3 text-sm font-bold text-amber-900">Return to current</button>
             </section>
           ) : (
-            <SessionManager clubId={clubId} seasonNumber={activeSeasonNumber} players={players} isManager={isManager} scoringRules={scoringRules} />
+            <SessionManager clubId={clubId} seasonNumber={activeSeasonNumber} players={players} isManager={isManager} scoringRules={scoringRules} onAddPlayer={() => openRoster(true)} />
           )}
         </aside>
       </div>
@@ -843,7 +867,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                   {managerMessage ? <p role="status" aria-live="polite" className="mt-3 text-sm font-semibold text-slate-700">{managerMessage}</p> : null}
                 </section>
               ) : null}
-              <section className="rounded-lg border border-teal-200 bg-teal-50 p-4">
+              <section ref={addPlayerSectionRef} className="scroll-mt-4 rounded-lg border border-teal-200 bg-teal-50 p-4">
                 <h4 className="text-sm font-black uppercase tracking-[0.16em] text-teal-800">Add player</h4>
                 <p className="mt-1 text-sm leading-6 text-slate-600">Any active club member can add a player to the roster.</p>
                 <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_140px_auto]">
@@ -906,10 +930,21 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
               <section className="mt-5">
                 <div className="flex items-center justify-between gap-3">
                   <h4 className="text-sm font-black uppercase tracking-[0.16em] text-slate-600">All players</h4>
-                  <p className="text-sm font-semibold text-slate-500">{players.length} total</p>
+                  <p className="text-sm font-semibold text-slate-500">{normalizedRosterSearch ? `${filteredRosterPlayers.length} of ${players.length}` : `${players.length} total`}</p>
+                </div>
+                <div className="relative mt-3">
+                  <span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
+                  <input
+                    type="search"
+                    value={rosterSearch}
+                    onChange={(event) => setRosterSearch(event.target.value)}
+                    placeholder="Search roster players…"
+                    aria-label="Search roster players"
+                    className="min-h-11 w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-base text-slate-900 outline-none transition focus:border-[rgb(var(--bamboo))] focus:ring-2 focus:ring-[rgb(var(--bamboo)/0.18)]"
+                  />
                 </div>
                 <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {players.map((player) => (
+                  {filteredRosterPlayers.map((player) => (
                     <div key={player.id} className="relative rounded-xl border border-slate-200 bg-slate-50 p-3 transition hover:border-slate-300 hover:bg-white">
                       <div className="flex min-w-0 items-center gap-3">
                         {isManager || player.authUid === user?.uid ? (
@@ -979,6 +1014,11 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                 {players.length === 0 ? (
                   <div className="mt-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm font-semibold text-slate-500">
                     No players yet.
+                  </div>
+                ) : null}
+                {players.length > 0 && filteredRosterPlayers.length === 0 ? (
+                  <div className="mt-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm font-semibold text-slate-500">
+                    No roster players match “{rosterSearch.trim()}”.
                   </div>
                 ) : null}
               </section>

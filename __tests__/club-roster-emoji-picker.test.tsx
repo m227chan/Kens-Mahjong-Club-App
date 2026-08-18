@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Timestamp } from '@/lib/timestamp'
 import type { ClubMembershipDoc } from '@/lib/types'
 
@@ -47,7 +47,11 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn(), refres
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { uid: 'member-1', email: 'member@example.com' } }) }))
 vi.mock('@/contexts/SoundContext', () => ({ useSound: () => ({ play: vi.fn() }) }))
 vi.mock('@/components/Leaderboard', () => ({ LeaderboardPanel: () => null }))
-vi.mock('@/components/SessionManager', () => ({ default: () => null }))
+vi.mock('@/components/SessionManager', () => ({
+  default: ({ onAddPlayer }: { onAddPlayer?: () => void }) => onAddPlayer
+    ? <button type="button" onClick={onAddPlayer}>Add player from session</button>
+    : null,
+}))
 vi.mock('@/components/DashboardContent', () => ({ default: () => null }))
 vi.mock('@/components/GameLogsModal', () => ({ default: () => null }))
 vi.mock('@/components/NetworkGraphModal', () => ({ default: () => null }))
@@ -73,6 +77,7 @@ const membership = {
 
 describe('club roster emoji picker', () => {
   beforeEach(() => vi.clearAllMocks())
+  afterEach(() => cleanup())
 
   it('refreshes available suggestions and closes on outside taps or roster exit', () => {
     const random = vi.spyOn(Math, 'random').mockReturnValue(0)
@@ -102,5 +107,28 @@ describe('club roster emoji picker', () => {
     expect(screen.queryByRole('group', { name: 'Available emoji options' })).toBeNull()
 
     random.mockRestore()
+  })
+
+  it('opens the roster from the session add-player action', () => {
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add player from session' }))
+
+    expect(screen.getByRole('dialog', { name: 'Players and linked users' })).not.toBeNull()
+    expect(screen.getByRole('heading', { name: 'Add player' })).not.toBeNull()
+  })
+
+  it('filters existing roster players by name', () => {
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open roster' }))
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search roster players' }), { target: { value: 'ali' } })
+
+    expect(screen.getByText('Alice')).not.toBeNull()
+    expect(screen.queryByText('Bob')).toBeNull()
+    expect(screen.getByText('1 of 2')).not.toBeNull()
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search roster players' }), { target: { value: 'missing' } })
+    expect(screen.getByText('No roster players match “missing”.')).not.toBeNull()
   })
 })

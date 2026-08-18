@@ -122,4 +122,22 @@ describe('session manager optimistic table changes', () => {
     expect(screen.getByRole('button', { name: 'Collapse Table 4' })).not.toBeNull()
     expect(screen.getByRole('button', { name: /Jump to Table 4.*your table/i }).getAttribute('aria-current')).toBe('location')
   })
+
+  it('opens the roster add-player flow from the session actions menu', async () => {
+    const onAddPlayer = vi.fn()
+    subscribeActiveSessionMock.mockImplementation(
+      (_clubId: string, _seasonNumber: number, onValue: (session: SessionDoc) => void) => {
+        onValue(activeSession)
+        return () => undefined
+      },
+    )
+
+    render(<SessionManager clubId="TEST" seasonNumber={1} players={players} onAddPlayer={onAddPlayer} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Session actions' }))
+    fireEvent.click(screen.getByRole('button', { name: /Add player/i }))
+
+    expect(onAddPlayer).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('dialog', { name: 'Session actions' })).toBeNull()
+  })
 })
