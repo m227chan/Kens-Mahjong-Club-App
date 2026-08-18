@@ -1731,7 +1731,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           align-items: center;
           justify-content: center;
           cursor: pointer;
-          z-index: 100;
+          z-index: 2;
           opacity: 0;
           transition:
             opacity 0.15s,

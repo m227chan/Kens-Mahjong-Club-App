@@ -178,6 +178,19 @@ describe('club season navigation', () => {
     confirm.mockRestore()
   })
 
+  it('makes the underlying club workspace inert while settings are open', () => {
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+
+    const workspace = document.querySelector('.club-workspace-dashboard-grid')
+    expect(workspace?.hasAttribute('inert')).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open settings' }))
+    expect(workspace?.hasAttribute('inert')).toBe(true)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(workspace?.hasAttribute('inert')).toBe(false)
+  })
+
   it('opens analytics with All time selected by default', async () => {
     render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
 

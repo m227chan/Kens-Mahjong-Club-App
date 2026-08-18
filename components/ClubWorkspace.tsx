@@ -137,6 +137,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [promotingManager, setPromotingManager] = useState(false)
   const [linkingPlayerId, setLinkingPlayerId] = useState<string | null>(null)
   const addPlayerSectionRef = useRef<HTMLElement>(null)
+  const clubDashboardRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const desktop = window.matchMedia?.('(min-width: 768px)')
@@ -182,6 +183,11 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const filteredRosterPlayers = normalizedRosterSearch
     ? players.filter((player) => player.displayName.toLocaleLowerCase().includes(normalizedRosterSearch))
     : players
+  const clubModalOpen = summaryDefinition !== null || rosterOpen || analyticsOpen || gameLogsOpen || networkOpen || settingsOpen || deleteConfirmOpen
+
+  useEffect(() => {
+    clubDashboardRef.current?.toggleAttribute('inert', clubModalOpen)
+  }, [clubModalOpen])
 
   const closeEmojiPickers = () => {
     setIconPickerOpen(false)
@@ -775,7 +781,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         ))}
       </nav>
 
-      <div className="club-workspace-dashboard-grid grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_460px]">
+      <div ref={clubDashboardRef} className={`club-workspace-dashboard-grid grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_460px]${clubModalOpen ? ' is-modal-covered' : ''}`} aria-hidden={clubModalOpen || undefined}>
         <div className="flex min-w-0 flex-col gap-6">
           {joinRequestNotice ? (
             <div role={joinRequestNotice.error ? 'alert' : 'status'} aria-live={joinRequestNotice.error ? 'assertive' : 'polite'} className={`rounded-lg border px-4 py-3 text-sm font-bold shadow-sm ${joinRequestNotice.error ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
