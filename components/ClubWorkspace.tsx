@@ -36,6 +36,7 @@ import {
   subscribeScoringRules,
   subscribeTitleRules,
   subscribeActivitySettings,
+  subscribeAllCompetitionStats,
   subscribeSeasons
 } from '@/lib/data'
 import type { ClubDoc, ClubMembershipDoc, JoinRequestDoc, PlayerDoc, PlayerStatsDoc, SeasonDoc } from '@/lib/types'
@@ -116,7 +117,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [clubToolsExpanded, setClubToolsExpanded] = useState(false)
   const [summaryDefinition, setSummaryDefinition] = useState<keyof typeof CLUB_SUMMARY_DEFINITIONS | null>(null)
   const [seasons, setSeasons] = useState<SeasonDoc[]>([])
-  const [viewedSeasonNumber, setViewedSeasonNumber] = useState<number | null>(null)
+  const [viewedSeasonNumber, setViewedSeasonNumber] = useState<number | 'all' | null>(null)
   const [seasonAction, setSeasonAction] = useState<'season' | 'tournament' | null>(null)
   const [tournamentName, setTournamentName] = useState('')
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null)
@@ -160,10 +161,12 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const usedIconKeys = new Set(players.map((player) => player.icon.trim().toLocaleLowerCase()))
   const latestSeasonNumber = seasons.length ? seasons[seasons.length - 1].seasonNumber : club?.activeSeasonNumber ?? 1
   const activeSeasonNumber = club?.activeSeasonNumber ?? latestSeasonNumber
-  const selectedSeasonNumber = viewedSeasonNumber ?? activeSeasonNumber
+  const viewingAllCompetitions = viewedSeasonNumber === 'all'
+  const selectedSeasonNumber = viewingAllCompetitions ? undefined : viewedSeasonNumber ?? activeSeasonNumber
+  const seasonSelectValue = viewingAllCompetitions ? 'all' : String(selectedSeasonNumber)
   const activeCompetition = seasons.find((season) => season.seasonNumber === activeSeasonNumber) ?? null
   const selectedCompetition = seasons.find((season) => season.seasonNumber === selectedSeasonNumber) ?? null
-  const viewingHistoricalCompetition = selectedSeasonNumber !== activeSeasonNumber
+  const viewingHistoricalCompetition = viewingAllCompetitions || selectedSeasonNumber !== activeSeasonNumber
   const nextTournamentNumber = seasons.filter((season) => season.kind === 'tournament').length + 1
   const linkedPlayerForUser = user ? players.find((player) => player.authUid === user.uid) ?? null : null
   const analyticsWindowValue = analyticsWindow.mode === 'all'
@@ -219,15 +222,19 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   useEffect(() => subscribePlayers(clubId, setPlayers), [clubId])
   useEffect(() => {
     setPlayerStatsReady(false)
+    const handleStats = (nextStats: PlayerStatsDoc[]) => {
+      setPlayerStats(nextStats)
+      setPlayerStatsReady(true)
+    }
+    if (viewingAllCompetitions) {
+      return subscribeAllCompetitionStats(clubId, handleStats)
+    }
     return subscribePlayerStats(
       clubId,
-      (nextStats) => {
-        setPlayerStats(nextStats)
-        setPlayerStatsReady(true)
-      },
+      handleStats,
       selectedSeasonNumber,
     )
-  }, [clubId, selectedSeasonNumber])
+  }, [clubId, selectedSeasonNumber, viewingAllCompetitions])
   useEffect(() => subscribeScoringRules(clubId, setScoringRules), [clubId])
   useEffect(() => subscribeTitleRules(clubId, setTitleRules), [clubId])
   useEffect(() => subscribeActivitySettings(clubId, setActivitySettings), [clubId])
@@ -437,6 +444,12 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   }
 
   const changeSeason = (value: string) => {
+    if (value === 'all') {
+      setViewedSeasonNumber('all')
+      setSeasonMessage('Showing all seasons and tournaments combined.')
+      setMobileView('standings')
+      return
+    }
     const seasonNumber = Number(value)
     const competition = seasons.find((season) => season.seasonNumber === seasonNumber)
     if (!seasonNumber || !competition) return
@@ -520,15 +533,16 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           <label data-tour="season-selector" className="club-season-action flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
             <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Season</span>
             <select
-              value={selectedSeasonNumber}
+              value={seasonSelectValue}
               onChange={(event) => changeSeason(event.target.value)}
               disabled={seasonAction !== null}
               className="bg-transparent text-sm font-black text-slate-900 outline-none disabled:opacity-50"
               aria-label="Season"
             >
-              {seasons.some((season) => season.seasonNumber === selectedSeasonNumber) ? null : (
+              <option value="all">All seasons</option>
+              {!viewingAllCompetitions && seasons.some((season) => season.seasonNumber === selectedSeasonNumber) ? null : !viewingAllCompetitions ? (
                 <option value={selectedSeasonNumber}>Season {selectedSeasonNumber}</option>
-              )}
+              ) : null}
               {seasons.map((season) => (
                 <option key={season.id} value={season.seasonNumber}>{season.name}{season.kind === 'tournament' ? ' · Tournament' : ''}{season.seasonNumber === activeSeasonNumber ? ' (current)' : ''}</option>
               ))}
@@ -740,16 +754,16 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           ) : null}
 
           <div className={mobileView === 'standings' ? 'block md:block' : 'hidden md:block'}>
-            <LeaderboardPanel clubId={clubId} seasonNumber={selectedSeasonNumber} players={players} stats={playerStats} titleRules={titleRules} activePlayerMonths={activitySettings.activePlayerMonths} onPlayerAnalytics={(playerId) => { setAnalyticsPlayerId(playerId); setAnalyticsOpen(true) }} />
+            <LeaderboardPanel clubId={clubId} seasonNumber={selectedSeasonNumber} scopeLabel={viewingAllCompetitions ? 'all seasons and tournaments' : selectedCompetition?.name} players={players} stats={playerStats} titleRules={titleRules} activePlayerMonths={activitySettings.activePlayerMonths} onPlayerAnalytics={(playerId) => { setAnalyticsPlayerId(playerId); setAnalyticsOpen(true) }} />
           </div>
         </div>
 
         <aside className={mobileView === 'session' ? 'club-session-panel order-first block md:block xl:order-none' : 'club-session-panel order-first hidden md:block xl:order-none'}>
           {viewingHistoricalCompetition ? (
             <section className="rounded-lg border border-amber-200 bg-amber-50 p-5 text-amber-950">
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-700">Historical {selectedCompetition?.kind === 'tournament' ? 'tournament' : 'season'}</p>
-              <h2 className="mt-2 text-lg font-black">{selectedCompetition?.name ?? `Season ${selectedSeasonNumber}`} is read-only</h2>
-              <p className="mt-1 text-sm leading-6 text-amber-900">Standings and analytics show {selectedCompetition?.name ?? `Season ${selectedSeasonNumber}`}. Return to {activeCompetition?.name ?? `Season ${activeSeasonNumber}`} to manage the current session.</p>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-700">{viewingAllCompetitions ? 'Club history' : `Historical ${selectedCompetition?.kind === 'tournament' ? 'tournament' : 'season'}`}</p>
+              <h2 className="mt-2 text-lg font-black">{viewingAllCompetitions ? 'All seasons combined' : `${selectedCompetition?.name ?? `Season ${selectedSeasonNumber}`} is read-only`}</h2>
+              <p className="mt-1 text-sm leading-6 text-amber-900">{viewingAllCompetitions ? 'Leaderboard and analytics combine every regular season and tournament in this club.' : `Standings and analytics show ${selectedCompetition?.name ?? `Season ${selectedSeasonNumber}`}.`} Return to {activeCompetition?.name ?? `Season ${activeSeasonNumber}`} to manage the current session.</p>
               <button type="button" onClick={() => changeSeason(String(activeSeasonNumber))} className="mt-4 min-h-10 rounded border border-amber-300 bg-white px-3 text-sm font-bold text-amber-900">Return to current</button>
             </section>
           ) : (
@@ -992,7 +1006,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         <GameLogsModal
           clubId={clubId}
           seasons={seasons}
-          currentSeason={selectedSeasonNumber}
+          currentSeason={selectedSeasonNumber ?? activeSeasonNumber}
           userId={user.uid}
           isManager={isManager}
           onClose={() => setGameLogsOpen(false)}
@@ -1004,7 +1018,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           clubId={clubId}
           players={players}
           seasons={seasons}
-          currentSeason={selectedSeasonNumber}
+          currentSeason={selectedSeasonNumber ?? activeSeasonNumber}
           onClose={() => setNetworkOpen(false)}
         />
       ) : null}

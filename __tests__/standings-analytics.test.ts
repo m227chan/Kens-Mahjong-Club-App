@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Timestamp } from '@/lib/timestamp'
-import { activePlayerIds, aggregatePlayerGames, boundsForPreset, defaultComparedPlayerIds, gamesInBounds, playerCompetitionRecords, subtractCalendarMonths, toggleComparedPlayerId } from '@/lib/standings-analytics'
+import { activePlayerIds, aggregateAllCompetitionStats, aggregatePlayerGames, boundsForPreset, combinedCompetitionSkillEvents, defaultComparedPlayerIds, gamesInBounds, playerCompetitionRecords, subtractCalendarMonths, toggleComparedPlayerId } from '@/lib/standings-analytics'
 import type { GameDoc, PlayerDoc, PlayerStatsDoc, SkillEventDoc } from '@/lib/types'
 
 const game = (id: string, date: string, winType: GameDoc['winType'], winnerPlayerId: string | null, scores: Record<string, number>): GameDoc => ({
@@ -56,6 +56,30 @@ describe('standings analytics', () => {
       peakSkillRating: 1530,
       lowestSkillRating: 1475,
     })
+  })
+
+  it('combines regular seasons and tournaments into one continuous club view', () => {
+    const seasonGame = { ...game('season', '2026-01-01', 'self_draw', 'p', { p: 10, q: -10 }), seasonNumber: 1 }
+    const tournamentGame = { ...game('tournament', '2026-02-01', 'discard', 'p', { p: 20, q: -20 }), seasonNumber: 2 }
+    const games = [seasonGame, tournamentGame]
+    const events = combinedCompetitionSkillEvents(games)
+    const stats = aggregateAllCompetitionStats(games)
+    const player = stats.find((row) => row.playerId === 'p')
+
+    expect(events).toHaveLength(4)
+    expect(events.filter((event) => event.playerId === 'p')[1].ratingBefore).toBe(events.filter((event) => event.playerId === 'p')[0].ratingAfter)
+    expect(player).toMatchObject({
+      totalPoints: 30,
+      gamesPlayed: 2,
+      gamesWon: 2,
+      gamesLost: 0,
+      skillGamesPlayed: 2,
+      pointsRank: 1,
+      skillRank: 1,
+      recentPointTrend: [10, 30],
+      daysAttended: 2,
+    })
+    expect(stats.find((row) => row.playerId === 'q')).toMatchObject({ totalPoints: -30, pointsRank: 2 })
   })
 
   it('returns empty record values when a player has no competition history', () => {

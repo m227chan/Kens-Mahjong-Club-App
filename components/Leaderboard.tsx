@@ -33,6 +33,7 @@ function Sparkline({ values }: { values: number[] }) {
 export function LeaderboardPanel({
   clubId,
   seasonNumber,
+  scopeLabel,
   compact = false,
   players: suppliedPlayers,
   stats: suppliedStats,
@@ -42,6 +43,7 @@ export function LeaderboardPanel({
 }: {
   clubId: string
   seasonNumber?: number
+  scopeLabel?: string
   compact?: boolean
   players?: PlayerDoc[]
   stats?: PlayerStatsDoc[]
@@ -67,9 +69,11 @@ export function LeaderboardPanel({
   const players = suppliedPlayers ?? subscribedPlayers
   const stats = suppliedStats ?? subscribedStats
   const statsUpdatedKey = stats.map((stat) => stat.updatedAt?.toMillis?.() ?? 0).sort().join(',')
+  const combinedCompetitions = seasonNumber == null
 
   useEffect(() => suppliedPlayers ? undefined : subscribePlayers(clubId, setSubscribedPlayers), [clubId, suppliedPlayers])
   useEffect(() => suppliedStats ? undefined : subscribePlayerStats(clubId, setSubscribedStats, seasonNumber), [clubId, seasonNumber, suppliedStats])
+  useEffect(() => setActiveOnly(!combinedCompetitions), [combinedCompetitions])
   useEffect(() => {
     if (preset === 'all') {
       setGames([])
@@ -143,7 +147,7 @@ export function LeaderboardPanel({
     <section data-tour="leaderboard" className="leaderboard-board overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
       <header className="leaderboard-board-header border-b border-slate-200 px-5 py-4">
         <div className="leaderboard-board-header-row flex items-center justify-between gap-3">
-          <div><h2 className="text-2xl font-black leading-none text-slate-900">Leaderboard</h2><p className="mt-2 text-sm font-medium text-slate-500">{gamesLoading ? 'Loading date history…' : `${rows.length} ranked players · ${preset === 'all' ? 'all time' : presets.find((item) => item.value === preset)?.label}`}</p></div>
+          <div><h2 className="text-2xl font-black leading-none text-slate-900">Leaderboard</h2><p className="mt-2 text-sm font-medium text-slate-500">{gamesLoading ? 'Loading date history…' : `${rows.length} ranked players · ${scopeLabel ? `${scopeLabel} · ` : ''}${preset === 'all' ? 'all time' : presets.find((item) => item.value === preset)?.label}`}</p></div>
           <div className="flex items-center gap-2">
             <button type="button" aria-expanded={filtersOpen} aria-label={`Filter leaderboard${filterCount ? `, ${filterCount} active` : ''}`} onClick={() => setFiltersOpen((value) => !value)} className="relative grid h-10 w-10 place-items-center rounded border border-slate-300 bg-slate-50 text-slate-700">
               <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" className="h-4 w-4"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
@@ -158,8 +162,8 @@ export function LeaderboardPanel({
         <label className="text-xs font-bold text-slate-600">Sort<select value={sortKey} onChange={(event) => setSort(event.target.value as SortKey)} className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm"><option value="points">Points</option><option value="rank">Rank</option><option value="name">Name</option><option value="skill">Skill</option><option value="games">Games</option><option value="wins">Wins</option><option value="winRate">Win ratio</option></select></label>
         <div className="text-xs font-bold text-slate-600"><span>Players shown</span><label className="mt-1 flex min-h-10 cursor-pointer items-center gap-2 rounded border border-slate-300 bg-white px-3 text-sm font-bold text-slate-700"><input type="checkbox" checked={activeOnly} onChange={(event) => setActiveOnly(event.target.checked)} className="h-4 w-4 accent-emerald-700" />Active</label></div>
         {preset === 'custom' ? <><label className="text-xs font-bold text-slate-600">From<input type="date" value={customStart} max={customEnd || undefined} onChange={(event) => setCustomStart(event.target.value)} className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm" /></label><label className="text-xs font-bold text-slate-600">To<input type="date" value={customEnd} min={customStart || undefined} onChange={(event) => setCustomEnd(event.target.value)} className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm" /></label></> : null}
-        <p className="self-end text-xs font-semibold leading-5 text-slate-500">Active means played within {activePlayerMonths} calendar month{activePlayerMonths === 1 ? '' : 's'}. Date filters recalculate points and results; Skill remains the selected season’s current rating.</p>
-        <button type="button" onClick={() => { setPreset('all'); setCustomStart(''); setCustomEnd(''); setNameFilter(''); setMinimumGames(''); setActiveOnly(true); setSortKey('points'); setSortDirection('desc') }} className="min-h-10 self-end rounded border border-slate-300 bg-white px-3 text-sm font-bold">Reset</button>
+        <p className="self-end text-xs font-semibold leading-5 text-slate-500">Active means played within {activePlayerMonths} calendar month{activePlayerMonths === 1 ? '' : 's'}. Date filters recalculate points and results; Skill remains the {combinedCompetitions ? 'combined all-seasons' : 'selected competition’s'} current rating.</p>
+        <button type="button" onClick={() => { setPreset('all'); setCustomStart(''); setCustomEnd(''); setNameFilter(''); setMinimumGames(''); setActiveOnly(!combinedCompetitions); setSortKey('points'); setSortDirection('desc') }} className="min-h-10 self-end rounded border border-slate-300 bg-white px-3 text-sm font-bold">Reset</button>
       </div> : null}
 
       {visibleRows.length ? <>
