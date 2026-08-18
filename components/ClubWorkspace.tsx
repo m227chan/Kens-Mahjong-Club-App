@@ -104,7 +104,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [rosterOpen, setRosterOpen] = useState(false)
   const [analyticsOpen, setAnalyticsOpen] = useState(false)
   const [analyticsPlayerId, setAnalyticsPlayerId] = useState<string | null>(null)
-  const [analyticsWindow, setAnalyticsWindow] = useState<SessionPointWindow>(() => hoursSessionWindow(24))
+  const [analyticsWindow, setAnalyticsWindow] = useState<SessionPointWindow>(() => allSessionWindow())
   const [analyticsStartDate, setAnalyticsStartDate] = useState(today)
   const [analyticsEndDate, setAnalyticsEndDate] = useState(today)
   const [analyticsWindowError, setAnalyticsWindowError] = useState<string | null>(null)
