@@ -52,7 +52,9 @@ vi.mock('@/components/ScoringRulesSettings', () => ({ default: () => null }))
 vi.mock('@/components/TitleRulesSettings', () => ({ default: () => null }))
 vi.mock('@/components/ActivitySettings', () => ({ default: () => null }))
 vi.mock('@/components/ClubToolSidebar', () => ({
-  default: ({ onAnalytics, onSettings }: { onAnalytics: () => void; onSettings: () => void }) => <>
+  default: ({ expanded, onAnalytics, onExpandedChange, onSettings }: { expanded: boolean; onAnalytics: () => void; onExpandedChange: (value: boolean) => void; onSettings: () => void }) => <>
+    <output data-testid="club-sidebar-expanded">{String(expanded)}</output>
+    <button type="button" onClick={() => onExpandedChange(false)}>Collapse club tools</button>
     <button type="button" onClick={onAnalytics}>Open analytics</button>
     <button type="button" onClick={onSettings}>Open settings</button>
   </>,
@@ -74,8 +76,30 @@ const membership = {
 const managerMembership = { ...membership, role: 'manager' as const }
 
 describe('club season navigation', () => {
-  beforeEach(() => vi.clearAllMocks())
-  afterEach(() => cleanup())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    window.localStorage.clear()
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query === '(min-width: 768px)',
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })))
+  })
+  afterEach(() => {
+    cleanup()
+    vi.unstubAllGlobals()
+  })
+
+  it('shows the desktop sidebar by default and remembers a user collapse', async () => {
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+
+    await waitFor(() => expect(screen.getByTestId('club-sidebar-expanded').textContent).toBe('true'))
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse club tools' }))
+
+    expect(screen.getByTestId('club-sidebar-expanded').textContent).toBe('false')
+    expect(window.localStorage.getItem('club-tools-sidebar')).toBe('collapsed')
+  })
 
   it('lets any member view a historical season without changing the live club season', async () => {
     render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
