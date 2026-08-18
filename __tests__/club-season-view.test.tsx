@@ -52,7 +52,10 @@ vi.mock('@/components/ScoringRulesSettings', () => ({ default: () => null }))
 vi.mock('@/components/TitleRulesSettings', () => ({ default: () => null }))
 vi.mock('@/components/ActivitySettings', () => ({ default: () => null }))
 vi.mock('@/components/ClubToolSidebar', () => ({
-  default: ({ onSettings }: { onSettings: () => void }) => <button type="button" onClick={onSettings}>Open settings</button>,
+  default: ({ onAnalytics, onSettings }: { onAnalytics: () => void; onSettings: () => void }) => <>
+    <button type="button" onClick={onAnalytics}>Open analytics</button>
+    <button type="button" onClick={onSettings}>Open settings</button>
+  </>,
 }))
 
 import ClubWorkspace from '@/components/ClubWorkspace'
@@ -110,5 +113,13 @@ describe('club season navigation', () => {
     }))
     expect(screen.queryByRole('dialog', { name: 'Test Club' })).toBeNull()
     confirm.mockRestore()
+  })
+
+  it('opens analytics with All time selected by default', async () => {
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open analytics' }))
+
+    expect((screen.getByLabelText('Time window for all analytics') as HTMLSelectElement).value).toBe('all')
   })
 })
