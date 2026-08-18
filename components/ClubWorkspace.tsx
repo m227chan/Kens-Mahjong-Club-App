@@ -522,7 +522,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         <div className="club-workspace-content">
       <div data-tour="club-header" className="club-workspace-header mb-5 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="club-workspace-heading">
-              <h1 className="truncate text-2xl font-black text-slate-950">{club?.name ?? membership.clubName}</h1>
+              <h1 className="break-words text-2xl font-black text-slate-950">{club?.name ?? membership.clubName}</h1>
               <div className="club-header-roster-summary" aria-label="Club roster summary">
                 <button type="button" onClick={() => setSummaryDefinition('players')} aria-haspopup="dialog" aria-controls="club-summary-definition-dialog"><strong>{players.length}</strong><small>Players</small></button>
                 <button type="button" onClick={() => setSummaryDefinition('linked')} aria-haspopup="dialog" aria-controls="club-summary-definition-dialog"><strong>{players.filter((player) => player.authUid).length}</strong><small>Linked</small></button>
@@ -978,16 +978,16 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
       {analyticsOpen ? (
         <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
           <div id="club-analytics-dialog" data-tour="analytics-modal" role="dialog" aria-modal="true" aria-labelledby="club-analytics-title" className="responsive-modal-panel flex max-h-[92vh] w-full max-w-6xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
-            <div className="flex shrink-0 flex-col items-start justify-between gap-3 border-b border-slate-200 p-5 sm:flex-row">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">Analytics</p>
+            <div className="club-analytics-header flex shrink-0 flex-col items-start justify-between gap-3 border-b border-slate-200 p-5 sm:flex-row">
+              <div className="club-analytics-heading">
+                <p className="club-analytics-kicker text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">Analytics</p>
                 <h3 id="club-analytics-title" className="mt-2 text-xl font-black text-slate-950">{club?.name ?? membership.clubName} insights</h3>
-                <p className="mt-1 text-sm text-slate-500">Dashboard charts, Skill movement, and club analytics.</p>
-                <Link href="/metrics" className="mt-3 inline-flex items-center gap-3 rounded-full border border-[rgb(var(--bamboo)/.45)] bg-[rgb(var(--bamboo)/.08)] px-4 py-2 text-xs font-black text-[rgb(var(--bamboo))] transition hover:translate-x-1 hover:bg-[rgb(var(--bamboo)/.14)]">
-                  <span>How are these metrics calculated?</span><span aria-hidden="true">→</span>
+                <p className="club-analytics-description mt-1 text-sm text-slate-500">Dashboard charts, Skill movement, and club analytics.</p>
+                <Link href="/metrics" className="club-analytics-metrics-link mt-3 inline-flex items-center gap-3 rounded-full border border-[rgb(var(--bamboo)/.45)] bg-[rgb(var(--bamboo)/.08)] px-4 py-2 text-xs font-black text-[rgb(var(--bamboo))] transition hover:translate-x-1 hover:bg-[rgb(var(--bamboo)/.14)]">
+                  <span className="club-analytics-metrics-long">How are these metrics calculated?</span><span className="club-analytics-metrics-short">Metrics guide</span><span aria-hidden="true">→</span>
                 </Link>
               </div>
-              <div className="flex w-full shrink-0 flex-wrap items-end justify-between gap-2 sm:w-auto sm:justify-end">
+              <div className="club-analytics-controls flex w-full shrink-0 flex-wrap items-end justify-between gap-2 sm:w-auto sm:justify-end">
                 <label>
                   <span className="sr-only">Time window for all analytics</span>
                   <select aria-label="Time window for all analytics" value={analyticsWindowValue} onChange={(event) => {
@@ -1004,7 +1004,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                   <label className="text-[10px] font-black uppercase tracking-[.1em] text-slate-500">From<input type="date" value={analyticsStartDate} max={analyticsEndDate} onChange={(event) => { setAnalyticsStartDate(event.target.value); applyAnalyticsCustomRange(event.target.value, analyticsEndDate) }} className="mt-1 block min-h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm font-bold normal-case tracking-normal text-slate-900" /></label>
                   <label className="text-[10px] font-black uppercase tracking-[.1em] text-slate-500">To<input type="date" value={analyticsEndDate} min={analyticsStartDate} max={today} onChange={(event) => { setAnalyticsEndDate(event.target.value); applyAnalyticsCustomRange(analyticsStartDate, event.target.value) }} className="mt-1 block min-h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm font-bold normal-case tracking-normal text-slate-900" /></label>
                 </> : null}
-                <button data-tour="analytics-close" type="button" onClick={() => setAnalyticsOpen(false)} className="min-h-10 rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">
+                <button data-tour="analytics-close" type="button" onClick={() => setAnalyticsOpen(false)} className="club-analytics-close min-h-10 rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">
                   Close
                 </button>
               </div>
