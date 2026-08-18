@@ -1213,14 +1213,14 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
 .club-workspace-content { min-width: 0; }
 .club-workspace-header { min-height: 84px; flex-wrap: wrap; padding: 14px 20px !important; }
 .club-workspace-heading { display: flex; min-width: 0; flex: 1 1 26rem; flex-wrap: wrap; align-items: center; gap: .75rem 1.1rem; }
-.club-workspace-heading h1 { min-width: 0; flex: 1 1 16rem; margin: 0; padding-right: 1.1rem; border-right: 1px solid rgb(var(--line)); font-size: clamp(1.35rem, 2vw, 1.7rem); line-height: 1.18; overflow-wrap: anywhere; text-wrap: balance; white-space: normal; }
+.club-workspace-heading h1 { min-width: 0; max-width: 28rem; flex: 0 1 auto; margin: 0; padding-right: 1.1rem; border-right: 1px solid rgb(var(--line)); font-size: clamp(1.35rem, 2vw, 1.7rem); line-height: 1.18; overflow-wrap: anywhere; text-wrap: balance; white-space: normal; }
 .club-context-actions { min-width: 0; flex: 1 1 24rem; margin-left: auto; justify-content: flex-end; }
 .club-workspace-dashboard-grid { min-width: 0; align-items: start; }
 .club-session-panel { min-width: 0; align-self: start; }
 .leaderboard-board-header { box-sizing: border-box; min-height: 76px; padding: 16px 20px !important; display: flex; align-items: center; }
 .leaderboard-board-header-row { width: 100%; align-items: center !important; }
 .leaderboard-board-header h2 { margin: 0; }
-.club-header-roster-summary { display: inline-flex; min-width: 0; flex: 0 1 auto; flex-wrap: wrap; align-items: center; gap: .35rem; margin: 0; color: rgb(var(--muted)); }
+.club-header-roster-summary { display: inline-flex; min-width: 0; flex: 0 1 auto; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: .35rem; margin: 0; color: rgb(var(--muted)); }
 .club-header-roster-summary button { display: inline-flex; align-items: baseline; gap: .28rem; min-height: 30px; padding: .28rem .55rem; border: 1px solid rgb(var(--line)); border-radius: 999px; background: rgb(var(--surface-2) / .7); box-shadow: 0 2px 0 rgb(var(--shadow) / .04); cursor: pointer; transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease; }
 .club-header-roster-summary button + button { border-left: 1px solid rgb(var(--line)); }
 .club-header-roster-summary button:hover,.club-header-roster-summary button:focus-visible { border-color: rgb(var(--bamboo) / .6); background: rgb(var(--bamboo) / .1); }
