@@ -154,6 +154,7 @@ export interface SeasonDoc {
   id: string
   seasonNumber: number
   name: string
+  kind: 'season' | 'tournament'
   createdAt: Timestamp
   createdBy: string
   active: boolean

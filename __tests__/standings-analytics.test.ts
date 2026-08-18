@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Timestamp } from '@/lib/timestamp'
-import { activePlayerIds, aggregatePlayerGames, boundsForPreset, defaultComparedPlayerIds, gamesInBounds, subtractCalendarMonths, toggleComparedPlayerId } from '@/lib/standings-analytics'
-import type { GameDoc, PlayerDoc, PlayerStatsDoc } from '@/lib/types'
+import { activePlayerIds, aggregatePlayerGames, boundsForPreset, defaultComparedPlayerIds, gamesInBounds, playerCompetitionRecords, subtractCalendarMonths, toggleComparedPlayerId } from '@/lib/standings-analytics'
+import type { GameDoc, PlayerDoc, PlayerStatsDoc, SkillEventDoc } from '@/lib/types'
 
 const game = (id: string, date: string, winType: GameDoc['winType'], winnerPlayerId: string | null, scores: Record<string, number>): GameDoc => ({
   id,
@@ -33,6 +33,40 @@ describe('standings analytics', () => {
       game('c', '2026-01-03', 'draw', null, { p: 0, q: 0 }),
     ])
     expect(rows.get('p')).toMatchObject({ totalPoints: 20, gamesPlayed: 3, gamesWon: 2, gamesLost: 0, selfDrawWins: 1, discardWins: 1, draws: 1, pointTrend: [12, 20, 20] })
+  })
+
+  it('calculates competition-wide player records from every game and Skill event', () => {
+    const games = [
+      game('a', '2026-01-01', 'self_draw', 'p', { p: 10, q: -10 }),
+      game('b', '2026-01-02', 'discard', 'q', { p: -25, q: 25 }),
+      game('c', '2026-01-03', 'self_draw', 'p', { p: 40, q: -40 }),
+      game('d', '2026-01-04', 'discard', 'q', { p: -5, q: 5 }),
+    ]
+    const skillEvents = [
+      { playerId: 'p', ratingBefore: 1500, ratingAfter: 1530 },
+      { playerId: 'p', ratingBefore: 1530, ratingAfter: 1475 },
+      { playerId: 'q', ratingBefore: 2000, ratingAfter: 2100 },
+    ] as SkillEventDoc[]
+
+    expect(playerCompetitionRecords(games, skillEvents, 'p')).toEqual({
+      maximumCumulativePoints: 25,
+      minimumCumulativePoints: -15,
+      highestSingleGameWin: 40,
+      worstSingleGameLoss: -25,
+      peakSkillRating: 1530,
+      lowestSkillRating: 1475,
+    })
+  })
+
+  it('returns empty record values when a player has no competition history', () => {
+    expect(playerCompetitionRecords([], [], 'p')).toEqual({
+      maximumCumulativePoints: null,
+      minimumCumulativePoints: null,
+      highestSingleGameWin: null,
+      worstSingleGameLoss: null,
+      peakSkillRating: null,
+      lowestSkillRating: null,
+    })
   })
 
   it('defines active players from any game inside the configured calendar window', () => {

@@ -1,4 +1,4 @@
-import type { GameDoc, PlayerDoc, PlayerStatsDoc } from '@/lib/types'
+import type { GameDoc, PlayerDoc, PlayerStatsDoc, SkillEventDoc } from '@/lib/types'
 
 export type StandingsDatePreset = 'all' | '30d' | '3m' | 'ytd' | 'custom'
 
@@ -18,6 +18,15 @@ export interface AggregatedPlayerGameStats {
   draws: number
   lastPlayedAt: Date | null
   pointTrend: number[]
+}
+
+export interface PlayerCompetitionRecords {
+  maximumCumulativePoints: number | null
+  minimumCumulativePoints: number | null
+  highestSingleGameWin: number | null
+  worstSingleGameLoss: number | null
+  peakSkillRating: number | null
+  lowestSkillRating: number | null
 }
 
 export function subtractCalendarMonths(date: Date, months: number) {
@@ -97,6 +106,42 @@ export function aggregatePlayerGames(games: GameDoc[], trendLength = 10) {
   })
 
   return rows
+}
+
+export function playerCompetitionRecords(
+  games: GameDoc[],
+  skillEvents: SkillEventDoc[],
+  playerId: string,
+): PlayerCompetitionRecords {
+  let runningPoints = 0
+  const cumulativePoints: number[] = []
+  const singleGameScores: number[] = []
+
+  ;[...games]
+    .sort((left, right) => gameDate(left).getTime() - gameDate(right).getTime())
+    .forEach((game) => {
+      const score = game.entries.find((entry) => entry.playerId === playerId)?.score
+      if (score === undefined) return
+      runningPoints += score
+      cumulativePoints.push(runningPoints)
+      singleGameScores.push(score)
+    })
+
+  const skillRatings = skillEvents
+    .filter((event) => event.playerId === playerId)
+    .flatMap((event) => [event.ratingBefore, event.ratingAfter])
+    .filter(Number.isFinite)
+  const wins = singleGameScores.filter((score) => score > 0)
+  const losses = singleGameScores.filter((score) => score < 0)
+
+  return {
+    maximumCumulativePoints: cumulativePoints.length ? Math.max(...cumulativePoints) : null,
+    minimumCumulativePoints: cumulativePoints.length ? Math.min(...cumulativePoints) : null,
+    highestSingleGameWin: wins.length ? Math.max(...wins) : null,
+    worstSingleGameLoss: losses.length ? Math.min(...losses) : null,
+    peakSkillRating: skillRatings.length ? Math.max(...skillRatings) : null,
+    lowestSkillRating: skillRatings.length ? Math.min(...skillRatings) : null,
+  }
 }
 
 export function activePlayerIds(games: GameDoc[], months: number, now = new Date()) {

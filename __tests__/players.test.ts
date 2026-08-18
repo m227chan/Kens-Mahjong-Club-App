@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { PLAYER_COLORS, RANK_TITLES, assignPlayerColors, assignTitles, rankTitleBandSizes, titleForStanding } from '../lib/players'
+import { PLAYER_COLORS, PLAYER_EMOJIS, RANK_TITLES, assignPlayerColors, assignTitles, randomUnusedPlayerEmojiOptions, rankTitleBandSizes, titleForStanding } from '../lib/players'
 
 describe('PLAYER_COLORS', () => {
   it('should have 14 colors', () => {
@@ -29,6 +29,24 @@ describe('assignPlayerColors', () => {
     const result = assignPlayerColors(players)
 
     expect(Object.keys(result)).toHaveLength(2)
+  })
+})
+
+describe('player emoji suggestions', () => {
+  it('returns a unique sample without any emoji already used by the roster', () => {
+    const used = new Set(PLAYER_EMOJIS.slice(0, 20).map((emoji) => emoji.toLocaleLowerCase()))
+    const suggestions = randomUnusedPlayerEmojiOptions(used, 16, () => 0.37)
+
+    expect(suggestions).toHaveLength(16)
+    expect(new Set(suggestions).size).toBe(suggestions.length)
+    expect(suggestions.every((emoji) => !used.has(emoji.toLocaleLowerCase()))).toBe(true)
+  })
+
+  it('returns only the remaining available emoji when fewer than requested remain', () => {
+    const available = PLAYER_EMOJIS.at(-1) as string
+    const used = new Set(PLAYER_EMOJIS.slice(0, -1).map((emoji) => emoji.toLocaleLowerCase()))
+
+    expect(randomUnusedPlayerEmojiOptions(used)).toEqual([available])
   })
 })
 

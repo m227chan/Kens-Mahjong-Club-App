@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Timestamp } from '@/lib/timestamp'
 import type { ClubMembershipDoc } from '@/lib/types'
 
@@ -16,8 +16,9 @@ const dataMocks = vi.hoisted(() => ({
   subscribeActivitySettings: vi.fn(() => vi.fn()),
   subscribeSeasons: vi.fn((_clubId: string, callback: (seasons: unknown[]) => void) => {
     callback([
-      { id: '1', seasonNumber: 1, name: 'Season 1', active: false },
-      { id: '2', seasonNumber: 2, name: 'Season 2', active: true },
+      { id: '1', seasonNumber: 1, name: 'Season 1', kind: 'season', active: false },
+      { id: '2', seasonNumber: 2, name: 'Season 2', kind: 'season', active: true },
+      { id: '3', seasonNumber: 3, name: 'Summer Open', kind: 'tournament', active: false },
     ])
     return vi.fn()
   }),
@@ -26,6 +27,7 @@ const dataMocks = vi.hoisted(() => ({
   ensureSeasons: vi.fn().mockResolvedValue(undefined),
   setActiveSeason: vi.fn(),
   startNewSeason: vi.fn().mockResolvedValue(3),
+  startNewTournament: vi.fn().mockResolvedValue({ seasonNumber: 4, name: 'Tournament 2', kind: 'tournament' }),
   createPlayer: vi.fn(),
   deleteClub: vi.fn(),
   removePlayer: vi.fn(),
@@ -49,7 +51,9 @@ vi.mock('@/components/NetworkGraphModal', () => ({ default: () => null }))
 vi.mock('@/components/ScoringRulesSettings', () => ({ default: () => null }))
 vi.mock('@/components/TitleRulesSettings', () => ({ default: () => null }))
 vi.mock('@/components/ActivitySettings', () => ({ default: () => null }))
-vi.mock('@/components/ClubToolSidebar', () => ({ default: () => null }))
+vi.mock('@/components/ClubToolSidebar', () => ({
+  default: ({ onSettings }: { onSettings: () => void }) => <button type="button" onClick={onSettings}>Open settings</button>,
+}))
 
 import ClubWorkspace from '@/components/ClubWorkspace'
 
@@ -64,13 +68,17 @@ const membership = {
   active: true,
 } satisfies ClubMembershipDoc
 
+const managerMembership = { ...membership, role: 'manager' as const }
+
 describe('club season navigation', () => {
   beforeEach(() => vi.clearAllMocks())
+  afterEach(() => cleanup())
 
   it('lets any member view a historical season without changing the live club season', async () => {
     render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
 
     await waitFor(() => expect((screen.getByLabelText('Season') as HTMLSelectElement).value).toBe('2'))
+    expect(screen.getByRole('option', { name: 'Summer Open · Tournament' })).toBeTruthy()
     expect(screen.getByTestId('session-season').textContent).toBe('2')
 
     fireEvent.change(screen.getByLabelText('Season'), { target: { value: '1' } })
@@ -81,7 +89,26 @@ describe('club season navigation', () => {
     expect(dataMocks.setActiveSeason).not.toHaveBeenCalled()
     expect(dataMocks.subscribePlayerStats).toHaveBeenLastCalledWith('CLUB1', expect.any(Function), 1)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Return to current season' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Return to current' }))
     await waitFor(() => expect(screen.getByTestId('session-season').textContent).toBe('2'))
+  })
+
+  it('lets a manager start a custom-named tournament from season controls', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<ClubWorkspace clubId="CLUB1" membership={managerMembership} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open settings' }))
+    const nameInput = screen.getByLabelText(/Tournament name/)
+    expect(nameInput.getAttribute('placeholder')).toBe('Tournament 2')
+
+    fireEvent.change(nameInput, { target: { value: 'Summer Open' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Start tournament' }))
+
+    await waitFor(() => expect(dataMocks.startNewTournament).toHaveBeenCalledWith('CLUB1', {
+      createdBy: 'member-1',
+      name: 'Summer Open',
+    }))
+    expect(screen.queryByRole('dialog', { name: 'Test Club' })).toBeNull()
+    confirm.mockRestore()
   })
 })

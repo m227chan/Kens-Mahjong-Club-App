@@ -25,6 +25,7 @@ import {
 import {
   setClubActiveSeason,
   startNewClubSeason,
+  startNewClubTournament,
 } from '@/lib/server/season-management'
 import { addPlayerToActiveSession } from '@/lib/server/roster-session'
 
@@ -527,6 +528,15 @@ export async function POST(request: NextRequest) {
       if (action === 'startNewSeason') {
         await requireManager(body.clubId)
         return startNewClubSeason(db, body.clubId, caller.uid)
+      }
+      if (action === 'startNewTournament') {
+        await requireManager(body.clubId)
+        return startNewClubTournament(
+          db,
+          body.clubId,
+          caller.uid,
+          typeof body.input?.name === 'string' ? body.input.name : undefined,
+        )
       }
       if (action === 'setActiveSeason') {
         await requireManager(body.clubId)
