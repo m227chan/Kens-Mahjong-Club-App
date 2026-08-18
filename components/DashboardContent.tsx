@@ -53,15 +53,17 @@ export default function DashboardContent({
   const [loadedSkillEvents, setLoadedSkillEvents] = useState<SkillEventDoc[]>([])
   const [recordGames, setRecordGames] = useState<GameDoc[]>([])
   const [recordSkillEvents, setRecordSkillEvents] = useState<SkillEventDoc[]>([])
-  const [selectedPlayerId, setSelectedPlayerId] = useState(initialPlayerId ?? '')
+  const [selectedPlayerId, setSelectedPlayerId] = useState(initialPlayerId ?? linkedPlayerId ?? '')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [recordsLoading, setRecordsLoading] = useState(true)
+  const [recordsLoading, setRecordsLoading] = useState(false)
   const [recordsError, setRecordsError] = useState<string | null>(null)
   const [clubVisual, setClubVisual] = useState<'points' | 'skill' | 'comparison'>('points')
   const [comparedPlayerIds, setComparedPlayerIds] = useState<string[]>([])
   const [playerSearch, setPlayerSearch] = useState('')
   const comparisonInitialized = useRef(false)
+  const playerSelectionTouched = useRef(Boolean(initialPlayerId))
+  const recordsLoadedKey = useRef('')
   const statsUpdatedKey = stats.map((stat) => [
     stat.playerId,
     stat.updatedAt?.toMillis?.() ?? 0,
@@ -84,6 +86,10 @@ export default function DashboardContent({
     return () => { cancelled = true }
   }, [analyticsWindow, clubId, seasonNumber, statsUpdatedKey])
   useEffect(() => {
+    if (page !== 'player') return
+    const requestKey = `${clubId}:${seasonNumber ?? 'all'}:${statsUpdatedKey}`
+    if (recordsLoadedKey.current === requestKey) return
+
     let cancelled = false
     setRecordsLoading(true); setRecordsError(null)
     const allTime = allSessionWindow()
@@ -92,17 +98,24 @@ export default function DashboardContent({
       ? Promise.resolve([] as SkillEventDoc[])
       : loadAnalyticsSkillEvents(clubId, allTime, seasonNumber)
     void Promise.all([gamesPromise, eventsPromise])
-      .then(([value, events]) => { if (!cancelled) { setRecordGames(value); setRecordSkillEvents(seasonNumber == null ? combinedCompetitionSkillEvents(value) : events) } })
+      .then(([value, events]) => { if (!cancelled) { setRecordGames(value); setRecordSkillEvents(seasonNumber == null ? combinedCompetitionSkillEvents(value) : events); recordsLoadedKey.current = requestKey } })
       .catch((nextError) => { if (!cancelled) setRecordsError(nextError instanceof Error ? nextError.message : 'Unable to load player records.') })
       .finally(() => { if (!cancelled) setRecordsLoading(false) })
     return () => { cancelled = true }
-  }, [clubId, seasonNumber, statsUpdatedKey])
+  }, [clubId, page, seasonNumber, statsUpdatedKey])
   useEffect(() => {
-    if (initialPlayerId) { setSelectedPlayerId(initialPlayerId); setPage('player') }
+    if (initialPlayerId) {
+      playerSelectionTouched.current = true
+      setSelectedPlayerId(initialPlayerId)
+      setPage('player')
+    }
   }, [initialPlayerId])
   useEffect(() => {
-    if (!selectedPlayerId && players[0]) setSelectedPlayerId(players[0].id)
-  }, [players, selectedPlayerId])
+    const selectedPlayerExists = players.some((player) => player.id === selectedPlayerId)
+    const linkedPlayerExists = Boolean(linkedPlayerId && players.some((player) => player.id === linkedPlayerId))
+    if (selectedPlayerExists && (playerSelectionTouched.current || !linkedPlayerExists || selectedPlayerId === linkedPlayerId)) return
+    setSelectedPlayerId(linkedPlayerExists ? linkedPlayerId! : players[0]?.id ?? '')
+  }, [linkedPlayerId, players, selectedPlayerId])
   useEffect(() => {
     if (comparisonInitialized.current || !players.length || !statsReady) return
     comparisonInitialized.current = true
@@ -197,7 +210,7 @@ export default function DashboardContent({
   }, [comparedPlayerIds, games, skillEvents])
 
   return (
-    <div className="space-y-5" aria-busy={loading || recordsLoading}>
+    <div className="space-y-5" aria-busy={loading || (page === 'player' && recordsLoading)}>
       <nav className="inline-flex rounded-lg border border-slate-300 bg-white p-1" aria-label="Analytics pages">
         <button type="button" onClick={() => setPage('club')} aria-current={page === 'club' ? 'page' : undefined} className={`rounded-md px-4 py-2 text-sm font-black ${page === 'club' ? 'bg-slate-900 text-white' : 'text-slate-600'}`}>Club overview</button>
         <button type="button" onClick={() => setPage('player')} aria-current={page === 'player' ? 'page' : undefined} className={`rounded-md px-4 py-2 text-sm font-black ${page === 'player' ? 'bg-slate-900 text-white' : 'text-slate-600'}`}>Player deep dive</button>
@@ -240,9 +253,9 @@ export default function DashboardContent({
           {clubVisual === 'skill' ? <ComparisonLineChart data={skillRanks} players={comparedPlayers} label="Skill rank history" reversed /> : null}
           {clubVisual === 'comparison' ? <div className="mt-4"><AnalyticsPanel playerStats={windowedStats} players={players} selectedPlayerIds={comparedPlayerIds} /></div> : null}
         </section>
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><h3 className="text-sm font-black text-slate-900">Leaders in this window</h3><div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{windowedStats.filter((stat) => stat.gamesPlayed > 0).sort((a, b) => b.totalPoints - a.totalPoints).slice(0, 6).map((stat, index) => { const player = players.find((item) => item.id === stat.playerId); return <button type="button" key={stat.playerId} onClick={() => { setSelectedPlayerId(stat.playerId); setPage('player') }} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3 text-left hover:border-emerald-400"><span><strong className="block text-sm">#{index + 1} {player?.icon} {player?.displayName ?? stat.playerId}</strong><span className="text-xs text-slate-500">Open player analytics</span></span><strong className="font-mono">{signed(stat.totalPoints)}</strong></button> })}</div>{!windowedStats.some((stat) => stat.gamesPlayed > 0) ? <p className="mt-4 rounded border border-dashed p-6 text-center text-sm font-semibold text-slate-500">No games were played in this window.</p> : null}</section>
+        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><h3 className="text-sm font-black text-slate-900">Leaders in this window</h3><div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{windowedStats.filter((stat) => stat.gamesPlayed > 0).sort((a, b) => b.totalPoints - a.totalPoints).slice(0, 6).map((stat, index) => { const player = players.find((item) => item.id === stat.playerId); return <button type="button" key={stat.playerId} onClick={() => { playerSelectionTouched.current = true; setSelectedPlayerId(stat.playerId); setPage('player') }} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3 text-left hover:border-emerald-400"><span><strong className="block text-sm">#{index + 1} {player?.icon} {player?.displayName ?? stat.playerId}</strong><span className="text-xs text-slate-500">Open player analytics</span></span><strong className="font-mono">{signed(stat.totalPoints)}</strong></button> })}</div>{!windowedStats.some((stat) => stat.gamesPlayed > 0) ? <p className="mt-4 rounded border border-dashed p-6 text-center text-sm font-semibold text-slate-500">No games were played in this window.</p> : null}</section>
       </> : <>
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><label className="text-xs font-black uppercase tracking-[.16em] text-slate-500">Player<select value={selectedPlayerId} onChange={(event) => setSelectedPlayerId(event.target.value)} className="mt-2 block min-h-11 w-full rounded border border-slate-300 bg-white px-3 text-sm font-bold normal-case tracking-normal text-slate-900">{players.map((player) => <option key={player.id} value={player.id}>{player.icon} {player.displayName}</option>)}</select></label></section>
+        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><label className="text-xs font-black uppercase tracking-[.16em] text-slate-500">Player<select value={selectedPlayerId} onChange={(event) => { playerSelectionTouched.current = true; setSelectedPlayerId(event.target.value) }} className="mt-2 block min-h-11 w-full rounded border border-slate-300 bg-white px-3 text-sm font-bold normal-case tracking-normal text-slate-900">{players.map((player) => <option key={player.id} value={player.id}>{player.icon} {player.displayName}</option>)}</select></label></section>
         {selectedPlayer ? <>
           <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-3"><span className="text-3xl">{selectedPlayer.icon}</span><div><p className="text-xs font-black uppercase tracking-[.16em] text-indigo-600">Player report</p><h2 className="text-xl font-black text-slate-950">{selectedPlayer.displayName}</h2></div></div><div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4"><Metric label="Points" value={signed(playerAggregate?.totalPoints ?? 0)} detail={`${playerAggregate?.gamesPlayed ?? 0} games in view`} /><Metric label="Win rate" value={`${Math.round(((playerAggregate?.gamesWon ?? 0) / Math.max(1, playerAggregate?.gamesPlayed ?? 0)) * 100)}%`} detail={`${playerAggregate?.gamesWon ?? 0} wins`} /><Metric label="Skill" value={selectedStats?.skillGamesPlayed ? selectedStats.skillRating : '—'} detail={selectedStats?.skillGamesPlayed ? `Rank #${selectedStats.skillRank}` : 'No Skill activity in view'} /><Metric label="Best game" value={Number.isFinite(selectedStats?.bestSingleGame) ? signed(selectedStats?.bestSingleGame ?? 0) : '—'} detail={`Peak Skill ${selectedStats?.skillGamesPlayed ? selectedStats.skillPeak : '—'}`} /></div></section>
           <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">

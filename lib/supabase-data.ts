@@ -712,10 +712,9 @@ export async function loadAnalyticsGames(
   seasonNumber?: number,
 ) {
   if (window.mode === 'all') {
-    const games = await loadAllGames(clubId)
-    return games.filter(
-      (game) => !seasonNumber || game.seasonNumber === seasonNumber,
-    )
+    return seasonNumber
+      ? loadGamesInDateRange(clubId, null, null, seasonNumber)
+      : loadAllGames(clubId)
   }
   const { startAt, endAt } = sessionWindowDateBounds(window)
   const key = `${clubId}:analytics-games:${seasonNumber ?? 'all'}:${window.mode === 'hours' ? `${window.hours}h` : `${window.startAt}:${window.endAt}`}`

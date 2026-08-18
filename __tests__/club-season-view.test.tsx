@@ -150,7 +150,7 @@ describe('club season navigation', () => {
     expect(screen.queryByTestId('session-season')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Open analytics' }))
-    expect(screen.getByTestId('analytics-season').textContent).toBe('all')
+    expect((await screen.findByTestId('analytics-season')).textContent).toBe('all')
   })
 
   it('lets a manager start a custom-named tournament from season controls', async () => {

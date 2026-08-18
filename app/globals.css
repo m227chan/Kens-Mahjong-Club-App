@@ -1171,6 +1171,7 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
     box-shadow:0 8px 20px rgb(var(--shadow)/.14);
   }
   .mobile-workspace-tab{
+    min-height:44px;
     border-color:rgb(var(--line))!important;
     background:rgb(var(--surface-2))!important;
     color:rgb(var(--ink))!important;
@@ -1342,13 +1343,13 @@ html.dark .club-tool-sidebar-panel { box-shadow: inset 0 1px 0 rgb(238 231 207 /
   .club-tool-sidebar:not(.is-expanded) .club-tool-sidebar-action::after { display: none; }
   .club-workspace-header { min-height: 0; margin-bottom: .65rem; padding: .7rem !important; }
   .club-workspace-header > .club-workspace-heading { width: 100%; flex: 0 1 auto; flex-direction: column; align-items: flex-start; gap: .45rem; }
-  .club-workspace-header h1 { flex: 0 1 auto; padding-right: 0; border-right: 0; font-size: 1.15rem; line-height: 1.3; text-align: left; }
+  .club-workspace-header h1 { flex: 0 1 auto; padding-right: 0; border-right: 0; overflow: visible; font-size: 1.15rem; line-height: 1.3; overflow-wrap: anywhere; text-align: left; text-overflow: clip; white-space: normal; }
   .club-header-roster-summary { margin-top: 0; }
-  .club-header-roster-summary button { padding: .25rem .5rem; }
+  .club-header-roster-summary button { min-height: 44px; padding: .25rem .5rem; touch-action: manipulation; }
   .club-header-roster-summary strong { font-size: .82rem; }
   .club-header-roster-summary small { font-size: .57rem; }
   .club-workspace-header > .club-context-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; width: 100%; flex: 0 1 auto; margin-left: 0; gap: .4rem; }
-  .club-season-action, .club-id-action { min-height: 40px !important; justify-content: center; padding: .4rem .55rem !important; font-size: .72rem !important; }
+  .club-season-action, .club-id-action { min-height: 44px !important; justify-content: center; padding: .4rem .55rem !important; font-size: .72rem !important; touch-action: manipulation; }
   .club-season-action select { min-width: 0; font-size: .78rem !important; }
   .club-action-status { grid-column: 1 / -1; min-height: 36px; justify-content: center; padding: .4rem .55rem !important; text-align: center; }
 

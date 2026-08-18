@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, useRef } from 'react'
-import DashboardContent from '@/components/DashboardContent'
 import GameLogsModal from '@/components/GameLogsModal'
 import NetworkGraphModal from '@/components/NetworkGraphModal'
 import { LeaderboardPanel } from '@/components/Leaderboard'
@@ -52,6 +52,10 @@ import {
   type SessionPointWindow,
   type SessionPointWindowHours,
 } from '@/lib/session-point-window'
+
+const DashboardContent = dynamic(() => import('@/components/DashboardContent'), {
+  loading: () => <div className="rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface-1))] p-5 text-sm font-bold text-[rgb(var(--muted))]" role="status">Loading analytics…</div>,
+})
 
 const ANALYTICS_TIME_WINDOWS = [
   { label: 'Last 24 hours', value: '24' },
