@@ -3,7 +3,8 @@
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState, useRef } from 'react'
+import { useCallback, useEffect, useState, useRef, type TouchEvent as ReactTouchEvent } from 'react'
+import useEmblaCarousel from 'embla-carousel-react'
 import GameLogsModal from '@/components/GameLogsModal'
 import NetworkGraphModal from '@/components/NetworkGraphModal'
 import { LeaderboardPanel } from '@/components/Leaderboard'
@@ -66,6 +67,24 @@ const ANALYTICS_TIME_WINDOWS = [
 ]
 
 const CLUB_SIDEBAR_PREFERENCE_KEY = 'club-tools-sidebar'
+const MOBILE_WORKSPACE_SWIPE_DISTANCE = 56
+
+function blocksWorkspaceSwipe(target: EventTarget | null) {
+  if (!(target instanceof Element)) return false
+  return Boolean(target.closest([
+    'a',
+    'button',
+    'input',
+    'select',
+    'textarea',
+    '[contenteditable="true"]',
+    '[draggable="true"]',
+    '[role="dialog"]',
+    '[role="button"]',
+    '[tabindex]:not([tabindex="-1"])',
+    '[data-workspace-swipe-ignore]',
+  ].join(',')))
+}
 
 const CLUB_SUMMARY_DEFINITIONS = {
   players: {
@@ -136,12 +155,36 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [deleteConfirmName, setDeleteConfirmName] = useState('')
   const [deletingClub, setDeletingClub] = useState(false)
   const [mobileView, setMobileView] = useState<'session' | 'standings'>('session')
+  const [isMobileViewport, setIsMobileViewport] = useState(false)
   const [managerEmail, setManagerEmail] = useState('')
   const [managerMessage, setManagerMessage] = useState<string | null>(null)
   const [promotingManager, setPromotingManager] = useState(false)
   const [linkingPlayerId, setLinkingPlayerId] = useState<string | null>(null)
+  const [mobilePanelsRef, mobilePanelsApi] = useEmblaCarousel({
+    align: 'start',
+    containScroll: false,
+    dragFree: false,
+    dragThreshold: 8,
+    duration: 30,
+    loop: false,
+    skipSnaps: false,
+    watchDrag: (_api, event) => !blocksWorkspaceSwipe(event.target),
+    breakpoints: {
+      '(min-width: 768px)': { active: false },
+      '(prefers-reduced-motion: reduce)': { duration: 0 },
+    },
+  })
   const addPlayerSectionRef = useRef<HTMLElement>(null)
   const clubDashboardRef = useRef<HTMLDivElement>(null)
+  const mobileToolsButtonRef = useRef<HTMLButtonElement>(null)
+  const mobileWorkspaceTabsRef = useRef<HTMLElement>(null)
+  const sessionPanelRef = useRef<HTMLElement>(null)
+  const leaderboardPanelRef = useRef<HTMLElement>(null)
+  const workspaceSwipeStartRef = useRef<{
+    x: number
+    y: number
+    destination: 'tools' | 'session' | 'standings'
+  } | null>(null)
 
   useEffect(() => {
     const desktop = window.matchMedia?.('(min-width: 768px)')
@@ -158,12 +201,133 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
     return () => desktop.removeEventListener?.('change', syncSidebarForViewport)
   }, [])
 
+  useEffect(() => {
+    const mobile = window.matchMedia?.('(max-width: 767px)')
+    if (!mobile) return
+    const syncMobileViewport = () => setIsMobileViewport(mobile.matches)
+    syncMobileViewport()
+    mobile.addEventListener?.('change', syncMobileViewport)
+    return () => mobile.removeEventListener?.('change', syncMobileViewport)
+  }, [])
+
   const changeClubToolsExpanded = (value: boolean) => {
     setClubToolsExpanded(value)
     if (window.matchMedia?.('(min-width: 768px)').matches) {
       window.localStorage.setItem(CLUB_SIDEBAR_PREFERENCE_KEY, value ? 'expanded' : 'collapsed')
     }
   }
+
+  const setMobileWorkspaceIndicatorPosition = useCallback((position: number) => {
+    const navigation = mobileWorkspaceTabsRef.current
+    if (!navigation) return
+    const controls = navigation.querySelectorAll<HTMLElement>('.mobile-workspace-tab')
+    if (controls.length < 3) return
+    const clampedPosition = Math.min(2, Math.max(0, position))
+    const lowerIndex = Math.floor(clampedPosition)
+    const upperIndex = Math.ceil(clampedPosition)
+    const lowerOffset = controls[lowerIndex].offsetLeft - controls[0].offsetLeft
+    const upperOffset = controls[upperIndex].offsetLeft - controls[0].offsetLeft
+    const offset = lowerOffset + ((upperOffset - lowerOffset) * (clampedPosition - lowerIndex))
+    navigation.style.setProperty('--mobile-workspace-indicator-x', `${offset}px`)
+  }, [])
+
+  const syncMobileWorkspaceIndicator = useCallback(() => {
+    if (!mobilePanelsApi || clubToolsExpanded) return
+    const progress = Math.min(1, Math.max(0, mobilePanelsApi.scrollProgress()))
+    setMobileWorkspaceIndicatorPosition(1 + progress)
+  }, [clubToolsExpanded, mobilePanelsApi, setMobileWorkspaceIndicatorPosition])
+
+  const showMobileView = (view: 'session' | 'standings') => {
+    changeClubToolsExpanded(false)
+    mobileWorkspaceTabsRef.current?.setAttribute('data-carousel-moving', 'true')
+    if (mobilePanelsApi) {
+      const targetIndex = view === 'session' ? 0 : 1
+      if (mobilePanelsApi.selectedScrollSnap() === targetIndex) {
+        setMobileView(view)
+        mobileWorkspaceTabsRef.current?.removeAttribute('data-carousel-moving')
+        setMobileWorkspaceIndicatorPosition(1 + targetIndex)
+      } else {
+        mobilePanelsApi.scrollTo(targetIndex)
+      }
+    } else {
+      setMobileView(view)
+      mobileWorkspaceTabsRef.current?.removeAttribute('data-carousel-moving')
+      setMobileWorkspaceIndicatorPosition(view === 'session' ? 1 : 2)
+    }
+  }
+
+  useEffect(() => {
+    if (!mobilePanelsApi) return
+
+    const selectPanel = () => {
+      setMobileView(mobilePanelsApi.selectedScrollSnap() === 0 ? 'session' : 'standings')
+      syncMobileWorkspaceIndicator()
+    }
+    const beginMovement = () => {
+      mobileWorkspaceTabsRef.current?.setAttribute('data-carousel-moving', 'true')
+    }
+    const finishMovement = () => {
+      syncMobileWorkspaceIndicator()
+      mobileWorkspaceTabsRef.current?.removeAttribute('data-carousel-moving')
+    }
+
+    mobilePanelsApi
+      .on('pointerDown', beginMovement)
+      .on('scroll', syncMobileWorkspaceIndicator)
+      .on('select', selectPanel)
+      .on('settle', finishMovement)
+      .on('reInit', selectPanel)
+      .on('resize', syncMobileWorkspaceIndicator)
+    selectPanel()
+
+    return () => {
+      mobilePanelsApi
+        .off('pointerDown', beginMovement)
+        .off('scroll', syncMobileWorkspaceIndicator)
+        .off('select', selectPanel)
+        .off('settle', finishMovement)
+        .off('reInit', selectPanel)
+        .off('resize', syncMobileWorkspaceIndicator)
+    }
+  }, [mobilePanelsApi, syncMobileWorkspaceIndicator])
+
+  useEffect(() => {
+    if (!mobilePanelsApi || !isMobileViewport || typeof ResizeObserver === 'undefined') return
+
+    const track = mobilePanelsApi.containerNode()
+    const slides = mobilePanelsApi.slideNodes()
+    const updateActivePanelHeight = () => {
+      const activeSlide = slides[mobilePanelsApi.selectedScrollSnap()]
+      if (!activeSlide) return
+      const height = Math.max(activeSlide.scrollHeight, activeSlide.getBoundingClientRect().height)
+      if (height > 0) track.style.height = `${Math.ceil(height)}px`
+    }
+    const observer = new ResizeObserver(updateActivePanelHeight)
+    slides.forEach((slide) => observer.observe(slide))
+    const frame = window.requestAnimationFrame(updateActivePanelHeight)
+    mobilePanelsApi.on('select', updateActivePanelHeight).on('reInit', updateActivePanelHeight)
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+      observer.disconnect()
+      mobilePanelsApi.off('select', updateActivePanelHeight).off('reInit', updateActivePanelHeight)
+    }
+  }, [isMobileViewport, mobilePanelsApi])
+
+  useEffect(() => {
+    if (clubToolsExpanded) {
+      mobileWorkspaceTabsRef.current?.removeAttribute('data-carousel-moving')
+      return
+    }
+    syncMobileWorkspaceIndicator()
+  }, [clubToolsExpanded, syncMobileWorkspaceIndicator])
+
+  useEffect(() => {
+    const sessionInactive = isMobileViewport && (clubToolsExpanded || mobileView !== 'session')
+    const leaderboardInactive = isMobileViewport && (clubToolsExpanded || mobileView !== 'standings')
+    sessionPanelRef.current?.toggleAttribute('inert', sessionInactive)
+    leaderboardPanelRef.current?.toggleAttribute('inert', leaderboardInactive)
+  }, [clubToolsExpanded, isMobileViewport, mobileView])
 
   const isManager = membership.role === 'manager'
   const { play } = useSound()
@@ -188,6 +352,73 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
     ? players.filter((player) => player.displayName.toLocaleLowerCase().includes(normalizedRosterSearch))
     : players
   const clubModalOpen = summaryDefinition !== null || rosterOpen || analyticsOpen || gameLogsOpen || networkOpen || settingsOpen || deleteConfirmOpen
+
+  const handleWorkspaceTouchStart = (event: ReactTouchEvent<HTMLDivElement>) => {
+    if (clubModalOpen || event.touches.length !== 1 || blocksWorkspaceSwipe(event.target)) {
+      workspaceSwipeStartRef.current = null
+      return
+    }
+    if (!window.matchMedia?.('(max-width: 767px)').matches) return
+    workspaceSwipeStartRef.current = {
+      x: event.touches[0].clientX,
+      y: event.touches[0].clientY,
+      destination: clubToolsExpanded ? 'tools' : mobileView,
+    }
+  }
+
+  const handleWorkspaceTouchMove = (event: ReactTouchEvent<HTMLDivElement>) => {
+    const start = workspaceSwipeStartRef.current
+    if (!start || event.touches.length !== 1) {
+      workspaceSwipeStartRef.current = null
+      return
+    }
+    const deltaX = event.touches[0].clientX - start.x
+    const deltaY = event.touches[0].clientY - start.y
+    if (Math.abs(deltaY) > 16 && Math.abs(deltaY) > Math.abs(deltaX) * 1.15) {
+      workspaceSwipeStartRef.current = null
+      mobileWorkspaceTabsRef.current?.removeAttribute('data-carousel-moving')
+      setMobileWorkspaceIndicatorPosition(start.destination === 'tools' ? 0 : start.destination === 'session' ? 1 : 2)
+      return
+    }
+
+    const navigation = mobileWorkspaceTabsRef.current
+    const step = Math.max((navigation?.clientWidth ?? 0) / 3, MOBILE_WORKSPACE_SWIPE_DISTANCE)
+    if (start.destination === 'session' && deltaX > 0) {
+      navigation?.setAttribute('data-carousel-moving', 'true')
+      setMobileWorkspaceIndicatorPosition(1 - Math.min(1, deltaX / step))
+    } else if (start.destination === 'tools' && deltaX < 0) {
+      navigation?.setAttribute('data-carousel-moving', 'true')
+      setMobileWorkspaceIndicatorPosition(Math.min(1, -deltaX / step))
+    }
+  }
+
+  const handleWorkspaceTouchEnd = (event: ReactTouchEvent<HTMLDivElement>) => {
+    const start = workspaceSwipeStartRef.current
+    workspaceSwipeStartRef.current = null
+    const touch = event.changedTouches[0]
+    if (!start || !touch || clubModalOpen || !window.matchMedia?.('(max-width: 767px)').matches) return
+
+    const deltaX = touch.clientX - start.x
+    const deltaY = touch.clientY - start.y
+    if (Math.abs(deltaX) < MOBILE_WORKSPACE_SWIPE_DISTANCE || Math.abs(deltaX) < Math.abs(deltaY) * 1.25) {
+      mobileWorkspaceTabsRef.current?.removeAttribute('data-carousel-moving')
+      setMobileWorkspaceIndicatorPosition(start.destination === 'tools' ? 0 : start.destination === 'session' ? 1 : 2)
+      return
+    }
+
+    if (deltaX < 0) {
+      if (start.destination === 'tools') {
+        showMobileView('session')
+      }
+      return
+    }
+
+    if (start.destination === 'session') {
+      mobileWorkspaceTabsRef.current?.removeAttribute('data-carousel-moving')
+      setMobileWorkspaceIndicatorPosition(0)
+      changeClubToolsExpanded(true)
+    }
+  }
 
   useEffect(() => {
     clubDashboardRef.current?.toggleAttribute('inert', clubModalOpen)
@@ -538,10 +769,23 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
 
   return (
     <main className="club-workspace-main px-4 py-6">
-      <div className="club-workspace-shell" data-sidebar-expanded={clubToolsExpanded}>
+      <div
+        className="club-workspace-shell"
+        data-sidebar-expanded={clubToolsExpanded}
+        onTouchStart={handleWorkspaceTouchStart}
+        onTouchMove={handleWorkspaceTouchMove}
+        onTouchEnd={handleWorkspaceTouchEnd}
+        onTouchCancel={() => {
+          const start = workspaceSwipeStartRef.current
+          workspaceSwipeStartRef.current = null
+          mobileWorkspaceTabsRef.current?.removeAttribute('data-carousel-moving')
+          if (start) setMobileWorkspaceIndicatorPosition(start.destination === 'tools' ? 0 : start.destination === 'session' ? 1 : 2)
+        }}
+      >
         <ClubToolSidebar
           expanded={clubToolsExpanded}
           onExpandedChange={changeClubToolsExpanded}
+          mobileReturnFocusRef={mobileToolsButtonRef}
           rosterOpen={rosterOpen}
           analyticsOpen={analyticsOpen}
           gameLogsOpen={gameLogsOpen}
@@ -579,7 +823,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                 <option value={selectedSeasonNumber}>Season {selectedSeasonNumber}</option>
               ) : null}
               {seasons.map((season) => (
-                <option key={season.id} value={season.seasonNumber}>{season.name}{season.kind === 'tournament' ? ' · Tournament' : ''}{season.seasonNumber === activeSeasonNumber ? ' (current)' : ''}</option>
+                <option key={season.id} value={season.seasonNumber}>{season.name}{season.kind === 'tournament' ? ' · Tournament' : ''}{season.seasonNumber === activeSeasonNumber && !isMobileViewport ? ' (current)' : ''}</option>
               ))}
             </select>
           </label>
@@ -755,15 +999,27 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         </div>
       ) : null}
 
-      <nav className="mobile-workspace-tabs sticky top-0 z-30 mx-auto mb-4 grid w-full grid-cols-3 rounded-lg border border-slate-200 bg-white/95 p-2 backdrop-blur md:hidden" aria-label="Club workspace">
+      <nav
+        ref={mobileWorkspaceTabsRef}
+        className="mobile-workspace-tabs sticky top-0 z-30 mx-auto mb-4 grid w-full grid-cols-3 rounded-lg border border-slate-200 bg-white/95 p-2 backdrop-blur md:hidden"
+        aria-label="Club workspace"
+        data-active-destination={clubToolsExpanded ? 'tools' : mobileView}
+      >
         <button
+          ref={mobileToolsButtonRef}
           data-tour="club-tools-toggle"
           type="button"
           aria-label="Open club tools"
           aria-expanded={clubToolsExpanded}
           aria-controls="club-tool-sidebar-panel"
-          onClick={() => changeClubToolsExpanded(true)}
-          className="mobile-workspace-tab inline-flex items-center justify-center gap-1.5"
+          onClick={() => {
+            mobileWorkspaceTabsRef.current?.removeAttribute('data-carousel-moving')
+            setMobileView('session')
+            mobilePanelsApi?.scrollTo(0, true)
+            setMobileWorkspaceIndicatorPosition(0)
+            changeClubToolsExpanded(true)
+          }}
+          className={`mobile-workspace-tab inline-flex items-center justify-center gap-1.5${clubToolsExpanded ? ' active' : ''}`}
         >
           <span aria-hidden="true" className="text-base leading-none">☰</span>
           <span>Tools</span>
@@ -774,65 +1030,78 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         ] as const).map(([view, label]) => (
           <button
             key={view}
+            id={`club-${view}-view-control`}
             data-tour={view === 'standings' ? 'standings-tab' : undefined}
             type="button"
-            onClick={() => setMobileView(view)}
-            aria-pressed={mobileView === view}
-            className={mobileView === view ? 'mobile-workspace-tab active' : 'mobile-workspace-tab'}
+            onClick={() => showMobileView(view)}
+            aria-controls={view === 'session' ? 'club-session-view' : 'club-leaderboard-view'}
+            aria-pressed={!clubToolsExpanded && mobileView === view}
+            className={!clubToolsExpanded && mobileView === view ? 'mobile-workspace-tab active' : 'mobile-workspace-tab'}
           >
             {label}
           </button>
         ))}
       </nav>
 
-      <div ref={clubDashboardRef} className={`club-workspace-dashboard-grid grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_460px]${clubModalOpen ? ' is-modal-covered' : ''}`} aria-hidden={clubModalOpen || undefined}>
-        <div className="flex min-w-0 flex-col gap-6">
-          {joinRequestNotice ? (
-            <div role={joinRequestNotice.error ? 'alert' : 'status'} aria-live={joinRequestNotice.error ? 'assertive' : 'polite'} className={`rounded-lg border px-4 py-3 text-sm font-bold shadow-sm ${joinRequestNotice.error ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
-              {joinRequestNotice.message}
-            </div>
-          ) : null}
-          {isManager && joinRequests.length > 0 ? (
-            <section className="rounded-lg border border-amber-200 bg-amber-50 p-5">
-              <h3 className="text-sm font-black uppercase tracking-[0.16em] text-amber-800">Join requests</h3>
-              <div className="mt-4 space-y-3">
-                {joinRequests.map((request) => (
-                  <div key={request.uid} className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="font-bold text-slate-950">{request.displayName ?? request.email ?? 'Unknown user'}</p>
-                      <p className="text-sm text-slate-500">{request.email}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => approveRequest(request, false)} disabled={joiningAction === request.uid} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-700 disabled:opacity-50">
-                        Decline
-                      </button>
-                      <button type="button" onClick={() => approveRequest(request, true)} disabled={joiningAction === request.uid} className="rounded-lg bg-amber-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-50">
-                        Accept
-                      </button>
-                    </div>
+      <div ref={clubDashboardRef} className={`club-workspace-dashboard-grid${clubModalOpen ? ' is-modal-covered' : ''}`} aria-hidden={clubModalOpen || undefined}>
+        <div ref={mobilePanelsRef} className="club-mobile-panels-viewport">
+          <div className="club-mobile-panels-track">
+            <aside
+              ref={sessionPanelRef}
+              id="club-session-view"
+              className="club-mobile-panel club-session-panel"
+              aria-labelledby="club-session-view-control"
+              aria-hidden={isMobileViewport && (clubToolsExpanded || mobileView !== 'session') ? true : undefined}
+            >
+              {viewingHistoricalCompetition ? (
+                <section className="rounded-lg border border-amber-200 bg-amber-50 p-5 text-amber-950">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-700">{viewingAllCompetitions ? 'Club history' : `Historical ${selectedCompetition?.kind === 'tournament' ? 'tournament' : 'season'}`}</p>
+                  <h2 className="mt-2 text-lg font-black">{viewingAllCompetitions ? 'All seasons combined' : `${selectedCompetition?.name ?? `Season ${selectedSeasonNumber}`} is read-only`}</h2>
+                  <p className="mt-1 text-sm leading-6 text-amber-900">{viewingAllCompetitions ? 'Leaderboard and analytics combine every regular season and tournament in this club.' : `Standings and analytics show ${selectedCompetition?.name ?? `Season ${selectedSeasonNumber}`}.`} Return to {activeCompetition?.name ?? `Season ${activeSeasonNumber}`} to manage the current session.</p>
+                  <button type="button" onClick={() => changeSeason(String(activeSeasonNumber))} className="mt-4 min-h-10 rounded border border-amber-300 bg-white px-3 text-sm font-bold text-amber-900">Return to current</button>
+                </section>
+              ) : (
+                <SessionManager clubId={clubId} seasonNumber={activeSeasonNumber} players={players} isManager={isManager} scoringRules={scoringRules} onAddPlayer={() => openRoster(true)} />
+              )}
+            </aside>
+
+            <section
+              ref={leaderboardPanelRef}
+              id="club-leaderboard-view"
+              className="club-mobile-panel club-leaderboard-panel"
+              aria-labelledby="club-standings-view-control"
+              aria-hidden={isMobileViewport && (clubToolsExpanded || mobileView !== 'standings') ? true : undefined}
+            >
+              <div className="flex min-w-0 flex-col gap-6">
+                {joinRequestNotice ? (
+                  <div role={joinRequestNotice.error ? 'alert' : 'status'} aria-live={joinRequestNotice.error ? 'assertive' : 'polite'} className={`rounded-lg border px-4 py-3 text-sm font-bold shadow-sm ${joinRequestNotice.error ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
+                    {joinRequestNotice.message}
                   </div>
-                ))}
+                ) : null}
+                {isManager && joinRequests.length > 0 ? (
+                  <section className="rounded-lg border border-amber-200 bg-amber-50 p-5">
+                    <h3 className="text-sm font-black uppercase tracking-[0.16em] text-amber-800">Join requests</h3>
+                    <div className="mt-4 space-y-3">
+                      {joinRequests.map((request) => (
+                        <div key={request.uid} className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="font-bold text-slate-950">{request.displayName ?? request.email ?? 'Unknown user'}</p>
+                            <p className="text-sm text-slate-500">{request.email}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => approveRequest(request, false)} disabled={joiningAction === request.uid} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-700 disabled:opacity-50">Decline</button>
+                            <button type="button" onClick={() => approveRequest(request, true)} disabled={joiningAction === request.uid} className="rounded-lg bg-amber-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-50">Accept</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+                <LeaderboardPanel clubId={clubId} seasonNumber={selectedSeasonNumber} scopeLabel={viewingAllCompetitions ? 'all seasons and tournaments' : selectedCompetition?.name} players={players} stats={playerStats} titleRules={titleRules} activePlayerMonths={activitySettings.activePlayerMonths} onPlayerAnalytics={(playerId) => { setAnalyticsPlayerId(playerId); setAnalyticsOpen(true) }} />
               </div>
             </section>
-          ) : null}
-
-          <div className={mobileView === 'standings' ? 'block md:block' : 'hidden md:block'}>
-            <LeaderboardPanel clubId={clubId} seasonNumber={selectedSeasonNumber} scopeLabel={viewingAllCompetitions ? 'all seasons and tournaments' : selectedCompetition?.name} players={players} stats={playerStats} titleRules={titleRules} activePlayerMonths={activitySettings.activePlayerMonths} onPlayerAnalytics={(playerId) => { setAnalyticsPlayerId(playerId); setAnalyticsOpen(true) }} />
           </div>
         </div>
-
-        <aside className={mobileView === 'session' ? 'club-session-panel order-first block md:block xl:order-none' : 'club-session-panel order-first hidden md:block xl:order-none'}>
-          {viewingHistoricalCompetition ? (
-            <section className="rounded-lg border border-amber-200 bg-amber-50 p-5 text-amber-950">
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-700">{viewingAllCompetitions ? 'Club history' : `Historical ${selectedCompetition?.kind === 'tournament' ? 'tournament' : 'season'}`}</p>
-              <h2 className="mt-2 text-lg font-black">{viewingAllCompetitions ? 'All seasons combined' : `${selectedCompetition?.name ?? `Season ${selectedSeasonNumber}`} is read-only`}</h2>
-              <p className="mt-1 text-sm leading-6 text-amber-900">{viewingAllCompetitions ? 'Leaderboard and analytics combine every regular season and tournament in this club.' : `Standings and analytics show ${selectedCompetition?.name ?? `Season ${selectedSeasonNumber}`}.`} Return to {activeCompetition?.name ?? `Season ${activeSeasonNumber}`} to manage the current session.</p>
-              <button type="button" onClick={() => changeSeason(String(activeSeasonNumber))} className="mt-4 min-h-10 rounded border border-amber-300 bg-white px-3 text-sm font-bold text-amber-900">Return to current</button>
-            </section>
-          ) : (
-            <SessionManager clubId={clubId} seasonNumber={activeSeasonNumber} players={players} isManager={isManager} scoringRules={scoringRules} onAddPlayer={() => openRoster(true)} />
-          )}
-        </aside>
       </div>
 
         </div>

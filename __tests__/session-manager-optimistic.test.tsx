@@ -2,10 +2,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PlayerDoc, SessionDoc } from '@/lib/types'
 
-const { playMock, subscribeActiveSessionMock, tableActionMock } = vi.hoisted(() => ({
+const { playMock, subscribeActiveSessionMock, tableActionMock, updateSessionMock } = vi.hoisted(() => ({
   playMock: vi.fn(),
   subscribeActiveSessionMock: vi.fn(),
   tableActionMock: vi.fn(),
+  updateSessionMock: vi.fn(),
 }))
 
 const players = [
@@ -39,7 +40,7 @@ vi.mock('@/lib/data', () => ({
   createSession: vi.fn(),
   subscribeActiveSession: subscribeActiveSessionMock,
   subscribePlayers: vi.fn(() => () => undefined),
-  updateSession: vi.fn(),
+  updateSession: updateSessionMock,
 }))
 vi.mock('@/lib/table-checkin-client', () => ({
   getQrEnrollmentSetting: vi.fn(),
@@ -56,6 +57,7 @@ describe('session manager optimistic table changes', () => {
     vi.unstubAllGlobals()
     playMock.mockReset()
     tableActionMock.mockReset()
+    updateSessionMock.mockReset()
     subscribeActiveSessionMock.mockReset()
   })
 
@@ -79,9 +81,9 @@ describe('session manager optimistic table changes', () => {
 
     await screen.findByRole('button', { name: 'Move Jane to the sideline' })
     const singleTableCollection = screen.getByRole('list', { name: 'Session tables' })
-    expect(singleTableCollection.className).toContain('is-list')
+    expect(singleTableCollection.className).toBe('tables-container')
     expect(singleTableCollection.getAttribute('aria-describedby')).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Show all' })).toBeNull()
+    expect(screen.queryByText('Swipe to browse')).toBeNull()
     expect(document.querySelector('.sideline-toggle')?.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(await screen.findByRole('button', { name: 'Move Jane to the sideline' }))
 
@@ -111,8 +113,8 @@ describe('session manager optimistic table changes', () => {
   it('keeps the signed-in player table open in a large session', async () => {
     const largeSession = {
       ...activeSession,
-      tableCount: 6,
-      tables: { '1': [], '2': [], '3': [], '4': ['jane'], '5': [], '6': [] },
+      tableCount: 8,
+      tables: { '1': [], '2': [], '3': [], '4': ['jane'], '5': [], '6': [], '7': [], '8': [] },
     } as unknown as SessionDoc
     subscribeActiveSessionMock.mockImplementation(
       (_clubId: string, _seasonNumber: number, onValue: (session: SessionDoc) => void) => {
@@ -131,119 +133,25 @@ describe('session manager optimistic table changes', () => {
     expect(currentTableJump.getAttribute('aria-pressed')).toBe('true')
 
     const tableCollection = screen.getByRole('list', { name: 'Session tables' })
-    expect(tableCollection.className).toContain('is-carousel')
-    expect(screen.getByText('Table 4 · 4 of 6')).not.toBeNull()
+    expect(tableCollection.className).toBe('tables-container')
+    expect(screen.getAllByRole('listitem', { name: /Table \d/ })).toHaveLength(8)
+    const jumpStrip = document.querySelector('.session-table-jumps')
+    const tableControls = document.querySelector('.session-mobile-table-controls')
+    if (!jumpStrip || !tableControls) throw new Error('Expected the mobile table navigation controls')
+    expect(jumpStrip.querySelectorAll('button')).toHaveLength(8)
+    expect(tableControls.getAttribute('aria-label')).toBe('Change the number of session tables')
+    expect(tableControls.parentElement?.className).toBe('session-mobile-table-toolbar')
+    expect(tableControls.parentElement?.parentElement).toBe(jumpStrip?.parentElement)
+    expect(screen.queryByText('Swipe to browse')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Show all' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Swipe view' })).toBeNull()
 
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search tables or players' }), { target: { value: 'Jane' } })
-    await waitFor(() => expect(tableCollection.className).toContain('is-list'))
-    expect(tableCollection.getAttribute('aria-describedby')).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Show all' })).toBeNull()
+    await waitFor(() => expect(screen.getAllByRole('listitem', { name: /Table \d/ })).toHaveLength(1))
+    expect(tableCollection.className).toBe('tables-container')
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear table search' }))
-    await waitFor(() => expect(tableCollection.className).toContain('is-carousel'))
-    fireEvent.click(screen.getByRole('button', { name: 'Show all' }))
-    expect(tableCollection.className).toContain('is-list')
-    expect(screen.getByRole('button', { name: 'Swipe view' })).not.toBeNull()
-  }, 10_000)
-
-  it('updates the active table when the mobile table rail snaps', async () => {
-    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
-      matches: query === '(max-width: 767px)',
-      media: query,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    })))
-    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
-      return window.setTimeout(() => callback(performance.now()), 0)
-    })
-    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation((handle) => window.clearTimeout(handle))
-    const originalScrollTo = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollTo')
-    Object.defineProperty(HTMLElement.prototype, 'scrollTo', { configurable: true, value: vi.fn() })
-
-    const largeSession = {
-      ...activeSession,
-      tableCount: 6,
-      tables: { '1': [], '2': [], '3': [], '4': ['jane'], '5': [], '6': [] },
-    } as unknown as SessionDoc
-    subscribeActiveSessionMock.mockImplementation(
-      (_clubId: string, _seasonNumber: number, onValue: (session: SessionDoc) => void) => {
-        onValue(largeSession)
-        return () => undefined
-      },
-    )
-
-    try {
-      render(<SessionManager clubId="TEST" seasonNumber={1} players={players} />)
-      expect(await screen.findByRole('button', { name: 'My table 4' })).not.toBeNull()
-      const rail = await screen.findByRole('list', { name: 'Session tables' })
-      await waitFor(() => expect(rail.querySelectorAll<HTMLElement>('[data-table-id]')).toHaveLength(6))
-      Object.defineProperty(rail, 'scrollLeft', { configurable: true, value: 360 })
-      rail.querySelectorAll<HTMLElement>('[data-table-id]').forEach((card) => {
-        const position = Number(card.dataset.tableId)
-        Object.defineProperty(card, 'offsetLeft', {
-          configurable: true,
-          value: (position - 1) * 360,
-        })
-      })
-
-      fireEvent.scroll(rail)
-
-      await waitFor(() => expect(screen.getByRole('button', { name: /Jump to Table 2/i }).getAttribute('aria-pressed')).toBe('true'))
-      expect(screen.getByText('Table 2 · 2 of 6')).not.toBeNull()
-    } finally {
-      if (originalScrollTo) Object.defineProperty(HTMLElement.prototype, 'scrollTo', originalScrollTo)
-      else delete (HTMLElement.prototype as Partial<HTMLElement>).scrollTo
-    }
-  }, 10_000)
-
-  it('centers the active table when the viewport rotates into the mobile layout', async () => {
-    const mobileLayoutChanges: Array<() => void> = []
-    const mobileQuery = {
-      matches: false,
-      media: '(max-width: 767px)',
-      addEventListener: vi.fn((_type: string, listener: () => void) => { mobileLayoutChanges.push(listener) }),
-      removeEventListener: vi.fn(),
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-    }
-    vi.stubGlobal('matchMedia', vi.fn((query: string) => query === mobileQuery.media
-      ? mobileQuery
-      : { ...mobileQuery, matches: false, media: query }))
-    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
-      return window.setTimeout(() => callback(performance.now()), 0)
-    })
-    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation((handle) => window.clearTimeout(handle))
-    const originalScrollTo = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollTo')
-    const scrollTo = vi.fn()
-    Object.defineProperty(HTMLElement.prototype, 'scrollTo', { configurable: true, value: scrollTo })
-
-    const largeSession = {
-      ...activeSession,
-      tableCount: 6,
-      tables: { '1': [], '2': [], '3': [], '4': ['jane'], '5': [], '6': [] },
-    } as unknown as SessionDoc
-    subscribeActiveSessionMock.mockImplementation(
-      (_clubId: string, _seasonNumber: number, onValue: (session: SessionDoc) => void) => {
-        onValue(largeSession)
-        return () => undefined
-      },
-    )
-
-    try {
-      render(<SessionManager clubId="TEST" seasonNumber={1} players={players} />)
-      expect(await screen.findByRole('button', { name: 'My table 4' })).not.toBeNull()
-      const activeCard = await screen.findByRole('listitem', { name: /Table 4.*your table/i })
-      Object.defineProperty(activeCard, 'offsetLeft', { configurable: true, value: 1080 })
-      expect(scrollTo).not.toHaveBeenCalled()
-
-      mobileQuery.matches = true
-      mobileLayoutChanges[0]?.()
-
-      await waitFor(() => expect(scrollTo).toHaveBeenCalledWith({ left: 1080, behavior: 'auto' }))
-    } finally {
-      if (originalScrollTo) Object.defineProperty(HTMLElement.prototype, 'scrollTo', originalScrollTo)
-      else delete (HTMLElement.prototype as Partial<HTMLElement>).scrollTo
-    }
+    await waitFor(() => expect(screen.getAllByRole('listitem', { name: /Table \d/ })).toHaveLength(8))
   }, 10_000)
 
   it('opens the roster add-player flow from the session actions menu', async () => {
@@ -262,5 +170,89 @@ describe('session manager optimistic table changes', () => {
 
     expect(onAddPlayer).toHaveBeenCalledOnce()
     expect(screen.queryByRole('dialog', { name: 'Session actions' })).toBeNull()
+  })
+
+  it('adds and safely removes session tables from the compact controls', async () => {
+    const twoTableSession = {
+      ...activeSession,
+      tableCount: 2,
+      tables: { '1': ['jane'], '2': ['bob'] },
+      sideline: [],
+    } as unknown as SessionDoc
+    subscribeActiveSessionMock.mockImplementation(
+      (_clubId: string, _seasonNumber: number, onValue: (session: SessionDoc) => void) => {
+        onValue(twoTableSession)
+        return () => undefined
+      },
+    )
+    updateSessionMock.mockResolvedValue(undefined)
+
+    render(<SessionManager clubId="TEST" seasonNumber={1} players={players} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Add a table', hidden: true }))
+    await waitFor(() => expect(updateSessionMock).toHaveBeenLastCalledWith(
+      'TEST',
+      'session-1',
+      expect.objectContaining({ tableCount: 3, tables: expect.objectContaining({ '3': [] }) }),
+    ))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove the last table', hidden: true }))
+    await waitFor(() => expect(updateSessionMock).toHaveBeenLastCalledWith(
+      'TEST',
+      'session-1',
+      expect.objectContaining({ tableCount: 2 }),
+    ))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove the last table', hidden: true }))
+    await waitFor(() => expect(updateSessionMock).toHaveBeenLastCalledWith(
+      'TEST',
+      'session-1',
+      expect.objectContaining({
+        tableCount: 1,
+        tables: { '1': ['jane'] },
+        sideline: ['bob'],
+      }),
+    ))
+  })
+
+  it('restores the setup table count when a compact table change fails', async () => {
+    const twoTableSession = {
+      ...activeSession,
+      tableCount: 2,
+      tables: { '1': ['jane'], '2': ['bob'] },
+      sideline: [],
+    } as unknown as SessionDoc
+    subscribeActiveSessionMock.mockImplementation(
+      (_clubId: string, _seasonNumber: number, onValue: (session: SessionDoc) => void) => {
+        onValue(twoTableSession)
+        return () => undefined
+      },
+    )
+    updateSessionMock.mockRejectedValue(new Error('Save failed'))
+
+    render(<SessionManager clubId="TEST" seasonNumber={1} players={players} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Add a table', hidden: true }))
+    await screen.findByText('Save failed')
+    fireEvent.click(screen.getByRole('button', { name: 'Session actions' }))
+    fireEvent.click(screen.getByRole('button', { name: /Edit Session/i }))
+
+    expect((screen.getByRole('spinbutton', { name: 'Number of tables', hidden: true }) as HTMLInputElement).value).toBe('2')
+  })
+
+  it('opens the roster add-player flow from the explicit mobile control', async () => {
+    const onAddPlayer = vi.fn()
+    subscribeActiveSessionMock.mockImplementation(
+      (_clubId: string, _seasonNumber: number, onValue: (session: SessionDoc) => void) => {
+        onValue(activeSession)
+        return () => undefined
+      },
+    )
+
+    render(<SessionManager clubId="TEST" seasonNumber={1} players={players} onAddPlayer={onAddPlayer} />)
+
+    await screen.findByRole('button', { name: 'Session actions' })
+    fireEvent.click(screen.getByLabelText('Add a new player', { selector: 'button' }))
+    expect(onAddPlayer).toHaveBeenCalledOnce()
   })
 })

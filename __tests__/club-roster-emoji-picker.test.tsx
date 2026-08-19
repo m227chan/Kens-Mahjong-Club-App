@@ -58,6 +58,7 @@ vi.mock('@/components/NetworkGraphModal', () => ({ default: () => null }))
 vi.mock('@/components/ScoringRulesSettings', () => ({ default: () => null }))
 vi.mock('@/components/TitleRulesSettings', () => ({ default: () => null }))
 vi.mock('@/components/ActivitySettings', () => ({ default: () => null }))
+vi.mock('embla-carousel-react', () => ({ default: () => [vi.fn(), undefined] }))
 vi.mock('@/components/ClubToolSidebar', () => ({
   default: ({ onRoster }: { onRoster: () => void }) => <button type="button" onClick={onRoster}>Open roster</button>,
 }))

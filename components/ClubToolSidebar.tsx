@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 
 type ClubToolSidebarProps = {
   expanded: boolean
   onExpandedChange: (value: boolean) => void
+  mobileReturnFocusRef?: RefObject<HTMLButtonElement | null>
   rosterOpen: boolean
   analyticsOpen: boolean
   gameLogsOpen: boolean
@@ -50,6 +51,7 @@ function DrawerIcon({ expanded }: { expanded: boolean }) {
 export default function ClubToolSidebar({
   expanded,
   onExpandedChange,
+  mobileReturnFocusRef,
   rosterOpen,
   analyticsOpen,
   gameLogsOpen,
@@ -92,9 +94,12 @@ export default function ClubToolSidebar({
   }, [expanded, mobileDrawer])
 
   useEffect(() => {
-    if (previouslyExpanded.current && !expanded) toggleRef.current?.focus()
+    if (previouslyExpanded.current && !expanded) {
+      if (mobileDrawer) mobileReturnFocusRef?.current?.focus({ preventScroll: true })
+      else toggleRef.current?.focus({ preventScroll: true })
+    }
     previouslyExpanded.current = expanded
-  }, [expanded])
+  }, [expanded, mobileDrawer, mobileReturnFocusRef])
 
   const toolGroups = [
     {

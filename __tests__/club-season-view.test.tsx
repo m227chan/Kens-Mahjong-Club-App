@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Timestamp } from '@/lib/timestamp'
 import type { ClubMembershipDoc } from '@/lib/types'
@@ -52,6 +52,73 @@ vi.mock('@/components/NetworkGraphModal', () => ({ default: () => null }))
 vi.mock('@/components/ScoringRulesSettings', () => ({ default: () => null }))
 vi.mock('@/components/TitleRulesSettings', () => ({ default: () => null }))
 vi.mock('@/components/ActivitySettings', () => ({ default: () => null }))
+const emblaMock = vi.hoisted(() => {
+  type Handler = (api: unknown, event: string) => void
+  const handlers = new Map<string, Set<Handler>>()
+  let selected = 0
+  let progress = 0
+  let viewportNode: HTMLElement | null = null
+  const api = {} as {
+    on: ReturnType<typeof vi.fn>
+    off: ReturnType<typeof vi.fn>
+    scrollTo: ReturnType<typeof vi.fn>
+    selectedScrollSnap: ReturnType<typeof vi.fn>
+    scrollProgress: ReturnType<typeof vi.fn>
+    containerNode: ReturnType<typeof vi.fn>
+    slideNodes: ReturnType<typeof vi.fn>
+  }
+  const emit = (event: string) => {
+    handlers.get(event)?.forEach((handler) => handler(api, event))
+  }
+  api.on = vi.fn((event: string, handler: Handler) => {
+    const eventHandlers = handlers.get(event) ?? new Set<Handler>()
+    eventHandlers.add(handler)
+    handlers.set(event, eventHandlers)
+    return api
+  })
+  api.off = vi.fn((event: string, handler: Handler) => {
+    handlers.get(event)?.delete(handler)
+    return api
+  })
+  api.scrollTo = vi.fn((index: number) => {
+    emit('pointerDown')
+    selected = index
+    progress = index
+    emit('scroll')
+    emit('select')
+    emit('settle')
+  })
+  api.selectedScrollSnap = vi.fn(() => selected)
+  api.scrollProgress = vi.fn(() => progress)
+  api.containerNode = vi.fn(() => viewportNode?.firstElementChild as HTMLElement)
+  api.slideNodes = vi.fn(() => Array.from(viewportNode?.querySelectorAll<HTMLElement>('.club-mobile-panel') ?? []))
+
+  return {
+    api,
+    viewportRef: vi.fn((node: HTMLElement | null) => { viewportNode = node }),
+    reset() {
+      handlers.clear()
+      selected = 0
+      progress = 0
+      viewportNode = null
+    },
+    dragTo(index: number, intermediateProgress = index) {
+      emit('pointerDown')
+      progress = intermediateProgress
+      emit('scroll')
+      selected = index
+      progress = index
+      emit('select')
+      emit('settle')
+    },
+    setProgress(value: number) {
+      progress = value
+      emit('scroll')
+    },
+    emit,
+  }
+})
+vi.mock('embla-carousel-react', () => ({ default: () => [emblaMock.viewportRef, emblaMock.api] }))
 vi.mock('@/components/ClubToolSidebar', () => ({
   default: ({ expanded, onAnalytics, onExpandedChange, onSettings }: { expanded: boolean; onAnalytics: () => void; onExpandedChange: (value: boolean) => void; onSettings: () => void }) => <>
     <output data-testid="club-sidebar-expanded">{String(expanded)}</output>
@@ -76,9 +143,16 @@ const membership = {
 
 const managerMembership = { ...membership, role: 'manager' as const }
 
+function swipe(element: Element, from: { x: number; y: number }, to: { x: number; y: number }) {
+  fireEvent.touchStart(element, { touches: [{ clientX: from.x, clientY: from.y }] })
+  fireEvent.touchMove(element, { touches: [{ clientX: to.x, clientY: to.y }] })
+  fireEvent.touchEnd(element, { changedTouches: [{ clientX: to.x, clientY: to.y }] })
+}
+
 describe('club season navigation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    emblaMock.reset()
     window.localStorage.clear()
     vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
       matches: query === '(min-width: 768px)',
@@ -115,6 +189,153 @@ describe('club season navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open club tools' }))
 
     expect(screen.getByTestId('club-sidebar-expanded').textContent).toBe('true')
+  })
+
+  it('keeps the glass selector and swipeable panels synchronized on mobile', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query === '(max-width: 767px)',
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })))
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+
+    const workspace = document.querySelector('.club-workspace-shell')
+    expect(workspace).not.toBeNull()
+    const sessionButton = screen.getByRole('button', { name: 'Session' })
+    const leaderboardButton = screen.getByRole('button', { name: 'Leaderboard' })
+    const toolsButton = screen.getByRole('button', { name: 'Open club tools' })
+    const sessionPanel = document.querySelector('#club-session-view')!
+    const leaderboardPanel = document.querySelector('#club-leaderboard-view')!
+
+    expect(sessionButton.getAttribute('aria-pressed')).toBe('true')
+    expect(sessionPanel.hasAttribute('inert')).toBe(false)
+    expect(leaderboardPanel.hasAttribute('inert')).toBe(true)
+    expect(screen.getByRole('option', { name: 'Season 2' })).toBeTruthy()
+    expect(screen.queryByRole('option', { name: 'Season 2 (current)' })).toBeNull()
+
+    act(() => emblaMock.dragTo(1))
+    expect(leaderboardButton.getAttribute('aria-pressed')).toBe('true')
+    expect(sessionPanel.hasAttribute('inert')).toBe(true)
+    expect(leaderboardPanel.hasAttribute('inert')).toBe(false)
+
+    fireEvent.click(sessionButton)
+    expect(emblaMock.api.scrollTo).toHaveBeenLastCalledWith(0)
+    expect(sessionButton.getAttribute('aria-pressed')).toBe('true')
+
+    swipe(workspace!, { x: 120, y: 200 }, { x: 300, y: 205 })
+    expect(screen.getByTestId('club-sidebar-expanded').textContent).toBe('true')
+    expect(toolsButton.className).toContain('active')
+    expect(sessionButton.getAttribute('aria-pressed')).toBe('false')
+
+    swipe(workspace!, { x: 300, y: 200 }, { x: 120, y: 205 })
+    expect(screen.getByTestId('club-sidebar-expanded').textContent).toBe('false')
+    expect(sessionButton.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('moves the glass indicator with the panel drag and lets it settle', () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query === '(max-width: 767px)',
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })))
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+
+    const navigation = document.querySelector<HTMLElement>('.mobile-workspace-tabs')!
+    const controls = navigation.querySelectorAll<HTMLElement>('.mobile-workspace-tab')
+    Object.defineProperty(controls[0], 'offsetLeft', { configurable: true, value: 0 })
+    Object.defineProperty(controls[1], 'offsetLeft', { configurable: true, value: 100 })
+    Object.defineProperty(controls[2], 'offsetLeft', { configurable: true, value: 200 })
+
+    act(() => {
+      emblaMock.emit('pointerDown')
+      emblaMock.setProgress(.5)
+    })
+    expect(navigation.getAttribute('data-carousel-moving')).toBe('true')
+    expect(navigation.style.getPropertyValue('--mobile-workspace-indicator-x')).toBe('150px')
+
+    act(() => emblaMock.emit('settle'))
+    expect(navigation.hasAttribute('data-carousel-moving')).toBe(false)
+  })
+
+  it('keeps the mobile viewport fitted to the active panel as its content changes', () => {
+    let notifyResize: (() => void) | null = null
+    class MockResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        notifyResize = () => callback([], this as unknown as ResizeObserver)
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal('ResizeObserver', MockResizeObserver)
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query === '(max-width: 767px)',
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })))
+    const requestAnimationFrame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callback(0)
+      return 1
+    })
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+
+    const track = document.querySelector<HTMLElement>('.club-mobile-panels-track')!
+    const sessionPanel = document.querySelector<HTMLElement>('#club-session-view')!
+    const leaderboardPanel = document.querySelector<HTMLElement>('#club-leaderboard-view')!
+    Object.defineProperty(sessionPanel, 'scrollHeight', { configurable: true, value: 720 })
+    Object.defineProperty(leaderboardPanel, 'scrollHeight', { configurable: true, value: 480 })
+
+    act(() => { notifyResize?.() })
+    expect(track.style.height).toBe('720px')
+
+    act(() => emblaMock.dragTo(1))
+    expect(track.style.height).toBe('480px')
+    requestAnimationFrame.mockRestore()
+  })
+
+  it('does not turn vertical, short, interactive, or desktop gestures into workspace navigation', () => {
+    const matchMedia = vi.fn((query: string) => ({
+      matches: query === '(max-width: 767px)',
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }))
+    vi.stubGlobal('matchMedia', matchMedia)
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+
+    const workspace = document.querySelector('.club-workspace-shell')!
+    const sessionButton = screen.getByRole('button', { name: 'Session' })
+    const leaderboardButton = screen.getByRole('button', { name: 'Leaderboard' })
+
+    swipe(workspace, { x: 250, y: 100 }, { x: 230, y: 240 })
+    swipe(workspace, { x: 250, y: 100 }, { x: 210, y: 105 })
+    swipe(sessionButton, { x: 250, y: 100 }, { x: 100, y: 105 })
+    expect(sessionButton.getAttribute('aria-pressed')).toBe('true')
+
+    matchMedia.mockImplementation((query: string) => ({
+      matches: query === '(min-width: 768px)',
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }))
+    swipe(workspace, { x: 250, y: 100 }, { x: 100, y: 105 })
+    expect(leaderboardButton.getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('keeps both workspace panels available on desktop', () => {
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+
+    const sessionPanel = document.querySelector('#club-session-view')!
+    const leaderboardPanel = document.querySelector('#club-leaderboard-view')!
+    expect(sessionPanel.hasAttribute('aria-hidden')).toBe(false)
+    expect(sessionPanel.hasAttribute('inert')).toBe(false)
+    expect(leaderboardPanel.hasAttribute('aria-hidden')).toBe(false)
+    expect(leaderboardPanel.hasAttribute('inert')).toBe(false)
+    expect(screen.getByTestId('session-season')).toBeTruthy()
+    expect(screen.getByTestId('leaderboard-season')).toBeTruthy()
   })
 
   it('lets any member view a historical season without changing the live club season', async () => {

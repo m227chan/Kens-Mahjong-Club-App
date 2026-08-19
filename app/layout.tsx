@@ -61,7 +61,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 >
                   <BrandLockup className="brand-lockup-header" showDescriptor />
                 </Link>
-                <div className="flex items-center gap-2">
+                <div className="club-header-actions flex items-center gap-2">
                   <WikiHeaderLink />
                   <AppGuide />
                   <UserSettings />
