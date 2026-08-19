@@ -1341,7 +1341,7 @@ html.dark .club-tool-sidebar-panel { box-shadow: inset 0 1px 0 rgb(238 231 207 /
   .club-tool-sidebar.is-expanded .club-tool-sidebar-group-label { padding-inline: .68rem; }
   .club-tool-sidebar.is-expanded .club-tool-sidebar-backdrop { display: block; position: fixed; inset: 0; z-index: 70; border: 0; border-radius: 0; background: rgb(2 10 8 / .58); backdrop-filter: blur(3px); }
   .club-tool-sidebar:not(.is-expanded) .club-tool-sidebar-action::after { display: none; }
-  .club-workspace-header { min-height: 0; margin-bottom: .65rem; padding: .7rem !important; }
+  .club-workspace-header { min-height: 0; margin-bottom: .65rem; padding: 1rem .7rem .7rem !important; }
   .club-workspace-header > .club-workspace-heading { width: 100%; flex: 0 1 auto; flex-direction: column; align-items: flex-start; gap: .45rem; }
   .club-workspace-header h1 { flex: 0 1 auto; padding-right: 0; border-right: 0; overflow: visible; font-size: 1.15rem; line-height: 1.3; overflow-wrap: anywhere; text-align: left; text-overflow: clip; white-space: normal; }
   .club-header-roster-summary { margin-top: 0; }
