@@ -1,4 +1,5 @@
-import type { GameDoc, PlayerDoc, PlayerStatsDoc } from '@/lib/types'
+import type { GameDoc, PlayerDoc, PlayerStatsDoc, SkillEventDoc } from '@/lib/types'
+import { calculateSkillRound, initialSkillState } from '@/lib/skill-rating'
 
 export type StandingsDatePreset = 'all' | '30d' | '3m' | 'ytd' | 'custom'
 
@@ -18,6 +19,15 @@ export interface AggregatedPlayerGameStats {
   draws: number
   lastPlayedAt: Date | null
   pointTrend: number[]
+}
+
+export interface PlayerCompetitionRecords {
+  maximumCumulativePoints: number | null
+  minimumCumulativePoints: number | null
+  highestSingleGameWin: number | null
+  worstSingleGameLoss: number | null
+  peakSkillRating: number | null
+  lowestSkillRating: number | null
 }
 
 export function subtractCalendarMonths(date: Date, months: number) {
@@ -97,6 +107,174 @@ export function aggregatePlayerGames(games: GameDoc[], trendLength = 10) {
   })
 
   return rows
+}
+
+export function combinedCompetitionSkillEvents(games: GameDoc[]): SkillEventDoc[] {
+  const states = new Map<string, ReturnType<typeof initialSkillState>>()
+  const events: SkillEventDoc[] = []
+  const ordered = [...games].sort((left, right) =>
+    gameDate(left).getTime() - gameDate(right).getTime() || left.id.localeCompare(right.id),
+  )
+
+  ordered.forEach((game) => {
+    const results = calculateSkillRound(game.entries.map((entry) => ({
+      ...entry,
+      ...(states.get(entry.playerId) ?? initialSkillState()),
+    })))
+    results.forEach((result) => {
+      states.set(result.playerId, {
+        mu: result.mu,
+        sigma: result.sigma,
+        gamesPlayed: result.gamesPlayed,
+      })
+      events.push({
+        id: `all_${game.id}_${result.playerId}`,
+        gameId: game.id,
+        playerId: result.playerId,
+        datetime: game.datetime,
+        seasonNumber: game.seasonNumber,
+        ratingBefore: result.ratingBefore,
+        ratingAfter: result.ratingAfter,
+        delta: result.delta,
+        mu: result.mu,
+        sigma: result.sigma,
+      })
+    })
+  })
+
+  return events
+}
+
+export function aggregateAllCompetitionStats(games: GameDoc[]): PlayerStatsDoc[] {
+  const ordered = [...games].sort((left, right) =>
+    gameDate(left).getTime() - gameDate(right).getTime() || left.id.localeCompare(right.id),
+  )
+  const skillEvents = combinedCompetitionSkillEvents(ordered)
+  const skillByPlayer = new Map<string, SkillEventDoc[]>()
+  skillEvents.forEach((event) => skillByPlayer.set(event.playerId, [...(skillByPlayer.get(event.playerId) ?? []), event]))
+  const accumulators = new Map<string, {
+    totalPoints: number
+    gamesPlayed: number
+    gamesWon: number
+    gamesLost: number
+    scores: number[]
+    recentPointTrend: number[]
+    attendanceDays: Set<string>
+    lastGame: GameDoc
+  }>()
+
+  ordered.forEach((game) => {
+    const day = gameDate(game).toISOString().slice(0, 10)
+    game.entries.forEach((entry) => {
+      const current = accumulators.get(entry.playerId) ?? {
+        totalPoints: 0,
+        gamesPlayed: 0,
+        gamesWon: 0,
+        gamesLost: 0,
+        scores: [],
+        recentPointTrend: [],
+        attendanceDays: new Set<string>(),
+        lastGame: game,
+      }
+      current.totalPoints += entry.score
+      current.gamesPlayed += 1
+      if (entry.score > 0) current.gamesWon += 1
+      if (entry.score < 0) current.gamesLost += 1
+      current.scores.push(entry.score)
+      current.recentPointTrend = [...current.recentPointTrend, current.totalPoints].slice(-10)
+      current.attendanceDays.add(day)
+      current.lastGame = game
+      accumulators.set(entry.playerId, current)
+    })
+  })
+
+  const initial = initialSkillState()
+  const rows = [...accumulators].map(([playerId, value]): PlayerStatsDoc => {
+    const playerEvents = skillByPlayer.get(playerId) ?? []
+    const latestSkill = playerEvents.at(-1)
+    const recentSkillDeltas = playerEvents.slice(-5).map((event) => event.delta)
+    const skillRating = latestSkill?.ratingAfter ?? 1500
+    const skillPeak = playerEvents.length
+      ? Math.max(...playerEvents.flatMap((event) => [event.ratingBefore, event.ratingAfter]))
+      : 1500
+    const lastPlayedAt = gameDate(value.lastGame).toISOString().slice(0, 10)
+    return {
+      id: `all_${playerId}`,
+      playerId,
+      totalPoints: value.totalPoints,
+      gamesPlayed: value.gamesPlayed,
+      gamesWon: value.gamesWon,
+      gamesLost: value.gamesLost,
+      winLossRatio: value.gamesWon / Math.max(1, value.gamesLost),
+      bestSingleGame: Math.max(...value.scores),
+      worstSingleGame: Math.min(...value.scores),
+      eloRating: skillRating,
+      eloPeak: skillPeak,
+      eloGamesPlayed: value.gamesPlayed,
+      eloRank: 0,
+      pointsRank: 0,
+      last5EloDelta: recentSkillDeltas.reduce((sum, delta) => sum + delta, 0),
+      recentEloDeltas: recentSkillDeltas,
+      skillMu: latestSkill?.mu ?? initial.mu,
+      skillSigma: latestSkill?.sigma ?? initial.sigma,
+      skillRating,
+      skillPeak,
+      skillGamesPlayed: playerEvents.length,
+      skillRank: 0,
+      last5SkillDelta: recentSkillDeltas.reduce((sum, delta) => sum + delta, 0),
+      recentSkillDeltas,
+      recentPointTrend: value.recentPointTrend,
+      daysAttended: value.attendanceDays.size,
+      lastPlayedAt,
+      updatedAt: value.lastGame.datetime,
+    }
+  })
+  const pointRanks = competitionRanks(rows, (row) => row.totalPoints)
+  const skillRanks = competitionRanks(rows, (row) => row.skillRating)
+  return rows
+    .map((row) => ({
+      ...row,
+      eloRank: skillRanks.get(row) ?? 0,
+      pointsRank: pointRanks.get(row) ?? 0,
+      skillRank: skillRanks.get(row) ?? 0,
+    }))
+    .sort((left, right) => left.skillRank - right.skillRank || left.playerId.localeCompare(right.playerId))
+}
+
+export function playerCompetitionRecords(
+  games: GameDoc[],
+  skillEvents: SkillEventDoc[],
+  playerId: string,
+): PlayerCompetitionRecords {
+  let runningPoints = 0
+  const cumulativePoints: number[] = []
+  const singleGameScores: number[] = []
+
+  ;[...games]
+    .sort((left, right) => gameDate(left).getTime() - gameDate(right).getTime())
+    .forEach((game) => {
+      const score = game.entries.find((entry) => entry.playerId === playerId)?.score
+      if (score === undefined) return
+      runningPoints += score
+      cumulativePoints.push(runningPoints)
+      singleGameScores.push(score)
+    })
+
+  const skillRatings = skillEvents
+    .filter((event) => event.playerId === playerId)
+    .flatMap((event) => [event.ratingBefore, event.ratingAfter])
+    .filter(Number.isFinite)
+  const wins = singleGameScores.filter((score) => score > 0)
+  const losses = singleGameScores.filter((score) => score < 0)
+
+  return {
+    maximumCumulativePoints: cumulativePoints.length ? Math.max(...cumulativePoints) : null,
+    minimumCumulativePoints: cumulativePoints.length ? Math.min(...cumulativePoints) : null,
+    highestSingleGameWin: wins.length ? Math.max(...wins) : null,
+    worstSingleGameLoss: losses.length ? Math.min(...losses) : null,
+    peakSkillRating: skillRatings.length ? Math.max(...skillRatings) : null,
+    lowestSkillRating: skillRatings.length ? Math.min(...skillRatings) : null,
+  }
 }
 
 export function activePlayerIds(games: GameDoc[], months: number, now = new Date()) {

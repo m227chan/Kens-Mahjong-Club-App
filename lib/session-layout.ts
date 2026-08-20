@@ -1,10 +1,21 @@
+export const MIN_SESSION_TABLES = 1
+export const MAX_SESSION_TABLES = 99
+
+export function clampSessionTableCount(tableCount: number) {
+  return Math.min(
+    MAX_SESSION_TABLES,
+    Math.max(MIN_SESSION_TABLES, Math.floor(Number(tableCount) || MIN_SESSION_TABLES)),
+  )
+}
+
 export function createInitialSessionLayout(
   participants: string[],
   tableCount: number,
 ) {
+  const normalizedTableCount = clampSessionTableCount(tableCount)
   return {
     tables: Object.fromEntries(
-      Array.from({ length: tableCount }, (_, index) => [
+      Array.from({ length: normalizedTableCount }, (_, index) => [
         String(index + 1),
         [] as string[],
       ]),
@@ -19,13 +30,14 @@ export function normalizeSessionLayout(
   rawTables: Record<string, string[]> = {},
   rawSideline: string[] = [],
 ) {
+  const normalizedTableCount = clampSessionTableCount(tableCount)
   const legacyAutoSeated = Object.keys(rawTables).some((key) =>
     /^table_\d+$/.test(key),
   )
   const participantSet = new Set(participants)
   const assigned = new Set<string>()
   const tables = Object.fromEntries(
-    Array.from({ length: tableCount }, (_, index) => {
+    Array.from({ length: normalizedTableCount }, (_, index) => {
       const tableId = String(index + 1)
       const rawPlayers =
         legacyAutoSeated || !Array.isArray(rawTables[tableId])

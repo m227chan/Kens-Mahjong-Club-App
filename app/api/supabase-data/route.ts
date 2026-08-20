@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { adminAuth } from '@/lib/firebase-admin'
 import { withTransaction } from '@/lib/postgres-admin'
-import { normalizeSessionLayout } from '@/lib/session-layout'
+import { MAX_SESSION_TABLES, normalizeSessionLayout } from '@/lib/session-layout'
 import { apiError, bearerToken, jsonObject } from '@/lib/server/api'
 import {
   assertGuestTableScope,
@@ -25,6 +25,7 @@ import {
 import {
   setClubActiveSeason,
   startNewClubSeason,
+  startNewClubTournament,
 } from '@/lib/server/season-management'
 import { addPlayerToActiveSession } from '@/lib/server/roster-session'
 
@@ -528,6 +529,15 @@ export async function POST(request: NextRequest) {
         await requireManager(body.clubId)
         return startNewClubSeason(db, body.clubId, caller.uid)
       }
+      if (action === 'startNewTournament') {
+        await requireManager(body.clubId)
+        return startNewClubTournament(
+          db,
+          body.clubId,
+          caller.uid,
+          typeof body.input?.name === 'string' ? body.input.name : undefined,
+        )
+      }
       if (action === 'setActiveSeason') {
         await requireManager(body.clubId)
         await setClubActiveSeason(db, body.clubId, Number(body.seasonNumber))
@@ -540,7 +550,7 @@ export async function POST(request: NextRequest) {
             ? input.participants.map(String)
             : []
         const tableCount = Math.min(
-            99,
+            MAX_SESSION_TABLES,
             Math.max(1, Math.floor(Number(input.tableCount) || 1)),
           ),
           seasonNumber = Math.floor(Number(input.seasonNumber) || 0)

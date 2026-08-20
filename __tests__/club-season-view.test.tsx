@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Timestamp } from '@/lib/timestamp'
 import type { ClubMembershipDoc } from '@/lib/types'
 
@@ -11,13 +11,15 @@ const dataMocks = vi.hoisted(() => ({
   subscribeClubMembers: vi.fn((_clubId: string, callback: (members: unknown[]) => void) => { callback([]); return vi.fn() }),
   subscribePlayers: vi.fn((_clubId: string, callback: (players: unknown[]) => void) => { callback([]); return vi.fn() }),
   subscribePlayerStats: vi.fn((_clubId: string, callback: (stats: unknown[]) => void) => { callback([]); return vi.fn() }),
+  subscribeAllCompetitionStats: vi.fn((_clubId: string, callback: (stats: unknown[]) => void) => { callback([]); return vi.fn() }),
   subscribeScoringRules: vi.fn(() => vi.fn()),
   subscribeTitleRules: vi.fn(() => vi.fn()),
   subscribeActivitySettings: vi.fn(() => vi.fn()),
   subscribeSeasons: vi.fn((_clubId: string, callback: (seasons: unknown[]) => void) => {
     callback([
-      { id: '1', seasonNumber: 1, name: 'Season 1', active: false },
-      { id: '2', seasonNumber: 2, name: 'Season 2', active: true },
+      { id: '1', seasonNumber: 1, name: 'Season 1', kind: 'season', active: false },
+      { id: '2', seasonNumber: 2, name: 'Season 2', kind: 'season', active: true },
+      { id: '3', seasonNumber: 3, name: 'Summer Open', kind: 'tournament', active: false },
     ])
     return vi.fn()
   }),
@@ -26,6 +28,7 @@ const dataMocks = vi.hoisted(() => ({
   ensureSeasons: vi.fn().mockResolvedValue(undefined),
   setActiveSeason: vi.fn(),
   startNewSeason: vi.fn().mockResolvedValue(3),
+  startNewTournament: vi.fn().mockResolvedValue({ seasonNumber: 4, name: 'Tournament 2', kind: 'tournament' }),
   createPlayer: vi.fn(),
   deleteClub: vi.fn(),
   removePlayer: vi.fn(),
@@ -41,15 +44,89 @@ vi.mock('@/lib/data', () => dataMocks)
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }) }))
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { uid: 'member-1', email: 'member@example.com' } }) }))
 vi.mock('@/contexts/SoundContext', () => ({ useSound: () => ({ play: vi.fn() }) }))
-vi.mock('@/components/Leaderboard', () => ({ LeaderboardPanel: ({ seasonNumber }: { seasonNumber: number }) => <div data-testid="leaderboard-season">{seasonNumber}</div> }))
+vi.mock('@/components/Leaderboard', () => ({ LeaderboardPanel: ({ seasonNumber }: { seasonNumber?: number }) => <div data-testid="leaderboard-season">{seasonNumber ?? 'all'}</div> }))
 vi.mock('@/components/SessionManager', () => ({ default: ({ seasonNumber }: { seasonNumber: number }) => <div data-testid="session-season">{seasonNumber}</div> }))
-vi.mock('@/components/DashboardContent', () => ({ default: () => null }))
+vi.mock('@/components/DashboardContent', () => ({ default: ({ seasonNumber }: { seasonNumber?: number }) => <div data-testid="analytics-season">{seasonNumber ?? 'all'}</div> }))
 vi.mock('@/components/GameLogsModal', () => ({ default: () => null }))
 vi.mock('@/components/NetworkGraphModal', () => ({ default: () => null }))
 vi.mock('@/components/ScoringRulesSettings', () => ({ default: () => null }))
 vi.mock('@/components/TitleRulesSettings', () => ({ default: () => null }))
 vi.mock('@/components/ActivitySettings', () => ({ default: () => null }))
-vi.mock('@/components/ClubToolSidebar', () => ({ default: () => null }))
+const emblaMock = vi.hoisted(() => {
+  type Handler = (api: unknown, event: string) => void
+  const handlers = new Map<string, Set<Handler>>()
+  let selected = 0
+  let progress = 0
+  let viewportNode: HTMLElement | null = null
+  const api = {} as {
+    on: ReturnType<typeof vi.fn>
+    off: ReturnType<typeof vi.fn>
+    scrollTo: ReturnType<typeof vi.fn>
+    selectedScrollSnap: ReturnType<typeof vi.fn>
+    scrollProgress: ReturnType<typeof vi.fn>
+    containerNode: ReturnType<typeof vi.fn>
+    slideNodes: ReturnType<typeof vi.fn>
+  }
+  const emit = (event: string) => {
+    handlers.get(event)?.forEach((handler) => handler(api, event))
+  }
+  api.on = vi.fn((event: string, handler: Handler) => {
+    const eventHandlers = handlers.get(event) ?? new Set<Handler>()
+    eventHandlers.add(handler)
+    handlers.set(event, eventHandlers)
+    return api
+  })
+  api.off = vi.fn((event: string, handler: Handler) => {
+    handlers.get(event)?.delete(handler)
+    return api
+  })
+  api.scrollTo = vi.fn((index: number) => {
+    emit('pointerDown')
+    selected = index
+    progress = index
+    emit('scroll')
+    emit('select')
+    emit('settle')
+  })
+  api.selectedScrollSnap = vi.fn(() => selected)
+  api.scrollProgress = vi.fn(() => progress)
+  api.containerNode = vi.fn(() => viewportNode?.firstElementChild as HTMLElement)
+  api.slideNodes = vi.fn(() => Array.from(viewportNode?.querySelectorAll<HTMLElement>('.club-mobile-panel') ?? []))
+
+  return {
+    api,
+    viewportRef: vi.fn((node: HTMLElement | null) => { viewportNode = node }),
+    reset() {
+      handlers.clear()
+      selected = 0
+      progress = 0
+      viewportNode = null
+    },
+    dragTo(index: number, intermediateProgress = index) {
+      emit('pointerDown')
+      progress = intermediateProgress
+      emit('scroll')
+      selected = index
+      progress = index
+      emit('select')
+      emit('settle')
+    },
+    setProgress(value: number) {
+      progress = value
+      emit('scroll')
+    },
+    emit,
+  }
+})
+vi.mock('embla-carousel-react', () => ({ default: () => [emblaMock.viewportRef, emblaMock.api] }))
+vi.mock('@/components/ClubToolSidebar', () => ({
+  default: ({ expanded, onAnalytics, onExpandedChange, onSettings }: { expanded: boolean; onAnalytics: () => void; onExpandedChange: (value: boolean) => void; onSettings: () => void }) => <>
+    <output data-testid="club-sidebar-expanded">{String(expanded)}</output>
+    <button type="button" onClick={() => onExpandedChange(false)}>Collapse club tools</button>
+    <button type="button" onClick={onAnalytics}>Open analytics</button>
+    <button type="button" onClick={onSettings}>Open settings</button>
+  </>,
+}))
 
 import ClubWorkspace from '@/components/ClubWorkspace'
 
@@ -64,13 +141,208 @@ const membership = {
   active: true,
 } satisfies ClubMembershipDoc
 
+const managerMembership = { ...membership, role: 'manager' as const }
+
+function swipe(element: Element, from: { x: number; y: number }, to: { x: number; y: number }) {
+  fireEvent.touchStart(element, { touches: [{ clientX: from.x, clientY: from.y }] })
+  fireEvent.touchMove(element, { touches: [{ clientX: to.x, clientY: to.y }] })
+  fireEvent.touchEnd(element, { changedTouches: [{ clientX: to.x, clientY: to.y }] })
+}
+
 describe('club season navigation', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    emblaMock.reset()
+    window.localStorage.clear()
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query === '(min-width: 768px)',
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })))
+  })
+  afterEach(() => {
+    cleanup()
+    vi.unstubAllGlobals()
+  })
+
+  it('shows the desktop sidebar by default and remembers a user collapse', async () => {
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+
+    await waitFor(() => expect(screen.getByTestId('club-sidebar-expanded').textContent).toBe('true'))
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse club tools' }))
+
+    expect(screen.getByTestId('club-sidebar-expanded').textContent).toBe('false')
+    expect(window.localStorage.getItem('club-tools-sidebar')).toBe('collapsed')
+  })
+
+  it('keeps Club Tools available in the sticky mobile workspace bar', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })))
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+
+    await waitFor(() => expect(screen.getByTestId('club-sidebar-expanded').textContent).toBe('false'))
+    fireEvent.click(screen.getByRole('button', { name: 'Open club tools' }))
+
+    expect(screen.getByTestId('club-sidebar-expanded').textContent).toBe('true')
+  })
+
+  it('keeps the glass selector and swipeable panels synchronized on mobile', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query === '(max-width: 767px)',
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })))
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+
+    const workspace = document.querySelector('.club-workspace-shell')
+    expect(workspace).not.toBeNull()
+    const sessionButton = screen.getByRole('button', { name: 'Session' })
+    const leaderboardButton = screen.getByRole('button', { name: 'Leaderboard' })
+    const toolsButton = screen.getByRole('button', { name: 'Open club tools' })
+    const sessionPanel = document.querySelector('#club-session-view')!
+    const leaderboardPanel = document.querySelector('#club-leaderboard-view')!
+
+    expect(sessionButton.getAttribute('aria-pressed')).toBe('true')
+    expect(sessionPanel.hasAttribute('inert')).toBe(false)
+    expect(leaderboardPanel.hasAttribute('inert')).toBe(true)
+    expect(screen.getByRole('option', { name: 'Season 2' })).toBeTruthy()
+    expect(screen.queryByRole('option', { name: 'Season 2 (current)' })).toBeNull()
+
+    act(() => emblaMock.dragTo(1))
+    expect(leaderboardButton.getAttribute('aria-pressed')).toBe('true')
+    expect(sessionPanel.hasAttribute('inert')).toBe(true)
+    expect(leaderboardPanel.hasAttribute('inert')).toBe(false)
+
+    fireEvent.click(sessionButton)
+    expect(emblaMock.api.scrollTo).toHaveBeenLastCalledWith(0)
+    expect(sessionButton.getAttribute('aria-pressed')).toBe('true')
+
+    swipe(workspace!, { x: 120, y: 200 }, { x: 300, y: 205 })
+    expect(screen.getByTestId('club-sidebar-expanded').textContent).toBe('true')
+    expect(toolsButton.className).toContain('active')
+    expect(sessionButton.getAttribute('aria-pressed')).toBe('false')
+
+    swipe(workspace!, { x: 300, y: 200 }, { x: 120, y: 205 })
+    expect(screen.getByTestId('club-sidebar-expanded').textContent).toBe('false')
+    expect(sessionButton.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('moves the glass indicator with the panel drag and lets it settle', () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query === '(max-width: 767px)',
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })))
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+
+    const navigation = document.querySelector<HTMLElement>('.mobile-workspace-tabs')!
+    const controls = navigation.querySelectorAll<HTMLElement>('.mobile-workspace-tab')
+    Object.defineProperty(controls[0], 'offsetLeft', { configurable: true, value: 0 })
+    Object.defineProperty(controls[1], 'offsetLeft', { configurable: true, value: 100 })
+    Object.defineProperty(controls[2], 'offsetLeft', { configurable: true, value: 200 })
+
+    act(() => {
+      emblaMock.emit('pointerDown')
+      emblaMock.setProgress(.5)
+    })
+    expect(navigation.getAttribute('data-carousel-moving')).toBe('true')
+    expect(navigation.style.getPropertyValue('--mobile-workspace-indicator-x')).toBe('150px')
+
+    act(() => emblaMock.emit('settle'))
+    expect(navigation.hasAttribute('data-carousel-moving')).toBe(false)
+  })
+
+  it('keeps the mobile viewport fitted to the active panel as its content changes', () => {
+    let notifyResize: (() => void) | null = null
+    class MockResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        notifyResize = () => callback([], this as unknown as ResizeObserver)
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal('ResizeObserver', MockResizeObserver)
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query === '(max-width: 767px)',
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })))
+    const requestAnimationFrame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callback(0)
+      return 1
+    })
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+
+    const track = document.querySelector<HTMLElement>('.club-mobile-panels-track')!
+    const sessionPanel = document.querySelector<HTMLElement>('#club-session-view')!
+    const leaderboardPanel = document.querySelector<HTMLElement>('#club-leaderboard-view')!
+    Object.defineProperty(sessionPanel, 'scrollHeight', { configurable: true, value: 720 })
+    Object.defineProperty(leaderboardPanel, 'scrollHeight', { configurable: true, value: 480 })
+
+    act(() => { notifyResize?.() })
+    expect(track.style.height).toBe('720px')
+
+    act(() => emblaMock.dragTo(1))
+    expect(track.style.height).toBe('480px')
+    requestAnimationFrame.mockRestore()
+  })
+
+  it('does not turn vertical, short, interactive, or desktop gestures into workspace navigation', () => {
+    const matchMedia = vi.fn((query: string) => ({
+      matches: query === '(max-width: 767px)',
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }))
+    vi.stubGlobal('matchMedia', matchMedia)
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+
+    const workspace = document.querySelector('.club-workspace-shell')!
+    const sessionButton = screen.getByRole('button', { name: 'Session' })
+    const leaderboardButton = screen.getByRole('button', { name: 'Leaderboard' })
+
+    swipe(workspace, { x: 250, y: 100 }, { x: 230, y: 240 })
+    swipe(workspace, { x: 250, y: 100 }, { x: 210, y: 105 })
+    swipe(sessionButton, { x: 250, y: 100 }, { x: 100, y: 105 })
+    expect(sessionButton.getAttribute('aria-pressed')).toBe('true')
+
+    matchMedia.mockImplementation((query: string) => ({
+      matches: query === '(min-width: 768px)',
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }))
+    swipe(workspace, { x: 250, y: 100 }, { x: 100, y: 105 })
+    expect(leaderboardButton.getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('keeps both workspace panels available on desktop', () => {
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+
+    const sessionPanel = document.querySelector('#club-session-view')!
+    const leaderboardPanel = document.querySelector('#club-leaderboard-view')!
+    expect(sessionPanel.hasAttribute('aria-hidden')).toBe(false)
+    expect(sessionPanel.hasAttribute('inert')).toBe(false)
+    expect(leaderboardPanel.hasAttribute('aria-hidden')).toBe(false)
+    expect(leaderboardPanel.hasAttribute('inert')).toBe(false)
+    expect(screen.getByTestId('session-season')).toBeTruthy()
+    expect(screen.getByTestId('leaderboard-season')).toBeTruthy()
+  })
 
   it('lets any member view a historical season without changing the live club season', async () => {
     render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
 
     await waitFor(() => expect((screen.getByLabelText('Season') as HTMLSelectElement).value).toBe('2'))
+    expect(screen.getByRole('option', { name: 'Summer Open · Tournament' })).toBeTruthy()
     expect(screen.getByTestId('session-season').textContent).toBe('2')
 
     fireEvent.change(screen.getByLabelText('Season'), { target: { value: '1' } })
@@ -81,7 +353,70 @@ describe('club season navigation', () => {
     expect(dataMocks.setActiveSeason).not.toHaveBeenCalled()
     expect(dataMocks.subscribePlayerStats).toHaveBeenLastCalledWith('CLUB1', expect.any(Function), 1)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Return to current season' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Return to current' }))
     await waitFor(() => expect(screen.getByTestId('session-season').textContent).toBe('2'))
+  })
+
+  it('combines every season and tournament in leaderboard and analytics', async () => {
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+
+    await waitFor(() => expect((screen.getByLabelText('Season') as HTMLSelectElement).value).toBe('2'))
+    expect(screen.getByRole('option', { name: 'All seasons' })).toBeTruthy()
+
+    fireEvent.change(screen.getByLabelText('Season'), { target: { value: 'all' } })
+
+    await waitFor(() => expect(screen.getByTestId('leaderboard-season').textContent).toBe('all'))
+    expect(dataMocks.subscribeAllCompetitionStats).toHaveBeenCalledWith('CLUB1', expect.any(Function))
+    expect(screen.getByText('All seasons combined')).toBeTruthy()
+    expect(screen.queryByTestId('session-season')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open analytics' }))
+    expect((await screen.findByTestId('analytics-season')).textContent).toBe('all')
+  })
+
+  it('lets a manager start a custom-named tournament from season controls', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<ClubWorkspace clubId="CLUB1" membership={managerMembership} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open settings' }))
+    const manageControls = screen.getByRole('button', { name: 'Manage season controls' })
+    expect(manageControls.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByLabelText(/Tournament name/)).toBeNull()
+
+    fireEvent.click(manageControls)
+    expect(screen.getByRole('button', { name: 'Collapse season controls' }).getAttribute('aria-expanded')).toBe('true')
+    const nameInput = screen.getByLabelText(/Tournament name/)
+    expect(nameInput.getAttribute('placeholder')).toBe('Tournament 2')
+
+    fireEvent.change(nameInput, { target: { value: 'Summer Open' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Start tournament' }))
+
+    await waitFor(() => expect(dataMocks.startNewTournament).toHaveBeenCalledWith('CLUB1', {
+      createdBy: 'member-1',
+      name: 'Summer Open',
+    }))
+    expect(screen.queryByRole('dialog', { name: 'Test Club' })).toBeNull()
+    confirm.mockRestore()
+  })
+
+  it('makes the underlying club workspace inert while settings are open', () => {
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+
+    const workspace = document.querySelector('.club-workspace-dashboard-grid')
+    expect(workspace?.hasAttribute('inert')).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open settings' }))
+    expect(workspace?.hasAttribute('inert')).toBe(true)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(workspace?.hasAttribute('inert')).toBe(false)
+  })
+
+  it('opens analytics with All time selected by default', async () => {
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open analytics' }))
+
+    expect((screen.getByLabelText('Time window for all analytics') as HTMLSelectElement).value).toBe('all')
   })
 })

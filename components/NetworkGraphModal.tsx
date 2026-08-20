@@ -238,7 +238,7 @@ export default function NetworkGraphModal({
 
   const egoName = egoPlayerId ? labels[egoPlayerId] ?? 'Selected player' : null
   const seasonName = seasonFilter === 'all'
-    ? 'All seasons'
+    ? 'All seasons & tournaments'
     : seasons.find((season) => season.seasonNumber === seasonFilter)?.name ?? `Season ${seasonFilter}`
   const fullDateRange = Boolean(
     seasonBounds
@@ -254,7 +254,7 @@ export default function NetworkGraphModal({
 
   return (
     <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
-      <div role="dialog" aria-modal="true" aria-labelledby="network-modal-title" data-tour="network-modal" className="responsive-modal-panel flex max-h-[calc(100dvh-3rem)] w-full max-w-6xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
+      <div id="network-graph-dialog" role="dialog" aria-modal="true" aria-labelledby="network-modal-title" data-tour="network-modal" className="responsive-modal-panel flex max-h-[calc(100dvh-3rem)] w-full max-w-6xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
         <div className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:gap-4 sm:p-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-600">Player Network</p>
@@ -333,7 +333,7 @@ export default function NetworkGraphModal({
                 }}
                 className="mt-2 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900"
               >
-                <option value="all">All seasons</option>
+                <option value="all">All seasons &amp; tournaments</option>
                 {seasons.map((season) => (
                   <option key={season.id} value={season.seasonNumber}>
                     {season.name}

@@ -54,13 +54,13 @@ flowchart LR
 | Domain algorithms        | `lib/scoring.ts`, `lib/skill-rating.ts`, `lib/stats-engine.ts`, `lib/players.ts`, `lib/session-layout.ts` | Score calculation, experience-aware multiplayer Skill, legacy ELO, ranking, titles, and session normalization |
 | Database definition      | `supabase/migrations/*.sql`                                                                               | Schema, constraints, indexes, views, RLS policies, Realtime publication, and historical baselines             |
 | Operations               | `scripts/*.mjs`                                                                                           | Ordered schema migrations and Firebase custom-claim setup                                                     |
-| Verification             | `__tests__/*.test.ts`                                                                                     | Unit coverage for players, scoring, ELO/stat behavior, session layout, and network net-point attribution      |
+| Verification             | `__tests__/*.test.ts`                                                                                     | Unit and component coverage for authentication, clubs, sessions, scoring, standings, analytics, UI flows, and server rules |
 
 ## 3. Technology stack
 
 - **Framework:** Next.js App Router with TypeScript and React.
 - **Styling:** Tailwind CSS utilities plus a shared token and component layer in `app/globals.css`.
-- **Typography:** Manrope for interface text and JetBrains Mono for scores, ranks, labels, and other tabular data.
+- **Typography:** The highly readable system-safe Arial/Helvetica sans-serif stack throughout the interface, including numeric and tabular data.
 - **Authentication:** Firebase Authentication with Google popup sign-in; Firebase Admin verifies server requests.
 - **Database:** Supabase-hosted PostgreSQL.
 - **Browser data access:** `@supabase/supabase-js`, using the current Firebase ID token as the access token.
@@ -88,7 +88,7 @@ app/
   wiki/                            Authenticated, read-only Mahjong scoring reference
   globals.css                      Theme tokens, responsive rules, component styling
   icon.svg                         Browser icon
-  layout.tsx                       Global header, providers, fonts, metadata
+  layout.tsx                       Global header, providers, controls, metadata
   page.tsx                         Signed-in personal dashboard
 components/
   AppGuide.tsx                     Global guide and no-write training tour
@@ -101,8 +101,10 @@ components/
   network/                         Co-occurrence graph, edge math, and net-points helpers
   Leaderboard.tsx                  Desktop and mobile standings
   SessionManager.tsx               Live table/session and result workflow
-  SoundToggle.tsx                  Global sound control
-  ThemeToggle.tsx                  Light/dark control
+  FocusedTableView.tsx             Restricted single-table scoring surface
+  SessionPointTrackerModal.tsx     Player point-window detail and float control
+  UserSettings.tsx                 Account preferences and deletion workflow
+  ViewHeader.tsx                   Shared Session/Leaderboard card header contract
 contexts/
   AuthContext.tsx                  Firebase auth state and sign-in actions
   SoundContext.tsx                 Sound preference and Web Audio cues
@@ -149,13 +151,17 @@ The club route normalizes the club ID, requires authentication, subscribes to th
 
 ### `/wiki`
 
-The authenticated wiki is a read-only Hong Kong Mahjong reference. It combines the canonical tile artwork with the scoring table, payment examples, and the hand patterns represented by the printed scoring guide. The reference intentionally explains that it is not a complete play guide, that the classic 0–13+ table is a general reference, and that each club may customize its minimum fan, cap, and fan-to-point map in Club settings. The page does not write club data or duplicate the scoring engine.
+The authenticated wiki is a read-only Hong Kong Mahjong reference. Users can select one of their clubs to preview that club's scoring rules; otherwise the default reference mapping is shown. It combines the canonical tile artwork with the scoring table, payment examples, and the hand patterns represented by the printed scoring guide. The reference intentionally explains that it is not a complete play guide, that the classic 0–13+ table is a general reference, and that each club may customize its minimum fan, cap, and fan-to-point map in Club settings. The page does not write club data or duplicate the scoring engine.
 
 The contents drawer uses the same semantic surfaces and touch-target rules as the rest of the app. It is visible on desktop, collapses into a labelled floating control on smaller screens, closes with an explicit button or backdrop tap, and tracks the section currently in view. Long hand examples wrap inside the content column instead of forcing the page to overflow horizontally.
 
+### `/metrics`
+
+The publicly readable metric glossary explains Points, win/loss measures, Skill Rating, ranks, attendance, trends, and chart terminology. It is a static, read-only companion to Analytics and does not query or write club data.
+
 ### Global layout
 
-`app/layout.tsx` loads fonts, the favicon, theme/sound/help controls, `AuthProvider`, and `SoundProvider`. The brand link always points to `/`, making it the personal-dashboard shortcut for signed-in users. The header is sticky and uses semantic theme tokens.
+`app/layout.tsx` configures metadata, the favicon, theme/sound/help controls, `AuthProvider`, and `SoundProvider`. Global CSS supplies the system-safe font stack, so rendering does not depend on downloading a web font. The brand link always points to `/`, making it the personal-dashboard shortcut for signed-in users. The header is sticky and uses semantic theme tokens.
 
 The header help control opens `AppGuide`. Its complete reference follows the signed-in workflow from personal dashboard through clubs, rosters, seasons, sessions, scoring, session point tracking (including float), standings, analytics, logs, player network, and manager tools. It preserves the operational session reference, including table setup, participating players, the sideline, result entry, self-draw/discard rules, session reset controls, and the full fan-to-base-points map.
 
@@ -262,7 +268,7 @@ The authoritative schema is the ordered SQL in `supabase/migrations`. The follow
 | `season_player_stats`    | Rebuilt aggregates and ranks scoped to a season                                                                 |
 | `elo_events`             | Legacy per-game/per-player ELO history retained for compatibility                                               |
 | `skill_events`           | Per-game/per-player experience-aware Skill rating history                                                       |
-| `sessions`               | One active session per club, participants, table count, table JSON, sideline, and close time                    |
+| `sessions`               | One active session per club, participants, 1–99 table count, table JSON, sideline, and close time               |
 | `table_arrangements`     | Legacy seating snapshots retained for schema/data compatibility                                                  |
 | `club_qr_tables`         | Permanent table QR identity, token version, label, and enabled state                                             |
 | `session_table_activity` | Per-table occupancy and activity timestamps used by stale-seat cleanup                                           |
@@ -276,6 +282,7 @@ The authoritative schema is the ordered SQL in `supabase/migrations`. The follow
 - Club roles and request states are PostgreSQL enums.
 - Active player emojis are unique within a club when an icon key is present.
 - A club may have only one active session.
+- Session table counts are constrained to the inclusive 1–99 range.
 - A game entry set contains no more than four players.
 - A completed four-player game must sum to zero; the deferred trigger validates the final transaction state rather than every intermediate insert.
 - Game-to-player and season-to-club relationships are enforced with foreign keys.
@@ -366,12 +373,12 @@ Shared client-facing types live in `lib/types.ts`:
 ### Session manager
 
 - Create or resume one active session per club. Session creation is transactional: a stale active session from an older season is closed before the new session is inserted, preventing the partial unique-index conflict on active sessions.
-- Choose participating players and a table count.
+- Choose participating players and a table count from 1 through 99. The same limit is enforced by UI controls, session normalization, API writes, and the database constraint.
 - “All” selection includes the complete currently filtered roster selection.
 - New sessions begin with every participant on the sideline and empty numbered tables. The sideline is collapsed by default so waiting players remain available without occupying the primary scoring area; starting a drag from a table opens it automatically.
-- Mobile-only decrement/increment controls make table count editing reliable without text-selection quirks.
+- Mobile decrement/increment controls make table count editing reliable without text-selection quirks and disable at the 1- and 99-table boundaries.
 - Move players between sideline and tables, fill open seats, clear tables, swap players, and edit the session. Occupied tables expose a clear-table control on hover, and every occupied seat exposes a remove-player control on hover, including incomplete tables; touch layouts keep these controls visible because hover is unavailable. The add-player dialog shows the table's selected players first and lets the user remove a selection without closing the dialog.
-- A compact table locator shows every table's occupancy, identifies the signed-in player's table, and jumps directly to a selected table. Search by player or table appears for large sessions, and sessions with five or more tables initially collapse every table except the signed-in player's table.
+- A compact table locator shows every table's occupancy, identifies the signed-in player's table, and jumps directly to a selected table. Its numbered strip supports vertical page scrolling plus dedicated horizontal drag, trackpad, and mouse-wheel navigation without activating the outer Session/Leaderboard carousel. Search by player or table appears for large sessions, and sessions with five or more tables initially collapse every table except the signed-in player's table.
 - Table cards show capacity and readiness; four players marks a table ready.
 - Record self-draw wins, discard wins, or draws.
 - Winner, discarder, and fan selections have visible selected states.
@@ -534,7 +541,7 @@ The exact production club identifier, source records, and cutoff are operational
 
 ## 12. Session layout invariants
 
-Current sessions use stringified numeric table keys (`"1"`, `"2"`, and so on). `createInitialSessionLayout` creates every requested table empty and places every participant on the sideline.
+Current sessions use stringified numeric table keys (`"1"`, `"2"`, and so on). Table counts are clamped to the supported 1–99 range. `createInitialSessionLayout` creates every normalized table empty and places every participant on the sideline.
 
 `normalizeSessionLayout` guarantees that:
 
@@ -572,21 +579,23 @@ Content sits on distinct surface layers with borders, restrained offset shadows,
 
 ### Typography
 
-- Manrope is the primary readable interface font.
-- JetBrains Mono is reserved for numeric data, compact labels, table metadata, and rank/score emphasis.
+- Arial is the primary readable interface font, with Helvetica and the browser sans-serif default as fallbacks.
+- Numeric data, compact labels, table metadata, ranks, and scores use the same readable family with tabular alignment where scanning benefits from it.
 - Avoid novelty/display fonts for long text or dense controls.
 - Data columns should use stable widths and tabular visual rhythm.
 
 ### Responsive behavior
 
 - The global content width is capped for readable desktop composition.
-- The club workspace uses a desktop two-column layout, with the leaderboard as the wider visual anchor and Session as the narrower operational panel. Mobile opens directly to Session and uses a sticky two-option Session/Leaderboard navigator.
-- The authenticated club workspace keeps the club name, season selector, and copyable Club ID in a compact header. Roster, Session tracker, Analytics, Game logs, Network, and Club settings live in a collapsible Club tools rail. The rail is a 60px in-flow icon column when collapsed and expands to 224px on desktop; on mobile it remains a 46px in-flow rail and opens a temporary drawer no wider than 260px.
-- The collapsed rail always consumes layout width, so it cannot cover the Session Manager, leaderboard, charts, roster summary, join requests, or mobile workspace tabs. Selecting a tool closes the mobile drawer before opening the existing modal.
+- From 768 through 1279 pixels the Session and Leaderboard cards form a centered vertical stack. At 1280 pixels and above they share a two-column layout with Session as the flexible primary work area and Leaderboard in a 460-pixel column. Mobile shows exactly one full-width card at a time so an adjacent card edge cannot peek into the selected view.
+- Mobile opens directly to Session and uses a sticky three-destination Tools/Session/Leaderboard navigator. The Session and Leaderboard cards share the same header, border, radius, action-button, and title contract.
+- On mobile, the club title, roster summary, season/club controls, and workspace navigator form a compact context band so the selected Session or Leaderboard card receives most of the viewport.
+- The authenticated club workspace keeps the club name, season selector, and copyable Club ID in a compact header. Roster, Session tracker, Analytics, Game logs, Network, and Club settings live in a collapsible Club tools rail. The rail is a 72-pixel in-flow icon column when collapsed and expands to 248 pixels on desktop; on mobile it becomes a temporary drawer up to 86vw or 320 pixels wide.
+- The desktop rail always consumes layout width, so it cannot cover the Session Manager, leaderboard, charts, roster summary, or join requests. The mobile drawer overlays a backdrop and closes before opening a selected tool modal.
 - Full-screen mobile modal panels use `100dvh` and safe-area padding.
 - Session-specific dialogs use fixed viewport positioning, never document-relative centering.
 - Wide data tables scroll horizontally on desktop/tablet; game logs become cards on mobile.
-- Controls used on touch devices should have at least a 44-pixel interactive dimension.
+- Primary, destructive, and repeated gameplay controls used on touch devices should have at least a 44-pixel interactive dimension. Compact, well-separated context controls in the mobile club header and workspace navigator may use 36–40 pixels to preserve room for the live Session and Leaderboard surfaces.
 - Hover-only actions must also be visible or reachable on coarse-pointer devices.
 
 ### Interaction and accessibility
@@ -728,12 +737,7 @@ The code is designed for a Node-capable Next.js host. Before deployment:
 
 ## 19. Testing and quality gates
 
-Current deterministic unit suites cover:
-
-- emoji allocation and rank-title banding;
-- score construction and zero-sum validation;
-- pairwise ELO, K-factor behavior, titles, and ranking;
-- initial session layout and legacy session normalization.
+Current deterministic suites cover authentication context, dashboard and club navigation, roster permissions and emoji selection, seasons and tournaments, session normalization and optimistic table actions, focused scoring, offline game synchronization, scoring and statistics engines, standings and analytics queries, title and scoring-rule editors, the wiki, help tour, network and game-log views, guest table tokens, and API safety. Database integration suites are opt-in and skip when their isolated test database configuration is absent.
 
 Before handing off a code change, run checks in proportion to the risk:
 

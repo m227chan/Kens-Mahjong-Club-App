@@ -2,6 +2,7 @@ import 'server-only'
 
 import type { PoolClient } from 'pg'
 import { signGuestTableToken } from '@/lib/guest-table-token'
+import { clampSessionTableCount } from '@/lib/session-layout'
 
 function normalizeClubId(value: string) {
   return value.trim().toUpperCase()
@@ -25,7 +26,9 @@ export async function validateGuestClub(db: PoolClient, rawClubId: string) {
 
   if (!club) throw new Error('No club found with that ID.')
 
-  const tableCount = Number(club.table_count ?? 0)
+  const tableCount = club.table_count == null
+    ? 0
+    : clampSessionTableCount(Number(club.table_count))
   const tables =
     Number.isFinite(tableCount) && tableCount > 0
       ? Array.from({ length: tableCount }, (_, index) => index + 1)

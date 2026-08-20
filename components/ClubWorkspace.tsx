@@ -1,9 +1,10 @@
 'use client'
 
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState, useRef } from 'react'
-import DashboardContent from '@/components/DashboardContent'
+import { useCallback, useEffect, useState, useRef, type TouchEvent as ReactTouchEvent } from 'react'
+import useEmblaCarousel from 'embla-carousel-react'
 import GameLogsModal from '@/components/GameLogsModal'
 import NetworkGraphModal from '@/components/NetworkGraphModal'
 import { LeaderboardPanel } from '@/components/Leaderboard'
@@ -25,6 +26,7 @@ import {
   resolveJoinRequest,
   setPlayerAuthLink,
   startNewSeason,
+  startNewTournament,
   updatePlayerIcon,
   updatePlayerName,
   subscribeClub,
@@ -35,10 +37,11 @@ import {
   subscribeScoringRules,
   subscribeTitleRules,
   subscribeActivitySettings,
+  subscribeAllCompetitionStats,
   subscribeSeasons
 } from '@/lib/data'
 import type { ClubDoc, ClubMembershipDoc, JoinRequestDoc, PlayerDoc, PlayerStatsDoc, SeasonDoc } from '@/lib/types'
-import { PLAYER_EMOJIS, randomUnusedPlayerEmoji } from '@/lib/players'
+import { randomUnusedPlayerEmoji, randomUnusedPlayerEmojiOptions } from '@/lib/players'
 import { DEFAULT_SCORING_RULES, type ScoringRules } from '@/lib/scoring-rules'
 import { DEFAULT_TITLE_RULES, type TitleRules } from '@/lib/title-rules'
 import { DEFAULT_ACTIVITY_SETTINGS, type ActivitySettings as ActivitySettingsValue } from '@/lib/activity-settings'
@@ -51,7 +54,10 @@ import {
   type SessionPointWindowHours,
 } from '@/lib/session-point-window'
 
-const iconChoices = PLAYER_EMOJIS
+const DashboardContent = dynamic(() => import('@/components/DashboardContent'), {
+  loading: () => <div className="rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface-1))] p-5 text-sm font-bold text-[rgb(var(--muted))]" role="status">Loading analytics…</div>,
+})
+
 const ANALYTICS_TIME_WINDOWS = [
   { label: 'Last 24 hours', value: '24' },
   { label: 'Last 48 hours', value: '48' },
@@ -59,6 +65,26 @@ const ANALYTICS_TIME_WINDOWS = [
   { label: 'All time', value: 'all' },
   { label: 'Custom dates', value: 'custom' },
 ]
+
+const CLUB_SIDEBAR_PREFERENCE_KEY = 'club-tools-sidebar'
+const MOBILE_WORKSPACE_SWIPE_DISTANCE = 56
+
+function blocksWorkspaceSwipe(target: EventTarget | null) {
+  if (!(target instanceof Element)) return false
+  return Boolean(target.closest([
+    'a',
+    'button',
+    'input',
+    'select',
+    'textarea',
+    '[contenteditable="true"]',
+    '[draggable="true"]',
+    '[role="dialog"]',
+    '[role="button"]',
+    '[tabindex]:not([tabindex="-1"])',
+    '[data-workspace-swipe-ignore]',
+  ].join(',')))
+}
 
 const CLUB_SUMMARY_DEFINITIONS = {
   players: {
@@ -94,6 +120,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [playerName, setPlayerName] = useState('')
   const [playerIcon, setPlayerIcon] = useState(() => randomUnusedPlayerEmoji(new Set()))
   const [iconPickerOpen, setIconPickerOpen] = useState(false)
+  const [newPlayerEmojiChoices, setNewPlayerEmojiChoices] = useState<string[]>([])
   const [linkToMe, setLinkToMe] = useState(false)
   const [playerMessage, setPlayerMessage] = useState<string | null>(null)
   const [joiningAction, setJoiningAction] = useState<string | null>(null)
@@ -101,21 +128,26 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [seasonMessage, setSeasonMessage] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [rosterOpen, setRosterOpen] = useState(false)
+  const [rosterSearch, setRosterSearch] = useState('')
+  const [scrollToAddPlayer, setScrollToAddPlayer] = useState(false)
   const [analyticsOpen, setAnalyticsOpen] = useState(false)
   const [analyticsPlayerId, setAnalyticsPlayerId] = useState<string | null>(null)
-  const [analyticsWindow, setAnalyticsWindow] = useState<SessionPointWindow>(() => hoursSessionWindow(24))
+  const [analyticsWindow, setAnalyticsWindow] = useState<SessionPointWindow>(() => allSessionWindow())
   const [analyticsStartDate, setAnalyticsStartDate] = useState(today)
   const [analyticsEndDate, setAnalyticsEndDate] = useState(today)
   const [analyticsWindowError, setAnalyticsWindowError] = useState<string | null>(null)
   const [gameLogsOpen, setGameLogsOpen] = useState(false)
   const [networkOpen, setNetworkOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [seasonControlsOpen, setSeasonControlsOpen] = useState(false)
   const [clubToolsExpanded, setClubToolsExpanded] = useState(false)
   const [summaryDefinition, setSummaryDefinition] = useState<keyof typeof CLUB_SUMMARY_DEFINITIONS | null>(null)
   const [seasons, setSeasons] = useState<SeasonDoc[]>([])
-  const [viewedSeasonNumber, setViewedSeasonNumber] = useState<number | null>(null)
-  const [seasonAction, setSeasonAction] = useState(false)
+  const [viewedSeasonNumber, setViewedSeasonNumber] = useState<number | 'all' | null>(null)
+  const [seasonAction, setSeasonAction] = useState<'season' | 'tournament' | null>(null)
+  const [tournamentName, setTournamentName] = useState('')
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null)
+  const [editingPlayerEmojiChoices, setEditingPlayerEmojiChoices] = useState<string[]>([])
   const [customEmojiValue, setCustomEmojiValue] = useState('')
   const [renamingPlayerId, setRenamingPlayerId] = useState<string | null>(null)
   const [renamingPlayerValue, setRenamingPlayerValue] = useState('')
@@ -123,24 +155,324 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [deleteConfirmName, setDeleteConfirmName] = useState('')
   const [deletingClub, setDeletingClub] = useState(false)
   const [mobileView, setMobileView] = useState<'session' | 'standings'>('session')
+  const [isMobileViewport, setIsMobileViewport] = useState(false)
   const [managerEmail, setManagerEmail] = useState('')
   const [managerMessage, setManagerMessage] = useState<string | null>(null)
   const [promotingManager, setPromotingManager] = useState(false)
   const [linkingPlayerId, setLinkingPlayerId] = useState<string | null>(null)
+  const [mobilePanelsRef, mobilePanelsApi] = useEmblaCarousel({
+    align: 'start',
+    containScroll: false,
+    dragFree: false,
+    dragThreshold: 8,
+    duration: 30,
+    loop: false,
+    skipSnaps: false,
+    watchDrag: (_api, event) => !blocksWorkspaceSwipe(event.target),
+    breakpoints: {
+      '(min-width: 768px)': { active: false },
+      '(prefers-reduced-motion: reduce)': { duration: 0 },
+    },
+  })
+  const addPlayerSectionRef = useRef<HTMLElement>(null)
+  const clubDashboardRef = useRef<HTMLDivElement>(null)
+  const mobileToolsButtonRef = useRef<HTMLButtonElement>(null)
+  const mobileWorkspaceTabsRef = useRef<HTMLElement>(null)
+  const sessionPanelRef = useRef<HTMLElement>(null)
+  const leaderboardPanelRef = useRef<HTMLElement>(null)
+  const workspaceSwipeStartRef = useRef<{
+    x: number
+    y: number
+    destination: 'tools' | 'session' | 'standings'
+  } | null>(null)
+
+  useEffect(() => {
+    const desktop = window.matchMedia?.('(min-width: 768px)')
+    if (!desktop) return
+    const syncSidebarForViewport = () => {
+      if (!desktop.matches) {
+        setClubToolsExpanded(false)
+        return
+      }
+      setClubToolsExpanded(window.localStorage.getItem(CLUB_SIDEBAR_PREFERENCE_KEY) !== 'collapsed')
+    }
+    syncSidebarForViewport()
+    desktop.addEventListener?.('change', syncSidebarForViewport)
+    return () => desktop.removeEventListener?.('change', syncSidebarForViewport)
+  }, [])
+
+  useEffect(() => {
+    const mobile = window.matchMedia?.('(max-width: 767px)')
+    if (!mobile) return
+    const syncMobileViewport = () => setIsMobileViewport(mobile.matches)
+    syncMobileViewport()
+    mobile.addEventListener?.('change', syncMobileViewport)
+    return () => mobile.removeEventListener?.('change', syncMobileViewport)
+  }, [])
+
+  const changeClubToolsExpanded = (value: boolean) => {
+    setClubToolsExpanded(value)
+    if (window.matchMedia?.('(min-width: 768px)').matches) {
+      window.localStorage.setItem(CLUB_SIDEBAR_PREFERENCE_KEY, value ? 'expanded' : 'collapsed')
+    }
+  }
+
+  const setMobileWorkspaceIndicatorPosition = useCallback((position: number) => {
+    const navigation = mobileWorkspaceTabsRef.current
+    if (!navigation) return
+    const controls = navigation.querySelectorAll<HTMLElement>('.mobile-workspace-tab')
+    if (controls.length < 3) return
+    const clampedPosition = Math.min(2, Math.max(0, position))
+    const lowerIndex = Math.floor(clampedPosition)
+    const upperIndex = Math.ceil(clampedPosition)
+    const lowerOffset = controls[lowerIndex].offsetLeft - controls[0].offsetLeft
+    const upperOffset = controls[upperIndex].offsetLeft - controls[0].offsetLeft
+    const offset = lowerOffset + ((upperOffset - lowerOffset) * (clampedPosition - lowerIndex))
+    navigation.style.setProperty('--mobile-workspace-indicator-x', `${offset}px`)
+  }, [])
+
+  const syncMobileWorkspaceIndicator = useCallback(() => {
+    if (!mobilePanelsApi || clubToolsExpanded) return
+    const progress = Math.min(1, Math.max(0, mobilePanelsApi.scrollProgress()))
+    setMobileWorkspaceIndicatorPosition(1 + progress)
+  }, [clubToolsExpanded, mobilePanelsApi, setMobileWorkspaceIndicatorPosition])
+
+  const showMobileView = (view: 'session' | 'standings') => {
+    changeClubToolsExpanded(false)
+    mobileWorkspaceTabsRef.current?.setAttribute('data-carousel-moving', 'true')
+    if (mobilePanelsApi) {
+      const targetIndex = view === 'session' ? 0 : 1
+      if (mobilePanelsApi.selectedScrollSnap() === targetIndex) {
+        setMobileView(view)
+        mobileWorkspaceTabsRef.current?.removeAttribute('data-carousel-moving')
+        setMobileWorkspaceIndicatorPosition(1 + targetIndex)
+      } else {
+        mobilePanelsApi.scrollTo(targetIndex)
+      }
+    } else {
+      setMobileView(view)
+      mobileWorkspaceTabsRef.current?.removeAttribute('data-carousel-moving')
+      setMobileWorkspaceIndicatorPosition(view === 'session' ? 1 : 2)
+    }
+  }
+
+  useEffect(() => {
+    if (!mobilePanelsApi) return
+
+    const selectPanel = () => {
+      setMobileView(mobilePanelsApi.selectedScrollSnap() === 0 ? 'session' : 'standings')
+      syncMobileWorkspaceIndicator()
+    }
+    const beginMovement = () => {
+      mobileWorkspaceTabsRef.current?.setAttribute('data-carousel-moving', 'true')
+    }
+    const finishMovement = () => {
+      syncMobileWorkspaceIndicator()
+      mobileWorkspaceTabsRef.current?.removeAttribute('data-carousel-moving')
+    }
+
+    mobilePanelsApi
+      .on('pointerDown', beginMovement)
+      .on('scroll', syncMobileWorkspaceIndicator)
+      .on('select', selectPanel)
+      .on('settle', finishMovement)
+      .on('reInit', selectPanel)
+      .on('resize', syncMobileWorkspaceIndicator)
+    selectPanel()
+
+    return () => {
+      mobilePanelsApi
+        .off('pointerDown', beginMovement)
+        .off('scroll', syncMobileWorkspaceIndicator)
+        .off('select', selectPanel)
+        .off('settle', finishMovement)
+        .off('reInit', selectPanel)
+        .off('resize', syncMobileWorkspaceIndicator)
+    }
+  }, [mobilePanelsApi, syncMobileWorkspaceIndicator])
+
+  useEffect(() => {
+    if (!mobilePanelsApi || !isMobileViewport || typeof ResizeObserver === 'undefined') return
+
+    const track = mobilePanelsApi.containerNode()
+    const slides = mobilePanelsApi.slideNodes()
+    const updateActivePanelHeight = () => {
+      const activeSlide = slides[mobilePanelsApi.selectedScrollSnap()]
+      if (!activeSlide) return
+      const height = Math.max(activeSlide.scrollHeight, activeSlide.getBoundingClientRect().height)
+      if (height > 0) track.style.height = `${Math.ceil(height)}px`
+    }
+    const observer = new ResizeObserver(updateActivePanelHeight)
+    slides.forEach((slide) => observer.observe(slide))
+    const frame = window.requestAnimationFrame(updateActivePanelHeight)
+    mobilePanelsApi.on('select', updateActivePanelHeight).on('reInit', updateActivePanelHeight)
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+      observer.disconnect()
+      mobilePanelsApi.off('select', updateActivePanelHeight).off('reInit', updateActivePanelHeight)
+    }
+  }, [isMobileViewport, mobilePanelsApi])
+
+  useEffect(() => {
+    if (clubToolsExpanded) {
+      mobileWorkspaceTabsRef.current?.removeAttribute('data-carousel-moving')
+      return
+    }
+    syncMobileWorkspaceIndicator()
+  }, [clubToolsExpanded, syncMobileWorkspaceIndicator])
+
+  useEffect(() => {
+    const sessionInactive = isMobileViewport && (clubToolsExpanded || mobileView !== 'session')
+    const leaderboardInactive = isMobileViewport && (clubToolsExpanded || mobileView !== 'standings')
+    sessionPanelRef.current?.toggleAttribute('inert', sessionInactive)
+    leaderboardPanelRef.current?.toggleAttribute('inert', leaderboardInactive)
+  }, [clubToolsExpanded, isMobileViewport, mobileView])
 
   const isManager = membership.role === 'manager'
   const { play } = useSound()
   const usedIconKeys = new Set(players.map((player) => player.icon.trim().toLocaleLowerCase()))
   const latestSeasonNumber = seasons.length ? seasons[seasons.length - 1].seasonNumber : club?.activeSeasonNumber ?? 1
   const activeSeasonNumber = club?.activeSeasonNumber ?? latestSeasonNumber
-  const selectedSeasonNumber = viewedSeasonNumber ?? activeSeasonNumber
-  const viewingHistoricalSeason = selectedSeasonNumber !== activeSeasonNumber
+  const viewingAllCompetitions = viewedSeasonNumber === 'all'
+  const selectedSeasonNumber = viewingAllCompetitions ? undefined : viewedSeasonNumber ?? activeSeasonNumber
+  const seasonSelectValue = viewingAllCompetitions ? 'all' : String(selectedSeasonNumber)
+  const activeCompetition = seasons.find((season) => season.seasonNumber === activeSeasonNumber) ?? null
+  const selectedCompetition = seasons.find((season) => season.seasonNumber === selectedSeasonNumber) ?? null
+  const viewingHistoricalCompetition = viewingAllCompetitions || selectedSeasonNumber !== activeSeasonNumber
+  const nextTournamentNumber = seasons.filter((season) => season.kind === 'tournament').length + 1
   const linkedPlayerForUser = user ? players.find((player) => player.authUid === user.uid) ?? null : null
   const analyticsWindowValue = analyticsWindow.mode === 'all'
     ? 'all'
     : analyticsWindow.mode === 'range'
       ? 'custom'
       : String(analyticsWindow.hours)
+  const normalizedRosterSearch = rosterSearch.trim().toLocaleLowerCase()
+  const filteredRosterPlayers = normalizedRosterSearch
+    ? players.filter((player) => player.displayName.toLocaleLowerCase().includes(normalizedRosterSearch))
+    : players
+  const clubModalOpen = summaryDefinition !== null || rosterOpen || analyticsOpen || gameLogsOpen || networkOpen || settingsOpen || deleteConfirmOpen
+
+  const handleWorkspaceTouchStart = (event: ReactTouchEvent<HTMLDivElement>) => {
+    if (clubModalOpen || event.touches.length !== 1 || blocksWorkspaceSwipe(event.target)) {
+      workspaceSwipeStartRef.current = null
+      return
+    }
+    if (!window.matchMedia?.('(max-width: 767px)').matches) return
+    workspaceSwipeStartRef.current = {
+      x: event.touches[0].clientX,
+      y: event.touches[0].clientY,
+      destination: clubToolsExpanded ? 'tools' : mobileView,
+    }
+  }
+
+  const handleWorkspaceTouchMove = (event: ReactTouchEvent<HTMLDivElement>) => {
+    const start = workspaceSwipeStartRef.current
+    if (!start || event.touches.length !== 1) {
+      workspaceSwipeStartRef.current = null
+      return
+    }
+    const deltaX = event.touches[0].clientX - start.x
+    const deltaY = event.touches[0].clientY - start.y
+    if (Math.abs(deltaY) > 16 && Math.abs(deltaY) > Math.abs(deltaX) * 1.15) {
+      workspaceSwipeStartRef.current = null
+      mobileWorkspaceTabsRef.current?.removeAttribute('data-carousel-moving')
+      setMobileWorkspaceIndicatorPosition(start.destination === 'tools' ? 0 : start.destination === 'session' ? 1 : 2)
+      return
+    }
+
+    const navigation = mobileWorkspaceTabsRef.current
+    const step = Math.max((navigation?.clientWidth ?? 0) / 3, MOBILE_WORKSPACE_SWIPE_DISTANCE)
+    if (start.destination === 'session' && deltaX > 0) {
+      navigation?.setAttribute('data-carousel-moving', 'true')
+      setMobileWorkspaceIndicatorPosition(1 - Math.min(1, deltaX / step))
+    } else if (start.destination === 'tools' && deltaX < 0) {
+      navigation?.setAttribute('data-carousel-moving', 'true')
+      setMobileWorkspaceIndicatorPosition(Math.min(1, -deltaX / step))
+    }
+  }
+
+  const handleWorkspaceTouchEnd = (event: ReactTouchEvent<HTMLDivElement>) => {
+    const start = workspaceSwipeStartRef.current
+    workspaceSwipeStartRef.current = null
+    const touch = event.changedTouches[0]
+    if (!start || !touch || clubModalOpen || !window.matchMedia?.('(max-width: 767px)').matches) return
+
+    const deltaX = touch.clientX - start.x
+    const deltaY = touch.clientY - start.y
+    if (Math.abs(deltaX) < MOBILE_WORKSPACE_SWIPE_DISTANCE || Math.abs(deltaX) < Math.abs(deltaY) * 1.25) {
+      mobileWorkspaceTabsRef.current?.removeAttribute('data-carousel-moving')
+      setMobileWorkspaceIndicatorPosition(start.destination === 'tools' ? 0 : start.destination === 'session' ? 1 : 2)
+      return
+    }
+
+    if (deltaX < 0) {
+      if (start.destination === 'tools') {
+        showMobileView('session')
+      }
+      return
+    }
+
+    if (start.destination === 'session') {
+      mobileWorkspaceTabsRef.current?.removeAttribute('data-carousel-moving')
+      setMobileWorkspaceIndicatorPosition(0)
+      changeClubToolsExpanded(true)
+    }
+  }
+
+  useEffect(() => {
+    clubDashboardRef.current?.toggleAttribute('inert', clubModalOpen)
+  }, [clubModalOpen])
+
+  const closeEmojiPickers = () => {
+    setIconPickerOpen(false)
+    setEditingPlayerId(null)
+    setEditingPlayerEmojiChoices([])
+    setCustomEmojiValue('')
+  }
+
+  const closeRoster = () => {
+    closeEmojiPickers()
+    setRosterSearch('')
+    setScrollToAddPlayer(false)
+    setRosterOpen(false)
+  }
+
+  const openRoster = (showAddPlayer = false) => {
+    setPlayerMessage(null)
+    setRosterOpen(true)
+    setScrollToAddPlayer(showAddPlayer)
+  }
+
+  useEffect(() => {
+    if (!rosterOpen || !scrollToAddPlayer) return
+    const frame = window.requestAnimationFrame(() => {
+      addPlayerSectionRef.current?.scrollIntoView?.({ block: 'start' })
+      setScrollToAddPlayer(false)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [rosterOpen, scrollToAddPlayer])
+
+  const openNewPlayerEmojiPicker = () => {
+    setEditingPlayerId(null)
+    setEditingPlayerEmojiChoices([])
+    setNewPlayerEmojiChoices(randomUnusedPlayerEmojiOptions(usedIconKeys))
+    setIconPickerOpen(true)
+  }
+
+  const togglePlayerEmojiPicker = (player: PlayerDoc, customValue = player.icon) => {
+    setIconPickerOpen(false)
+    setNewPlayerEmojiChoices([])
+    if (editingPlayerId === player.id) {
+      setEditingPlayerId(null)
+      setEditingPlayerEmojiChoices([])
+      setCustomEmojiValue('')
+      return
+    }
+    setEditingPlayerEmojiChoices(randomUnusedPlayerEmojiOptions(usedIconKeys))
+    setCustomEmojiValue(customValue)
+    setEditingPlayerId(player.id)
+  }
 
   const applyAnalyticsCustomRange = (startDate: string, endDate: string) => {
     try {
@@ -156,15 +488,19 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   useEffect(() => subscribePlayers(clubId, setPlayers), [clubId])
   useEffect(() => {
     setPlayerStatsReady(false)
+    const handleStats = (nextStats: PlayerStatsDoc[]) => {
+      setPlayerStats(nextStats)
+      setPlayerStatsReady(true)
+    }
+    if (viewingAllCompetitions) {
+      return subscribeAllCompetitionStats(clubId, handleStats)
+    }
     return subscribePlayerStats(
       clubId,
-      (nextStats) => {
-        setPlayerStats(nextStats)
-        setPlayerStatsReady(true)
-      },
+      handleStats,
       selectedSeasonNumber,
     )
-  }, [clubId, selectedSeasonNumber])
+  }, [clubId, selectedSeasonNumber, viewingAllCompetitions])
   useEffect(() => subscribeScoringRules(clubId, setScoringRules), [clubId])
   useEffect(() => subscribeTitleRules(clubId, setTitleRules), [clubId])
   useEffect(() => subscribeActivitySettings(clubId, setActivitySettings), [clubId])
@@ -199,11 +535,37 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
     return () => window.clearTimeout(timer)
   }, [seasonMessage])
 
+  useEffect(() => {
+    if (!rosterOpen || (!iconPickerOpen && editingPlayerId === null)) return
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target
+      if (target instanceof Element && target.closest('[data-emoji-picker-control]')) return
+      closeEmojiPickers()
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeEmojiPickers()
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [editingPlayerId, iconPickerOpen, rosterOpen])
+
   const addPlayer = async () => {
     setPlayerMessage(null)
     if (!playerName.trim()) {
       play('error')
       setPlayerMessage('Enter a player name.')
+      return
+    }
+
+    if (!playerIcon.trim()) {
+      play('error')
+      setPlayerMessage('Enter an emoji.')
       return
     }
 
@@ -348,54 +710,97 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   }
 
   const changeSeason = (value: string) => {
+    if (value === 'all') {
+      setViewedSeasonNumber('all')
+      setSeasonMessage('Showing all seasons and tournaments combined.')
+      setMobileView('standings')
+      return
+    }
     const seasonNumber = Number(value)
-    if (!seasonNumber || !seasons.some((season) => season.seasonNumber === seasonNumber)) return
+    const competition = seasons.find((season) => season.seasonNumber === seasonNumber)
+    if (!seasonNumber || !competition) return
     setViewedSeasonNumber(seasonNumber === activeSeasonNumber ? null : seasonNumber)
     setSeasonMessage(seasonNumber === activeSeasonNumber
-      ? `Showing current Season ${seasonNumber}.`
-      : `Viewing Season ${seasonNumber} history.`)
+      ? `Showing current ${competition.name}.`
+      : `Viewing ${competition.name} history.`)
   }
 
   const createNextSeason = async () => {
     if (!user) return
     if (!window.confirm('Start a new season? Current season data will remain available, and the active session will reset.')) return
-    setSeasonAction(true)
+    setSeasonAction('season')
     setSeasonMessage(null)
     try {
-      const nextSeason = await startNewSeason(clubId, { createdBy: user.uid })
+      await startNewSeason(clubId, { createdBy: user.uid })
       setViewedSeasonNumber(null)
-      setSeasonMessage(`Season ${nextSeason} started.`)
+      const regularSeasonNumber = seasons.filter((season) => season.kind !== 'tournament').length + 1
+      setSeasonMessage(`Season ${regularSeasonNumber} started.`)
       setSettingsOpen(false)
-      window.location.reload()
     } catch (error) {
       setSeasonMessage(error instanceof Error ? error.message : 'Unable to start a new season.')
       play('error')
     } finally {
-      setSeasonAction(false)
+      setSeasonAction(null)
+    }
+  }
+
+  const createTournament = async () => {
+    if (!user) return
+    const proposedName = tournamentName.trim() || `Tournament ${nextTournamentNumber}`
+    if (!window.confirm(`Start ${proposedName}? The active session will reset, and its scores and stats will stay separate from regular seasons.`)) return
+    setSeasonAction('tournament')
+    setSeasonMessage(null)
+    try {
+      const tournament = await startNewTournament(clubId, {
+        createdBy: user.uid,
+        ...(tournamentName.trim() ? { name: tournamentName.trim() } : {}),
+      })
+      setViewedSeasonNumber(null)
+      setTournamentName('')
+      setSeasonMessage(`${tournament.name} started.`)
+      setSettingsOpen(false)
+    } catch (error) {
+      setSeasonMessage(error instanceof Error ? error.message : 'Unable to start the tournament.')
+      play('error')
+    } finally {
+      setSeasonAction(null)
     }
   }
 
   return (
     <main className="club-workspace-main px-4 py-6">
-      <div className="club-workspace-shell" data-sidebar-expanded={clubToolsExpanded}>
+      <div
+        className="club-workspace-shell"
+        data-sidebar-expanded={clubToolsExpanded}
+        onTouchStart={handleWorkspaceTouchStart}
+        onTouchMove={handleWorkspaceTouchMove}
+        onTouchEnd={handleWorkspaceTouchEnd}
+        onTouchCancel={() => {
+          const start = workspaceSwipeStartRef.current
+          workspaceSwipeStartRef.current = null
+          mobileWorkspaceTabsRef.current?.removeAttribute('data-carousel-moving')
+          if (start) setMobileWorkspaceIndicatorPosition(start.destination === 'tools' ? 0 : start.destination === 'session' ? 1 : 2)
+        }}
+      >
         <ClubToolSidebar
           expanded={clubToolsExpanded}
-          onExpandedChange={setClubToolsExpanded}
+          onExpandedChange={changeClubToolsExpanded}
+          mobileReturnFocusRef={mobileToolsButtonRef}
           rosterOpen={rosterOpen}
           analyticsOpen={analyticsOpen}
           gameLogsOpen={gameLogsOpen}
           networkOpen={networkOpen}
           settingsOpen={settingsOpen}
-          onRoster={() => { setPlayerMessage(null); setRosterOpen(true) }}
+          onRoster={() => openRoster()}
           onAnalytics={() => { setAnalyticsPlayerId(null); setAnalyticsOpen(true) }}
           onGameLogs={() => setGameLogsOpen(true)}
           onNetwork={() => setNetworkOpen(true)}
-          onSettings={() => setSettingsOpen(true)}
+          onSettings={() => { setSeasonControlsOpen(false); setSettingsOpen(true) }}
         />
         <div className="club-workspace-content">
       <div data-tour="club-header" className="club-workspace-header mb-5 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="club-workspace-heading">
-              <h1 className="truncate text-2xl font-black text-slate-950">{club?.name ?? membership.clubName}</h1>
+              <h1 className="break-words text-2xl font-black text-slate-950">{club?.name ?? membership.clubName}</h1>
               <div className="club-header-roster-summary" aria-label="Club roster summary">
                 <button type="button" onClick={() => setSummaryDefinition('players')} aria-haspopup="dialog" aria-controls="club-summary-definition-dialog"><strong>{players.length}</strong><small>Players</small></button>
                 <button type="button" onClick={() => setSummaryDefinition('linked')} aria-haspopup="dialog" aria-controls="club-summary-definition-dialog"><strong>{players.filter((player) => player.authUid).length}</strong><small>Linked</small></button>
@@ -407,17 +812,18 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           <label data-tour="season-selector" className="club-season-action flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
             <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Season</span>
             <select
-              value={selectedSeasonNumber}
+              value={seasonSelectValue}
               onChange={(event) => changeSeason(event.target.value)}
-              disabled={seasonAction}
+              disabled={seasonAction !== null}
               className="bg-transparent text-sm font-black text-slate-900 outline-none disabled:opacity-50"
               aria-label="Season"
             >
-              {seasons.some((season) => season.seasonNumber === selectedSeasonNumber) ? null : (
-                <option value={selectedSeasonNumber}>{selectedSeasonNumber}</option>
-              )}
+              <option value="all">All seasons</option>
+              {!viewingAllCompetitions && seasons.some((season) => season.seasonNumber === selectedSeasonNumber) ? null : !viewingAllCompetitions ? (
+                <option value={selectedSeasonNumber}>Season {selectedSeasonNumber}</option>
+              ) : null}
               {seasons.map((season) => (
-                <option key={season.id} value={season.seasonNumber}>{season.seasonNumber}{season.seasonNumber === activeSeasonNumber ? ' (current)' : ''}</option>
+                <option key={season.id} value={season.seasonNumber}>{season.name}{season.kind === 'tournament' ? ' · Tournament' : ''}{season.seasonNumber === activeSeasonNumber && !isMobileViewport ? ' (current)' : ''}</option>
               ))}
             </select>
           </label>
@@ -450,13 +856,13 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
 
       {settingsOpen ? (
         <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
-          <div id="club-settings-dialog" data-tour="settings-modal" role="dialog" aria-modal="true" aria-labelledby="club-settings-title" className="responsive-modal-panel flex max-h-[calc(100dvh-3rem)] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl">
-            <div className="shrink-0 border-b border-slate-200 p-5">
+          <div id="club-settings-dialog" data-tour="settings-modal" role="dialog" aria-modal="true" aria-labelledby="club-settings-title" className="club-settings-dialog responsive-modal-panel flex max-h-[calc(100dvh-3rem)] min-h-0 w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+            <div className="club-settings-header shrink-0 border-b border-slate-200 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Club settings</p>
                   <h3 id="club-settings-title" className="mt-2 text-xl font-black text-slate-950">{club?.name ?? membership.clubName}</h3>
-                  <p className="mt-1 text-sm text-slate-500">Manage navigation and season controls for this club.</p>
+                  <p className="mt-1 text-sm text-slate-500">Manage competitions, scoring, standings, and club access.</p>
                 </div>
                 <button
                   data-tour="settings-close"
@@ -468,36 +874,96 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                 </button>
               </div>
             </div>
-            <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto overscroll-contain p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            <div className="club-settings-body grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
               <Link
                 href="/"
-                className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-black text-blue-800 transition hover:bg-blue-100"
+                className="club-settings-home-link inline-flex min-h-11 items-center gap-2 rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] px-4 py-3 text-sm font-black text-[rgb(var(--ink))] transition hover:border-[rgb(var(--bamboo))] hover:bg-[rgb(var(--bamboo)/.07)]"
               >
-                Back to homepage
+                <span aria-hidden="true">←</span> Back to homepage
               </Link>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-black text-slate-900">Season controls</p>
-                <p className="mt-1 text-sm text-slate-500">
-                  Active season: Season {activeSeasonNumber}. New clubs start at Season 1 by default.
-                </p>
-                {isManager ? (
+              <section aria-labelledby="competition-settings-heading" className="club-settings-card rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="club-settings-kicker">Competition</p>
+                    <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                      <h4 id="competition-settings-heading" className="text-base font-black text-slate-900">Season controls</h4>
+                      <p className="truncate text-xs font-semibold text-[rgb(var(--muted))]">
+                        <span className="font-black uppercase tracking-[.08em]">Current:</span>{' '}
+                        {activeCompetition?.name ?? `Season ${activeSeasonNumber}`} · {activeCompetition?.kind === 'tournament' ? 'Tournament' : 'Regular season'}
+                      </p>
+                    </div>
+                  </div>
                   <button
                     type="button"
-                    onClick={createNextSeason}
-                    disabled={seasonAction}
-                    className="mt-4 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-500 disabled:opacity-50"
+                    aria-expanded={seasonControlsOpen}
+                    aria-controls="season-controls-content"
+                    aria-label={seasonControlsOpen ? 'Collapse season controls' : 'Manage season controls'}
+                    onClick={() => setSeasonControlsOpen((open) => !open)}
+                    className="inline-flex min-h-10 w-full shrink-0 items-center justify-center gap-2 rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] px-3 text-sm font-black text-[rgb(var(--ink))] transition hover:border-[rgb(var(--bamboo))] hover:bg-[rgb(var(--bamboo)/.07)] sm:w-auto"
                   >
-                    {seasonAction ? 'Starting season...' : 'Start new season'}
+                    {seasonControlsOpen ? 'Hide' : 'Manage'}
+                    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" className={`h-4 w-4 transition-transform ${seasonControlsOpen ? 'rotate-180' : ''}`}><path d="m5 7.5 5 5 5-5" /></svg>
                   </button>
-                ) : (
-                  <p className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600">
-                    Only the club manager can start a new season.
-                  </p>
-                )}
+                </div>
+                {seasonControlsOpen ? (
+                  <div id="season-controls-content" className="mt-4 border-t border-slate-200 pt-4">
+                    <p className="max-w-xl text-sm leading-6 text-slate-500">Seasons build regular club history. Tournaments use separate scores, ratings, and standings.</p>
+                    {isManager ? (
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        <div className="club-competition-choice rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] p-4">
+                          <h5 className="text-sm font-black text-[rgb(var(--ink))]">Start a regular season</h5>
+                          <p className="mt-1 text-xs leading-5 text-[rgb(var(--muted))]">Creates Season {seasons.filter((season) => season.kind !== 'tournament').length + 1} and resets the active table session.</p>
+                          <button
+                            type="button"
+                            onClick={createNextSeason}
+                            disabled={seasonAction !== null}
+                            className="mt-4 min-h-11 w-full rounded-lg border border-[rgb(var(--bamboo))] bg-[rgb(var(--bamboo))] px-4 text-sm font-bold text-white transition hover:bg-[rgb(var(--bamboo-bright))] disabled:opacity-50"
+                          >
+                            {seasonAction === 'season' ? 'Starting season…' : 'Start new season'}
+                          </button>
+                        </div>
+                        <div className="club-competition-choice club-competition-choice-tournament rounded-lg border border-[rgb(var(--gold)/.55)] bg-[rgb(var(--gold)/.07)] p-4">
+                          <h5 className="text-sm font-black text-[rgb(var(--ink))]">Start a tournament</h5>
+                          <p className="mt-1 text-xs leading-5 text-[rgb(var(--muted))]">Keeps tournament results separate from regular season totals.</p>
+                          <label className="mt-3 block text-xs font-bold text-[rgb(var(--muted))]">
+                            Tournament name <span className="font-normal">(optional)</span>
+                            <input
+                              value={tournamentName}
+                              maxLength={80}
+                              onChange={(event) => setTournamentName(event.target.value)}
+                              placeholder={`Tournament ${nextTournamentNumber}`}
+                              className="mt-1 min-h-11 w-full rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] px-3 text-[rgb(var(--ink))] outline-none"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={createTournament}
+                            disabled={seasonAction !== null}
+                            className="mt-3 min-h-11 w-full rounded-lg border border-[rgb(var(--gold))] bg-[rgb(var(--gold)/.15)] px-4 text-sm font-black text-[rgb(var(--ink))] transition hover:bg-[rgb(var(--gold)/.25)] disabled:opacity-50"
+                          >
+                            {seasonAction === 'tournament' ? 'Starting tournament…' : 'Start tournament'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600">
+                        Only the club manager can start seasons or tournaments.
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+              </section>
+              <div className="club-settings-group-heading">
+                <p className="club-settings-kicker">Club rules</p>
+                <p>Scoring, activity, and leaderboard titles apply across the club.</p>
               </div>
               <ScoringRulesSettings clubId={clubId} rules={scoringRules} isManager={isManager} />
               <ActivitySettings clubId={clubId} settings={activitySettings} isManager={isManager} />
               <TitleRulesSettings clubId={clubId} rules={titleRules} isManager={isManager} />
+              <div className="club-settings-group-heading club-settings-danger-heading">
+                <p className="club-settings-kicker">Club access</p>
+                <p>Permanent club-level actions are kept separate from everyday settings.</p>
+              </div>
               {isManager && !club?.universal ? (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
                   <p className="text-sm font-black text-rose-700">Delete club</p>
@@ -533,72 +999,109 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         </div>
       ) : null}
 
-      <nav className="mobile-workspace-tabs sticky top-0 z-30 mx-auto mb-4 grid w-full grid-cols-2 rounded-lg border border-slate-200 bg-white/95 p-2 backdrop-blur md:hidden" aria-label="Club workspace">
+      <nav
+        ref={mobileWorkspaceTabsRef}
+        className="mobile-workspace-tabs sticky top-0 z-30 mx-auto mb-4 grid w-full grid-cols-3 rounded-lg border border-slate-200 bg-white/95 p-2 backdrop-blur md:hidden"
+        aria-label="Club workspace"
+        data-active-destination={clubToolsExpanded ? 'tools' : mobileView}
+      >
+        <button
+          ref={mobileToolsButtonRef}
+          data-tour="club-tools-toggle"
+          type="button"
+          aria-label="Open club tools"
+          aria-expanded={clubToolsExpanded}
+          aria-controls="club-tool-sidebar-panel"
+          onClick={() => {
+            mobileWorkspaceTabsRef.current?.removeAttribute('data-carousel-moving')
+            setMobileView('session')
+            mobilePanelsApi?.scrollTo(0, true)
+            setMobileWorkspaceIndicatorPosition(0)
+            changeClubToolsExpanded(true)
+          }}
+          className={`mobile-workspace-tab inline-flex items-center justify-center gap-1.5${clubToolsExpanded ? ' active' : ''}`}
+        >
+          <span aria-hidden="true" className="text-base leading-none">☰</span>
+          <span>Tools</span>
+        </button>
         {([
           ['session', 'Session'],
           ['standings', 'Leaderboard'],
         ] as const).map(([view, label]) => (
           <button
             key={view}
+            id={`club-${view}-view-control`}
             data-tour={view === 'standings' ? 'standings-tab' : undefined}
             type="button"
-            onClick={() => setMobileView(view)}
-            aria-pressed={mobileView === view}
-            className={mobileView === view ? 'mobile-workspace-tab active' : 'mobile-workspace-tab'}
+            onClick={() => showMobileView(view)}
+            aria-controls={view === 'session' ? 'club-session-view' : 'club-leaderboard-view'}
+            aria-pressed={!clubToolsExpanded && mobileView === view}
+            className={!clubToolsExpanded && mobileView === view ? 'mobile-workspace-tab active' : 'mobile-workspace-tab'}
           >
             {label}
           </button>
         ))}
       </nav>
 
-      <div className="club-workspace-dashboard-grid grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_460px]">
-        <div className="flex min-w-0 flex-col gap-6">
-          {joinRequestNotice ? (
-            <div role={joinRequestNotice.error ? 'alert' : 'status'} aria-live={joinRequestNotice.error ? 'assertive' : 'polite'} className={`rounded-lg border px-4 py-3 text-sm font-bold shadow-sm ${joinRequestNotice.error ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
-              {joinRequestNotice.message}
-            </div>
-          ) : null}
-          {isManager && joinRequests.length > 0 ? (
-            <section className="rounded-lg border border-amber-200 bg-amber-50 p-5">
-              <h3 className="text-sm font-black uppercase tracking-[0.16em] text-amber-800">Join requests</h3>
-              <div className="mt-4 space-y-3">
-                {joinRequests.map((request) => (
-                  <div key={request.uid} className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="font-bold text-slate-950">{request.displayName ?? request.email ?? 'Unknown user'}</p>
-                      <p className="text-sm text-slate-500">{request.email}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => approveRequest(request, false)} disabled={joiningAction === request.uid} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-700 disabled:opacity-50">
-                        Decline
-                      </button>
-                      <button type="button" onClick={() => approveRequest(request, true)} disabled={joiningAction === request.uid} className="rounded-lg bg-amber-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-50">
-                        Accept
-                      </button>
-                    </div>
+      <div ref={clubDashboardRef} className={`club-workspace-dashboard-grid${clubModalOpen ? ' is-modal-covered' : ''}`} aria-hidden={clubModalOpen || undefined}>
+        <div ref={mobilePanelsRef} className="club-mobile-panels-viewport">
+          <div className="club-mobile-panels-track">
+            <aside
+              ref={sessionPanelRef}
+              id="club-session-view"
+              className="club-mobile-panel club-session-panel"
+              aria-labelledby="club-session-view-control"
+              aria-hidden={isMobileViewport && (clubToolsExpanded || mobileView !== 'session') ? true : undefined}
+            >
+              {viewingHistoricalCompetition ? (
+                <section className="rounded-lg border border-amber-200 bg-amber-50 p-5 text-amber-950">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-700">{viewingAllCompetitions ? 'Club history' : `Historical ${selectedCompetition?.kind === 'tournament' ? 'tournament' : 'season'}`}</p>
+                  <h2 className="mt-2 text-lg font-black">{viewingAllCompetitions ? 'All seasons combined' : `${selectedCompetition?.name ?? `Season ${selectedSeasonNumber}`} is read-only`}</h2>
+                  <p className="mt-1 text-sm leading-6 text-amber-900">{viewingAllCompetitions ? 'Leaderboard and analytics combine every regular season and tournament in this club.' : `Standings and analytics show ${selectedCompetition?.name ?? `Season ${selectedSeasonNumber}`}.`} Return to {activeCompetition?.name ?? `Season ${activeSeasonNumber}`} to manage the current session.</p>
+                  <button type="button" onClick={() => changeSeason(String(activeSeasonNumber))} className="mt-4 min-h-10 rounded border border-amber-300 bg-white px-3 text-sm font-bold text-amber-900">Return to current</button>
+                </section>
+              ) : (
+                <SessionManager clubId={clubId} seasonNumber={activeSeasonNumber} players={players} isManager={isManager} scoringRules={scoringRules} onAddPlayer={() => openRoster(true)} />
+              )}
+            </aside>
+
+            <section
+              ref={leaderboardPanelRef}
+              id="club-leaderboard-view"
+              className="club-mobile-panel club-leaderboard-panel"
+              aria-labelledby="club-standings-view-control"
+              aria-hidden={isMobileViewport && (clubToolsExpanded || mobileView !== 'standings') ? true : undefined}
+            >
+              <div className="flex min-w-0 flex-col gap-6">
+                {joinRequestNotice ? (
+                  <div role={joinRequestNotice.error ? 'alert' : 'status'} aria-live={joinRequestNotice.error ? 'assertive' : 'polite'} className={`rounded-lg border px-4 py-3 text-sm font-bold shadow-sm ${joinRequestNotice.error ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
+                    {joinRequestNotice.message}
                   </div>
-                ))}
+                ) : null}
+                {isManager && joinRequests.length > 0 ? (
+                  <section className="rounded-lg border border-amber-200 bg-amber-50 p-5">
+                    <h3 className="text-sm font-black uppercase tracking-[0.16em] text-amber-800">Join requests</h3>
+                    <div className="mt-4 space-y-3">
+                      {joinRequests.map((request) => (
+                        <div key={request.uid} className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="font-bold text-slate-950">{request.displayName ?? request.email ?? 'Unknown user'}</p>
+                            <p className="text-sm text-slate-500">{request.email}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => approveRequest(request, false)} disabled={joiningAction === request.uid} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-700 disabled:opacity-50">Decline</button>
+                            <button type="button" onClick={() => approveRequest(request, true)} disabled={joiningAction === request.uid} className="rounded-lg bg-amber-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-50">Accept</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+                <LeaderboardPanel clubId={clubId} seasonNumber={selectedSeasonNumber} scopeLabel={viewingAllCompetitions ? 'all seasons and tournaments' : selectedCompetition?.name} players={players} stats={playerStats} titleRules={titleRules} activePlayerMonths={activitySettings.activePlayerMonths} onPlayerAnalytics={(playerId) => { setAnalyticsPlayerId(playerId); setAnalyticsOpen(true) }} />
               </div>
             </section>
-          ) : null}
-
-          <div className={mobileView === 'standings' ? 'block md:block' : 'hidden md:block'}>
-            <LeaderboardPanel clubId={clubId} seasonNumber={selectedSeasonNumber} players={players} stats={playerStats} titleRules={titleRules} activePlayerMonths={activitySettings.activePlayerMonths} onPlayerAnalytics={(playerId) => { setAnalyticsPlayerId(playerId); setAnalyticsOpen(true) }} />
           </div>
         </div>
-
-        <aside className={mobileView === 'session' ? 'club-session-panel order-first block md:block xl:order-none' : 'club-session-panel order-first hidden md:block xl:order-none'}>
-          {viewingHistoricalSeason ? (
-            <section className="rounded-lg border border-amber-200 bg-amber-50 p-5 text-amber-950">
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-700">Historical season</p>
-              <h2 className="mt-2 text-lg font-black">Season {selectedSeasonNumber} is read-only</h2>
-              <p className="mt-1 text-sm leading-6 text-amber-900">Standings and analytics show Season {selectedSeasonNumber}. Return to Season {activeSeasonNumber} to manage the current session.</p>
-              <button type="button" onClick={() => changeSeason(String(activeSeasonNumber))} className="mt-4 min-h-10 rounded border border-amber-300 bg-white px-3 text-sm font-bold text-amber-900">Return to current season</button>
-            </section>
-          ) : (
-            <SessionManager clubId={clubId} seasonNumber={activeSeasonNumber} players={players} isManager={isManager} scoringRules={scoringRules} />
-          )}
-        </aside>
       </div>
 
         </div>
@@ -613,7 +1116,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                 <h3 id="club-roster-title" className="mt-2 text-xl font-black text-slate-950">Players and linked users</h3>
                 <p className="mt-1 text-sm text-slate-500">{players.length} tracked players in {club?.name ?? membership.clubName}</p>
               </div>
-              <button data-tour="roster-close" type="button" onClick={() => setRosterOpen(false)} className="mr-5 mt-5 rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">
+              <button data-tour="roster-close" type="button" onClick={closeRoster} className="mr-5 mt-5 rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">
                 Close
               </button>
             </div>
@@ -643,7 +1146,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                   {managerMessage ? <p role="status" aria-live="polite" className="mt-3 text-sm font-semibold text-slate-700">{managerMessage}</p> : null}
                 </section>
               ) : null}
-              <section className="rounded-lg border border-teal-200 bg-teal-50 p-4">
+              <section ref={addPlayerSectionRef} className="scroll-mt-4 rounded-lg border border-teal-200 bg-teal-50 p-4">
                 <h4 className="text-sm font-black uppercase tracking-[0.16em] text-teal-800">Add player</h4>
                 <p className="mt-1 text-sm leading-6 text-slate-600">Any active club member can add a player to the roster.</p>
                 <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_140px_auto]">
@@ -656,38 +1159,36 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                     <div className="relative mt-2">
                       <input
                         value={playerIcon}
-                        onClick={() => setIconPickerOpen(true)}
-                        onFocus={() => setIconPickerOpen(true)}
+                        onClick={openNewPlayerEmojiPicker}
+                        onFocus={() => { if (!iconPickerOpen) openNewPlayerEmojiPicker() }}
                         onChange={(event) => {
                           setPlayerIcon(event.target.value.slice(0, 12))
                           setPlayerMessage(null)
                         }}
+                        data-emoji-picker-control
                         className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-teal-500"
                       />
                       {iconPickerOpen ? (
-                        <div className="emoji-menu absolute right-0 top-[calc(100%+8px)] z-20 w-56 rounded border border-slate-200 bg-white p-3 shadow-xl">
-                          <div className="emoji-picker grid grid-cols-4 gap-1">
-                            {iconChoices.map((choice) => {
-                              const used = usedIconKeys.has(choice.trim().toLocaleLowerCase())
-                              return (
-                                <button
-                                  key={choice}
-                                  type="button"
-                                  disabled={used}
-                                  onClick={() => {
-                                    setPlayerIcon(choice)
-                                    setPlayerMessage(null)
-                                    setIconPickerOpen(false)
-                                  }}
-                                  className={`flex h-11 w-11 items-center justify-center rounded border text-xl ${used ? 'cursor-not-allowed border-transparent opacity-20' : 'border-transparent bg-transparent hover:border-[rgb(var(--bamboo))] hover:bg-[rgb(var(--bamboo)/0.08)]'}`}
-                                  title={used ? 'Already in use' : 'Use this icon'}
-                                >
-                                  {choice}
-                                </button>
-                              )
-                            })}
+                        <div data-emoji-picker-control className="emoji-menu absolute right-0 top-[calc(100%+8px)] z-20 w-56 rounded border border-slate-200 bg-white p-3 shadow-xl">
+                          <div className="emoji-picker grid grid-cols-4 gap-1" role="group" aria-label="Available emoji options">
+                            {newPlayerEmojiChoices.filter((choice) => !usedIconKeys.has(choice.trim().toLocaleLowerCase())).map((choice) => (
+                              <button
+                                key={choice}
+                                type="button"
+                                onClick={() => {
+                                  setPlayerIcon(choice)
+                                  setPlayerMessage(null)
+                                  setIconPickerOpen(false)
+                                }}
+                                className="flex h-11 w-11 items-center justify-center rounded border border-transparent bg-transparent text-xl hover:border-[rgb(var(--bamboo))] hover:bg-[rgb(var(--bamboo)/0.08)]"
+                                title="Use this emoji"
+                                aria-label={`Use ${choice} emoji`}
+                              >
+                                {choice}
+                              </button>
+                            ))}
                           </div>
-                          <p className="mt-2 text-xs font-medium text-slate-500">Choose a unique emoji for this player.</p>
+                          <p className="mt-2 text-xs font-medium text-slate-500">Choose an available emoji for this player.</p>
                         </div>
                       ) : null}
                     </div>
@@ -708,19 +1209,31 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
               <section className="mt-5">
                 <div className="flex items-center justify-between gap-3">
                   <h4 className="text-sm font-black uppercase tracking-[0.16em] text-slate-600">All players</h4>
-                  <p className="text-sm font-semibold text-slate-500">{players.length} total</p>
+                  <p className="text-sm font-semibold text-slate-500">{normalizedRosterSearch ? `${filteredRosterPlayers.length} of ${players.length}` : `${players.length} total`}</p>
+                </div>
+                <div className="relative mt-3">
+                  <span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
+                  <input
+                    type="search"
+                    value={rosterSearch}
+                    onChange={(event) => setRosterSearch(event.target.value)}
+                    placeholder="Search roster players…"
+                    aria-label="Search roster players"
+                    className="min-h-11 w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-base text-slate-900 outline-none transition focus:border-[rgb(var(--bamboo))] focus:ring-2 focus:ring-[rgb(var(--bamboo)/0.18)]"
+                  />
                 </div>
                 <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {players.map((player) => (
+                  {filteredRosterPlayers.map((player) => (
                     <div key={player.id} className="relative rounded-xl border border-slate-200 bg-slate-50 p-3 transition hover:border-slate-300 hover:bg-white">
                       <div className="flex min-w-0 items-center gap-3">
                         {isManager || player.authUid === user?.uid ? (
                           <button
                             type="button"
-                            onClick={() => { setEditingPlayerId(editingPlayerId === player.id ? null : player.id); setCustomEmojiValue(player.icon) }}
-                            onContextMenu={(event) => { event.preventDefault(); setEditingPlayerId(player.id); setCustomEmojiValue('') }}
+                            onClick={() => togglePlayerEmojiPicker(player)}
+                            onContextMenu={(event) => { event.preventDefault(); togglePlayerEmojiPicker(player, '') }}
                             aria-label={`Change ${player.displayName} emoji`}
                             title="Change emoji. Right-click to enter a custom emoji."
+                            data-emoji-picker-control
                             className="flex h-11 w-11 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-lg text-slate-700 shadow-sm transition hover:scale-105 hover:border-[rgb(var(--bamboo))] hover:bg-[rgb(var(--bamboo)/0.12)] hover:ring-2 hover:ring-[rgb(var(--bamboo)/0.25)] focus-visible:ring-2 focus-visible:ring-[rgb(var(--bamboo))]"
                           >
                             {player.icon}
@@ -759,11 +1272,12 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                         </form>
                       ) : null}
                       {(isManager || player.authUid === user?.uid) && editingPlayerId === player.id ? (
-                        <div className="emoji-menu absolute right-2 top-full z-20 mt-2 w-64 max-w-[calc(100vw-3rem)] rounded border border-slate-200 bg-white p-3 shadow-xl">
-                          <div className="emoji-picker grid grid-cols-4 gap-1">{iconChoices.map((choice) => {
-                            const used = usedIconKeys.has(choice.toLocaleLowerCase()) && choice !== player.icon
-                            return <button key={choice} type="button" disabled={used} onClick={() => changePlayerIcon(player, choice)} className="flex h-11 w-11 items-center justify-center rounded border border-transparent bg-transparent text-xl hover:border-[rgb(var(--bamboo))] hover:bg-[rgb(var(--bamboo)/0.08)] disabled:opacity-20">{choice}</button>
-                          })}</div>
+                        <div data-emoji-picker-control className="emoji-menu absolute right-2 top-full z-20 mt-2 w-64 max-w-[calc(100vw-3rem)] rounded border border-slate-200 bg-white p-3 shadow-xl">
+                          <div className="emoji-picker grid grid-cols-4 gap-1" role="group" aria-label={`Available emoji options for ${player.displayName}`}>
+                            {editingPlayerEmojiChoices.filter((choice) => !usedIconKeys.has(choice.trim().toLocaleLowerCase())).map((choice) => (
+                              <button key={choice} type="button" onClick={() => changePlayerIcon(player, choice)} aria-label={`Use ${choice} emoji for ${player.displayName}`} className="flex h-11 w-11 items-center justify-center rounded border border-transparent bg-transparent text-xl hover:border-[rgb(var(--bamboo))] hover:bg-[rgb(var(--bamboo)/0.08)]">{choice}</button>
+                            ))}
+                          </div>
                           <form className="mt-3 border-t border-slate-200 pt-3" onSubmit={(event) => { event.preventDefault(); void changePlayerIcon(player, customEmojiValue) }}>
                             <label className="text-xs font-bold text-slate-600">Custom emoji</label>
                             <div className="mt-1 flex gap-2">
@@ -781,6 +1295,11 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                     No players yet.
                   </div>
                 ) : null}
+                {players.length > 0 && filteredRosterPlayers.length === 0 ? (
+                  <div className="mt-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm font-semibold text-slate-500">
+                    No roster players match “{rosterSearch.trim()}”.
+                  </div>
+                ) : null}
               </section>
             </div>
           </div>
@@ -790,16 +1309,16 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
       {analyticsOpen ? (
         <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
           <div id="club-analytics-dialog" data-tour="analytics-modal" role="dialog" aria-modal="true" aria-labelledby="club-analytics-title" className="responsive-modal-panel flex max-h-[92vh] w-full max-w-6xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
-            <div className="flex shrink-0 flex-col items-start justify-between gap-3 border-b border-slate-200 p-5 sm:flex-row">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">Analytics</p>
+            <div className="club-analytics-header flex shrink-0 flex-col items-start justify-between gap-3 border-b border-slate-200 p-5 sm:flex-row">
+              <div className="club-analytics-heading">
+                <p className="club-analytics-kicker text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">Analytics</p>
                 <h3 id="club-analytics-title" className="mt-2 text-xl font-black text-slate-950">{club?.name ?? membership.clubName} insights</h3>
-                <p className="mt-1 text-sm text-slate-500">Dashboard charts, Skill movement, and club analytics.</p>
-                <Link href="/metrics" className="mt-3 inline-flex items-center gap-3 rounded-full border border-[rgb(var(--bamboo)/.45)] bg-[rgb(var(--bamboo)/.08)] px-4 py-2 text-xs font-black text-[rgb(var(--bamboo))] transition hover:translate-x-1 hover:bg-[rgb(var(--bamboo)/.14)]">
-                  <span>How are these metrics calculated?</span><span aria-hidden="true">→</span>
+                <p className="club-analytics-description mt-1 text-sm text-slate-500">Dashboard charts, Skill movement, and club analytics.</p>
+                <Link href="/metrics" className="club-analytics-metrics-link mt-3 inline-flex items-center gap-3 rounded-full border border-[rgb(var(--bamboo)/.45)] bg-[rgb(var(--bamboo)/.08)] px-4 py-2 text-xs font-black text-[rgb(var(--bamboo))] transition hover:translate-x-1 hover:bg-[rgb(var(--bamboo)/.14)]">
+                  <span className="club-analytics-metrics-long">How are these metrics calculated?</span><span className="club-analytics-metrics-short">Metrics guide</span><span aria-hidden="true">→</span>
                 </Link>
               </div>
-              <div className="flex w-full shrink-0 flex-wrap items-end justify-between gap-2 sm:w-auto sm:justify-end">
+              <div className="club-analytics-controls flex w-full shrink-0 flex-wrap items-end justify-between gap-2 sm:w-auto sm:justify-end">
                 <label>
                   <span className="sr-only">Time window for all analytics</span>
                   <select aria-label="Time window for all analytics" value={analyticsWindowValue} onChange={(event) => {
@@ -816,7 +1335,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                   <label className="text-[10px] font-black uppercase tracking-[.1em] text-slate-500">From<input type="date" value={analyticsStartDate} max={analyticsEndDate} onChange={(event) => { setAnalyticsStartDate(event.target.value); applyAnalyticsCustomRange(event.target.value, analyticsEndDate) }} className="mt-1 block min-h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm font-bold normal-case tracking-normal text-slate-900" /></label>
                   <label className="text-[10px] font-black uppercase tracking-[.1em] text-slate-500">To<input type="date" value={analyticsEndDate} min={analyticsStartDate} max={today} onChange={(event) => { setAnalyticsEndDate(event.target.value); applyAnalyticsCustomRange(analyticsStartDate, event.target.value) }} className="mt-1 block min-h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm font-bold normal-case tracking-normal text-slate-900" /></label>
                 </> : null}
-                <button data-tour="analytics-close" type="button" onClick={() => setAnalyticsOpen(false)} className="min-h-10 rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">
+                <button data-tour="analytics-close" type="button" onClick={() => setAnalyticsOpen(false)} className="club-analytics-close min-h-10 rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600">
                   Close
                 </button>
               </div>
@@ -835,7 +1354,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         <GameLogsModal
           clubId={clubId}
           seasons={seasons}
-          currentSeason={selectedSeasonNumber}
+          currentSeason={selectedSeasonNumber ?? activeSeasonNumber}
           userId={user.uid}
           isManager={isManager}
           onClose={() => setGameLogsOpen(false)}
@@ -847,7 +1366,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           clubId={clubId}
           players={players}
           seasons={seasons}
-          currentSeason={selectedSeasonNumber}
+          currentSeason={selectedSeasonNumber ?? activeSeasonNumber}
           onClose={() => setNetworkOpen(false)}
         />
       ) : null}

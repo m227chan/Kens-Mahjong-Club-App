@@ -5,10 +5,12 @@ import { auth } from '@/lib/firebase'
 import { getSupabaseBrowserClient } from '@/lib/supabase'
 import { realtimeChannelName } from '@/lib/realtime-channel'
 import {
+  clampSessionTableCount,
   createInitialSessionLayout,
   normalizeSessionLayout,
 } from '@/lib/session-layout'
 import { computeGlobalRanks } from '@/lib/stats-engine'
+import { aggregateAllCompetitionStats } from '@/lib/standings-analytics'
 import type {
   AccountDeletionPlan,
   AccountManagerResolution,
@@ -181,7 +183,7 @@ function mapStats(row: Row): PlayerStatsDoc & { id: string } {
 }
 function mapSession(row: Row): SessionDoc {
   const participants = (row.participants as string[]) ?? []
-  const tableCount = Number(row.table_count)
+  const tableCount = clampSessionTableCount(Number(row.table_count))
   const rawTables = (row.tables as Record<string, string[]>) ?? {}
   const { tables, sideline } = normalizeSessionLayout(
     participants,
@@ -411,7 +413,7 @@ export function subscribeJoinRequests(
       .eq('status', 'pending')
       .order('created_at')
     if (error) throw error
-    return (data ?? []).map((row: Row) => ({
+    return (data ?? []).map((row: Row): JoinRequestDoc => ({
       id: String(row.firebase_uid),
       clubId: String(row.club_id),
       uid: String(row.firebase_uid),
@@ -711,10 +713,9 @@ export async function loadAnalyticsGames(
   seasonNumber?: number,
 ) {
   if (window.mode === 'all') {
-    const games = await loadAllGames(clubId)
-    return games.filter(
-      (game) => !seasonNumber || game.seasonNumber === seasonNumber,
-    )
+    return seasonNumber
+      ? loadGamesInDateRange(clubId, null, null, seasonNumber)
+      : loadAllGames(clubId)
   }
   const { startAt, endAt } = sessionWindowDateBounds(window)
   const key = `${clubId}:analytics-games:${seasonNumber ?? 'all'}:${window.mode === 'hours' ? `${window.hours}h` : `${window.startAt}:${window.endAt}`}`
@@ -808,6 +809,20 @@ export function subscribePlayerStats(
     () => invalidateClubHistoryCache(clubId),
   )
 }
+export function subscribeAllCompetitionStats(
+  clubId: string,
+  callback: (stats: PlayerStatsDoc[]) => void,
+) {
+  return realtime(
+    `all-competition-stats:${clubId}`,
+    'season_player_stats',
+    `club_id=eq.${clubId}`,
+    async () => aggregateAllCompetitionStats(await fetchGames(clubId)),
+    callback,
+    undefined,
+    () => invalidateClubHistoryCache(clubId),
+  )
+}
 export function subscribeSeasons(
   clubId: string,
   callback: (seasons: SeasonDoc[]) => void,
@@ -819,10 +834,11 @@ export function subscribeSeasons(
       .eq('club_id', clubId)
       .order('season_number')
     if (error) throw error
-    return (data ?? []).map((row: Row) => ({
+    return (data ?? []).map((row: Row): SeasonDoc => ({
       id: String(row.season_number),
       seasonNumber: Number(row.season_number),
       name: String(row.name),
+      kind: row.competition_type === 'tournament' ? 'tournament' : 'season',
       createdAt: ts(row.created_at),
       createdBy: String(row.created_by),
       active: Boolean(row.active),
@@ -840,6 +856,8 @@ export const ensureSeasons = (clubId: string, userId = 'system') =>
   serverAction<void>('ensureSeasons', { clubId, userId })
 export const startNewSeason = (clubId: string, input: { createdBy: string }) =>
   serverAction<number>('startNewSeason', { clubId, input })
+export const startNewTournament = (clubId: string, input: { createdBy: string; name?: string }) =>
+  serverAction<{ seasonNumber: number; name: string; kind: 'tournament' }>('startNewTournament', { clubId, input })
 export const setActiveSeason = (clubId: string, seasonNumber: number) =>
   serverAction<void>('setActiveSeason', { clubId, seasonNumber })
 export function subscribeActiveSession(
@@ -881,9 +899,10 @@ export async function createSession(
     sideline?: string[]
   },
 ) {
+  const tableCount = clampSessionTableCount(input.tableCount)
   const initialLayout = createInitialSessionLayout(
     input.participants,
-    input.tableCount,
+    tableCount,
   )
   const tables = input.tables ?? initialLayout.tables
   const assigned = new Set(Object.values(tables).flat())
@@ -892,7 +911,7 @@ export async function createSession(
     initialLayout.sideline.filter((playerId) => !assigned.has(playerId))
   return serverAction<string>('createSession', {
     clubId,
-    input: { ...input, tables, sideline },
+    input: { ...input, tableCount, tables, sideline },
   })
 }
 export async function updateSession(
@@ -903,7 +922,7 @@ export async function updateSession(
   const mapped: Row = {}
   if (values.seasonNumber != null) mapped.season_number = values.seasonNumber
   if (values.isActive != null) mapped.is_active = values.isActive
-  if (values.tableCount != null) mapped.table_count = values.tableCount
+  if (values.tableCount != null) mapped.table_count = clampSessionTableCount(values.tableCount)
   if (values.participants) mapped.participants = values.participants
   if (values.tables) mapped.tables = values.tables
   if (values.sideline) mapped.sideline = values.sideline

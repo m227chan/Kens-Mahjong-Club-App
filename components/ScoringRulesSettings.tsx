@@ -77,13 +77,13 @@ export default function ScoringRulesSettings({
   }
 
   if (!expanded) return (
-    <section aria-labelledby="house-scoring-rules-heading" className="rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface-2))] p-4 text-[rgb(var(--ink))]">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <section aria-labelledby="house-scoring-rules-heading" className="club-settings-card rounded-xl border border-[rgb(var(--line))] bg-[rgb(var(--surface-2))] p-4 text-[rgb(var(--ink))] sm:p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h4 id="house-scoring-rules-heading" className="text-sm font-black">House scoring rules</h4>
           <p className="mt-1 text-sm text-[rgb(var(--muted))]">Fan {rules.minFan}–{rules.maxFan}+ · club-specific point mapping</p>
         </div>
-        <button type="button" onClick={() => setExpanded(true)} aria-expanded="false" aria-controls="house-scoring-rules-content" className="min-h-11 rounded-lg bg-[rgb(var(--bamboo))] px-4 text-sm font-bold text-white">
+        <button type="button" onClick={() => setExpanded(true)} aria-expanded="false" aria-controls="house-scoring-rules-content" className="min-h-11 w-full rounded-lg bg-[rgb(var(--bamboo))] px-4 text-sm font-bold text-white sm:w-auto">
           {isManager ? 'Edit house scoring rules' : 'View house scoring rules'}
         </button>
       </div>
@@ -91,13 +91,13 @@ export default function ScoringRulesSettings({
   )
 
   return (
-    <section aria-labelledby="house-scoring-rules-heading" className="rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface-2))] p-4 text-[rgb(var(--ink))]">
-      <div className="flex items-center justify-between gap-3">
+    <section aria-labelledby="house-scoring-rules-heading" className="club-settings-card rounded-xl border border-[rgb(var(--line))] bg-[rgb(var(--surface-2))] p-4 text-[rgb(var(--ink))] sm:p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <h4 id="house-scoring-rules-heading" className="text-sm font-black">House scoring rules</h4>
           {dirty ? <span className="rounded-full bg-[rgb(var(--gold)/.14)] px-2 py-1 text-[11px] font-bold text-[rgb(var(--ink))]">Unsaved changes</span> : null}
         </div>
-        <button type="button" onClick={() => setExpanded(false)} aria-expanded="true" aria-controls="house-scoring-rules-content" className="min-h-11 rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] px-3 text-sm font-bold">Collapse</button>
+        <button type="button" onClick={() => setExpanded(false)} aria-expanded="true" aria-controls="house-scoring-rules-content" className="min-h-11 w-full rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] px-3 text-sm font-bold sm:w-auto">Collapse</button>
       </div>
       <div id="house-scoring-rules-content">
       <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted))]">

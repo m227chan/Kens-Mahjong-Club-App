@@ -6,6 +6,7 @@ import type { GameDoc, PlayerDoc, PlayerStatsDoc } from '@/lib/types'
 import { titleForStanding } from '@/lib/players'
 import { DEFAULT_TITLE_RULES, type TitleRules } from '@/lib/title-rules'
 import { aggregatePlayerGames, boundsForPreset, competitionRanks, gamesInBounds, subtractCalendarMonths, type StandingsDatePreset } from '@/lib/standings-analytics'
+import ViewHeader from '@/components/ViewHeader'
 
 type SortKey = 'rank' | 'name' | 'points' | 'skill' | 'games' | 'wins' | 'losses' | 'winRate'
 type SortDirection = 'asc' | 'desc'
@@ -24,7 +25,7 @@ function Sparkline({ values }: { values: number[] }) {
   const path = points.map((value, index) => `${(index / Math.max(1, points.length - 1)) * width},${height - 2 - ((value - min) / span) * (height - 4)}`).join(' ')
   const positive = (values.at(-1) ?? 0) >= (values[0] ?? 0)
   return values.length ? (
-    <svg viewBox={`0 0 ${width} ${height}`} className={`h-8 w-[84px] ${positive ? 'text-emerald-600' : 'text-rose-600'}`} role="img" aria-label={`Last ${values.length} game trend moved from ${values[0]} to ${values.at(-1)}`}>
+    <svg viewBox={`0 0 ${width} ${height}`} className={`h-8 w-[72px] max-w-full ${positive ? 'text-emerald-600' : 'text-rose-600'}`} role="img" aria-label={`Last ${values.length} game trend moved from ${values[0]} to ${values.at(-1)}`}>
       <polyline points={path} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ) : <span className="text-xs text-slate-400">No trend</span>
@@ -42,6 +43,7 @@ export function LeaderboardPanel({
 }: {
   clubId: string
   seasonNumber?: number
+  scopeLabel?: string
   compact?: boolean
   players?: PlayerDoc[]
   stats?: PlayerStatsDoc[]
@@ -52,7 +54,7 @@ export function LeaderboardPanel({
   const [subscribedPlayers, setSubscribedPlayers] = useState<PlayerDoc[]>([])
   const [subscribedStats, setSubscribedStats] = useState<PlayerStatsDoc[]>([])
   const [games, setGames] = useState<GameDoc[]>([])
-  const [gamesLoading, setGamesLoading] = useState(false)
+  const [, setGamesLoading] = useState(false)
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({})
   const [mobileExpanded, setMobileExpanded] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>('points')
@@ -67,9 +69,11 @@ export function LeaderboardPanel({
   const players = suppliedPlayers ?? subscribedPlayers
   const stats = suppliedStats ?? subscribedStats
   const statsUpdatedKey = stats.map((stat) => stat.updatedAt?.toMillis?.() ?? 0).sort().join(',')
+  const combinedCompetitions = seasonNumber == null
 
   useEffect(() => suppliedPlayers ? undefined : subscribePlayers(clubId, setSubscribedPlayers), [clubId, suppliedPlayers])
   useEffect(() => suppliedStats ? undefined : subscribePlayerStats(clubId, setSubscribedStats, seasonNumber), [clubId, seasonNumber, suppliedStats])
+  useEffect(() => setActiveOnly(!combinedCompetitions), [combinedCompetitions])
   useEffect(() => {
     if (preset === 'all') {
       setGames([])
@@ -137,20 +141,17 @@ export function LeaderboardPanel({
   const visibleRows = compact ? rows.slice(0, 8) : rows
   const mobileRows = mobileExpanded ? visibleRows : visibleRows.slice(0, 5)
   const filterCount = [activeOnly, preset !== 'all', Boolean(nameFilter), Boolean(minimumGames)].filter(Boolean).length
-  const presets: Array<{ value: StandingsDatePreset; label: string }> = [{ value: 'all', label: 'All time' }, { value: '30d', label: '30 days' }, { value: '3m', label: '3 months' }, { value: 'ytd', label: 'This year' }, { value: 'custom', label: 'Custom' }]
-
   return (
-    <section data-tour="leaderboard" className="leaderboard-board overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-      <header className="leaderboard-board-header border-b border-slate-200 px-5 py-4">
-        <div className="leaderboard-board-header-row flex items-center justify-between gap-3">
-          <div><h2 className="text-2xl font-black leading-none text-slate-900">Leaderboard</h2><p className="mt-2 text-sm font-medium text-slate-500">{gamesLoading ? 'Loading date history…' : `${rows.length} ranked players · ${preset === 'all' ? 'all time' : presets.find((item) => item.value === preset)?.label}`}</p></div>
-          <div className="flex items-center gap-2">
-            <button type="button" aria-expanded={filtersOpen} aria-label={`Filter leaderboard${filterCount ? `, ${filterCount} active` : ''}`} onClick={() => setFiltersOpen((value) => !value)} className="relative grid h-10 w-10 place-items-center rounded border border-slate-300 bg-slate-50 text-slate-700">
-              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" className="h-4 w-4"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
-            </button>
-          </div>
-        </div>
-      </header>
+    <section data-tour="leaderboard" className="leaderboard-board view-card overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <ViewHeader
+        className="leaderboard-board-header"
+        title="Leaderboard"
+        action={(
+          <button type="button" aria-expanded={filtersOpen} aria-label={`Filter leaderboard${filterCount ? `, ${filterCount} active` : ''}`} onClick={() => setFiltersOpen((value) => !value)} className="view-header-action">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+          </button>
+        )}
+      />
       {filtersOpen ? <div className="grid gap-3 border-b border-slate-200 bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-xs font-bold text-slate-600">Date range<select value={preset} onChange={(event) => setPreset(event.target.value as StandingsDatePreset)} className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm"><option value="all">All time</option><option value="30d">Last 30 days</option><option value="3m">Last 3 months</option><option value="ytd">Year to date</option><option value="custom">Custom dates</option></select></label>
         <label className="text-xs font-bold text-slate-600">Player<input type="search" value={nameFilter} onChange={(event) => setNameFilter(event.target.value)} placeholder="Filter names…" className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm" /></label>
@@ -158,8 +159,8 @@ export function LeaderboardPanel({
         <label className="text-xs font-bold text-slate-600">Sort<select value={sortKey} onChange={(event) => setSort(event.target.value as SortKey)} className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm"><option value="points">Points</option><option value="rank">Rank</option><option value="name">Name</option><option value="skill">Skill</option><option value="games">Games</option><option value="wins">Wins</option><option value="winRate">Win ratio</option></select></label>
         <div className="text-xs font-bold text-slate-600"><span>Players shown</span><label className="mt-1 flex min-h-10 cursor-pointer items-center gap-2 rounded border border-slate-300 bg-white px-3 text-sm font-bold text-slate-700"><input type="checkbox" checked={activeOnly} onChange={(event) => setActiveOnly(event.target.checked)} className="h-4 w-4 accent-emerald-700" />Active</label></div>
         {preset === 'custom' ? <><label className="text-xs font-bold text-slate-600">From<input type="date" value={customStart} max={customEnd || undefined} onChange={(event) => setCustomStart(event.target.value)} className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm" /></label><label className="text-xs font-bold text-slate-600">To<input type="date" value={customEnd} min={customStart || undefined} onChange={(event) => setCustomEnd(event.target.value)} className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm" /></label></> : null}
-        <p className="self-end text-xs font-semibold leading-5 text-slate-500">Active means played within {activePlayerMonths} calendar month{activePlayerMonths === 1 ? '' : 's'}. Date filters recalculate points and results; Skill remains the selected season’s current rating.</p>
-        <button type="button" onClick={() => { setPreset('all'); setCustomStart(''); setCustomEnd(''); setNameFilter(''); setMinimumGames(''); setActiveOnly(true); setSortKey('points'); setSortDirection('desc') }} className="min-h-10 self-end rounded border border-slate-300 bg-white px-3 text-sm font-bold">Reset</button>
+        <p className="self-end text-xs font-semibold leading-5 text-slate-500">Active means played within {activePlayerMonths} calendar month{activePlayerMonths === 1 ? '' : 's'}. Date filters recalculate points and results; Skill remains the {combinedCompetitions ? 'combined all-seasons' : 'selected competition’s'} current rating.</p>
+        <button type="button" onClick={() => { setPreset('all'); setCustomStart(''); setCustomEnd(''); setNameFilter(''); setMinimumGames(''); setActiveOnly(!combinedCompetitions); setSortKey('points'); setSortDirection('desc') }} className="min-h-10 self-end rounded border border-slate-300 bg-white px-3 text-sm font-bold">Reset</button>
       </div> : null}
 
       {visibleRows.length ? <>
@@ -171,9 +172,9 @@ export function LeaderboardPanel({
           </article>)}
           {visibleRows.length > 5 ? <button type="button" onClick={() => setMobileExpanded((value) => !value)} className="w-full px-4 py-3 text-sm font-bold text-emerald-700">{mobileExpanded ? 'Show fewer' : `Show all ${visibleRows.length} players`}</button> : null}
         </div>
-        <div className="hidden overflow-x-auto md:block"><div className="min-w-[850px]" role="table" aria-label="Club leaderboard">
-          <div role="row" className="grid grid-cols-[52px_minmax(150px,1.5fr)_75px_75px_55px_55px_65px_95px_78px] gap-2 border-b bg-slate-50 px-3 py-3 text-[11px] font-bold uppercase text-slate-500">{[['Rank','rank'],['Player','name'],['Points','points'],['Skill','skill'],['Games','games'],['Wins','wins'],['Win %','winRate']].map(([label,key], index) => <button key={key} type="button" onClick={() => setSort(key as SortKey)} className={`text-left ${index === 1 ? '' : ''}`}>{label}{sortKey === key ? (sortDirection === 'asc' ? ' ↑' : ' ↓') : ''}</button>)}<span>Last 10 trend</span><span aria-label="Player details" /></div>
-          {visibleRows.map((row) => <div key={row.playerId} role="row" tabIndex={onPlayerAnalytics ? 0 : undefined} onClick={() => onPlayerAnalytics?.(row.playerId)} onKeyDown={(event) => { if (onPlayerAnalytics && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onPlayerAnalytics(row.playerId) } }} aria-label={onPlayerAnalytics ? `Open analytics for ${row.displayName}` : undefined} className={`leaderboard-row grid grid-cols-[52px_minmax(150px,1.5fr)_75px_75px_55px_55px_65px_95px_78px] items-center gap-2 border-b px-3 py-3 ${onPlayerAnalytics ? 'cursor-pointer outline-none hover:ring-1 hover:ring-inset hover:ring-emerald-400 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500' : ''}`}><strong className="text-lg text-rose-700">#{row.visibleRank}</strong><span className="min-w-0"><strong className="block truncate text-sm">{row.icon} {row.displayName}</strong><span className="block truncate text-xs text-slate-500">{titleForStanding(row.visibleRank, rows.length, row.gamesPlayed, titleRules)}</span></span><span className="font-mono font-bold">{row.totalPoints}</span><span>{row.skillRating}</span><span>{row.gamesPlayed}</span><span>{row.gamesWon}</span><span>{formatWinRate(row.gamesWon, row.gamesPlayed)}</span><Sparkline values={row.pointTrend} />{onPlayerAnalytics ? <button type="button" onClick={(event) => { event.stopPropagation(); onPlayerAnalytics(row.playerId) }} className="rounded-full border border-emerald-300 bg-white px-2.5 py-1 text-[11px] font-bold text-emerald-800 hover:bg-emerald-50">See more</button> : <span />}</div>)}
+        <div className="hidden overflow-x-auto md:block"><div className="min-w-[640px]" role="table" aria-label="Club leaderboard">
+          <div role="row" className="grid grid-cols-[44px_minmax(128px,1.6fr)_62px_60px_50px_44px_52px_82px_34px] gap-1.5 border-b bg-slate-50 px-3 py-3 text-[10px] font-bold uppercase text-slate-500">{[['Rank','rank'],['Player','name'],['Points','points'],['Skill','skill'],['Games','games'],['Wins','wins'],['Win %','winRate']].map(([label,key]) => <button key={key} type="button" onClick={() => setSort(key as SortKey)} className="min-w-0 text-left">{label}{sortKey === key ? (sortDirection === 'asc' ? ' ↑' : ' ↓') : ''}</button>)}<span className="leading-tight">Last 10 trend</span><span aria-label="Player details" /></div>
+          {visibleRows.map((row) => <div key={row.playerId} role="row" tabIndex={onPlayerAnalytics ? 0 : undefined} onClick={() => onPlayerAnalytics?.(row.playerId)} onKeyDown={(event) => { if (onPlayerAnalytics && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onPlayerAnalytics(row.playerId) } }} aria-label={onPlayerAnalytics ? `Open analytics for ${row.displayName}` : undefined} className={`leaderboard-row grid grid-cols-[44px_minmax(128px,1.6fr)_62px_60px_50px_44px_52px_82px_34px] items-center gap-1.5 border-b px-3 py-3 ${onPlayerAnalytics ? 'cursor-pointer outline-none hover:ring-1 hover:ring-inset hover:ring-emerald-400 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500' : ''}`}><strong className="text-lg text-rose-700">#{row.visibleRank}</strong><span className="min-w-0"><strong className="block break-words text-sm">{row.icon} {row.displayName}</strong><span className="block break-words text-xs text-slate-500">{titleForStanding(row.visibleRank, rows.length, row.gamesPlayed, titleRules)}</span></span><span className="min-w-0 font-mono font-bold">{row.totalPoints}</span><span className="min-w-0">{row.skillRating}</span><span className="min-w-0">{row.gamesPlayed}</span><span className="min-w-0">{row.gamesWon}</span><span className="min-w-0">{formatWinRate(row.gamesWon, row.gamesPlayed)}</span><Sparkline values={row.pointTrend} />{onPlayerAnalytics ? <span aria-hidden="true" className="text-center text-xl font-black text-emerald-700">›</span> : <span />}</div>)}
         </div></div>
       </> : <div className="px-5 py-10 text-center text-sm font-semibold text-slate-500">No players have games matching these standings filters.</div>}
     </section>
