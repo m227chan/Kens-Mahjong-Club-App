@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import Link from 'next/link'
 import './globals.css'
-import { Manrope, JetBrains_Mono } from 'next/font/google'
 import { AuthProvider } from '@/contexts/AuthContext'
 import UserSettings from '@/components/UserSettings'
 import AppGuide from '@/components/AppGuide'
@@ -12,9 +11,6 @@ import { FloatingSessionTrackerProvider } from '@/contexts/FloatingSessionTracke
 import FloatingSessionTracker from '@/components/FloatingSessionTracker'
 import ViewportMetrics from '@/components/ViewportMetrics'
 import { BrandLockup } from '@/components/BrandMark'
-
-const manrope = Manrope({ subsets: ['latin'], variable: '--font-sans' })
-const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' })
 
 export const metadata: Metadata = {
   title: 'Mahjong Messiah Score Tracker',
@@ -38,7 +34,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${manrope.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en" suppressHydrationWarning>
       <body className="club-atmosphere min-h-screen">
         <ViewportMetrics />
         <AuthProvider>

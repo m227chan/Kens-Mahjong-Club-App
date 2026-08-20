@@ -4,6 +4,8 @@
 
 :root {
   color-scheme: light;
+  --font-sans: Arial, Helvetica, sans-serif;
+  --font-mono: var(--font-sans);
   --ink: 27 31 27;
   --muted: 102 106 92;
   --canvas: 239 235 218;
@@ -63,7 +65,9 @@ html.dark {
   --focus-ring: 243 188 82;
 }
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   scrollbar-width: none !important;
   -ms-overflow-style: none !important;
@@ -78,11 +82,19 @@ html, body {
   -ms-overflow-style: none !important;
   background: rgb(var(--canvas));
 }
+html,
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-sans);
+}
 body {
   margin: 0;
   color: rgb(var(--ink));
   background: rgb(var(--canvas));
-  font-family: var(--font-sans), sans-serif;
+  font-family: var(--font-sans);
   font-feature-settings: "tnum" 1, "zero" 1;
 }
 
@@ -102,7 +114,7 @@ body {
   box-shadow: 0 10px 40px rgb(var(--shadow) / .05);
 }
 .brand-kicker { color: rgb(var(--cinnabar)); }
-.font-display, h1, h2, h3 { font-family: var(--font-sans), sans-serif; letter-spacing: -.025em; }
+.font-display, h1, h2, h3 { font-family: var(--font-sans); letter-spacing: 0; }
 
 button, input, textarea, select { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
@@ -1107,16 +1119,16 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
 
 /* Mobile information architecture: focused views, compact summaries, one page scroll. */
 @media(max-width:767px){
-  .club-workspace-main{padding-top:.85rem}
-  .mobile-workspace-tabs{width:min(100%,36rem);box-shadow:0 6px 16px rgb(var(--shadow)/.08)}
+  .club-workspace-main{padding-top:.55rem}
+  .mobile-workspace-tabs{width:min(100%,36rem);margin-bottom:.65rem!important;box-shadow:0 6px 16px rgb(var(--shadow)/.08)}
   .mobile-workspace-tab{min-height:40px;border:1px solid transparent;border-radius:4px;color:rgb(var(--muted));font-size:.78rem;font-weight:800}
   .mobile-workspace-tab.active{border-color:rgb(var(--bamboo)/.38);background:rgb(var(--bamboo)/.1);color:rgb(var(--bamboo));box-shadow:inset 0 -3px 0 rgb(var(--bamboo))}
-  .club-workspace-header{width:min(100%,36rem);margin-inline:auto;margin-bottom:.6rem;padding:.7rem;flex-direction:column!important;align-items:stretch!important;gap:.55rem!important}
+  .club-workspace-header{width:min(100%,36rem);margin-inline:auto;margin-bottom:.45rem;padding:.6rem;flex-direction:column!important;align-items:stretch!important;gap:.4rem!important}
   .club-workspace-header>div:first-child>p{display:none}
-  .club-workspace-header h1{margin-top:0;overflow:hidden;text-align:center;font-size:1.15rem;line-height:1.3;text-overflow:ellipsis;white-space:nowrap}
+  .club-workspace-header h1{margin-top:0;overflow:hidden;text-align:center;font-size:1rem;line-height:1.2;text-overflow:ellipsis;white-space:nowrap}
   .club-context-actions{display:grid!important;grid-template-columns:minmax(0,1fr) auto;gap:.4rem}
-  .club-season-action,.club-id-action{min-height:38px!important;justify-content:center;padding:.4rem .65rem!important;font-size:.72rem!important}
-  .club-season-action select{font-size:.78rem!important}
+  .club-season-action,.club-id-action{min-height:38px!important;justify-content:center;padding:.3rem .55rem!important;font-size:.68rem!important}
+  .club-season-action select{font-size:.74rem!important}
   .club-action-status{grid-column:1/-1;min-height:36px;justify-content:center;padding:.4rem .65rem!important;text-align:center}
   #players{padding:1rem}
   #players>div:first-child>div>p:first-child{display:none}
@@ -1127,18 +1139,11 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
   .club-roster-stats>div p:first-child{font-size:.64rem;line-height:1.35;letter-spacing:.08em}
   .club-roster-stats>div p:last-child{margin-top:.35rem;font-size:1.35rem}
 
-  .leaderboard-board>header{padding:.8rem .9rem}
-  .leaderboard-board>header>p:first-child{display:none}
-  .leaderboard-board>header>div{margin-top:0;align-items:center}
-  .leaderboard-board>header h2{font-size:1.25rem}
-  .leaderboard-board>header div>p{font-size:.75rem}
   .mobile-leaderboard article{background:rgb(var(--surface-1))}
   .mobile-leaderboard-toggle{min-height:44px;background:rgb(var(--surface-2))}
 
   .session-manager #sessionPage{height:auto!important;min-height:0!important;overflow:visible!important}
   .session-manager .tables-scroll{overflow:visible!important;padding:8px!important}
-  .session-manager .header{position:relative!important;padding:11px 12px!important}
-  .session-manager .header>div:first-child>div:first-child{font-size:18px!important}
   .session-manager .sideline-section{margin:8px 8px 0!important;padding:0!important}
   .session-manager .table-seats{min-height:132px!important;padding:9px!important}
   .session-manager .table-card{margin-bottom:10px!important}
@@ -1167,7 +1172,7 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
     isolation:isolate;
     overflow:hidden;
     gap:.25rem;
-    padding:.3rem!important;
+    padding:.2rem!important;
     border-color:rgb(var(--line))!important;
     background:rgb(var(--surface-1)/.7)!important;
     box-shadow:inset 0 1px 0 rgb(255 255 255/.34),0 8px 24px rgb(var(--shadow)/.16);
@@ -1177,10 +1182,10 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
   .mobile-workspace-tabs::before{
     position:absolute;
     z-index:0;
-    top:.3rem;
-    bottom:.3rem;
-    left:.3rem;
-    width:calc((100% - 1.1rem)/3);
+    top:.2rem;
+    bottom:.2rem;
+    left:.2rem;
+    width:calc((100% - .9rem)/3);
     border:1px solid rgb(255 255 255/.42);
     border-radius:6px;
     background:linear-gradient(145deg,rgb(var(--bamboo)/.94),rgb(var(--bamboo-bright)/.78));
@@ -1206,13 +1211,15 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
   .mobile-workspace-tab{
     position:relative;
     z-index:1;
-    min-height:44px;
+    min-height:40px;
+    font-size:.72rem;
     border-color:transparent!important;
     background:transparent!important;
     color:rgb(var(--ink))!important;
     box-shadow:none!important;
     transition:color 180ms ease,text-shadow 180ms ease;
   }
+  .mobile-workspace-tab > span[aria-hidden="true"]{font-size:.85rem!important}
   .mobile-workspace-tab.active{
     border-color:transparent!important;
     background:transparent!important;
@@ -1257,11 +1264,69 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
 .club-workspace-heading h1 { min-width: 0; max-width: 28rem; flex: 0 1 auto; margin: 0; padding-right: 1.1rem; border-right: 1px solid rgb(var(--line)); font-size: clamp(1.35rem, 2vw, 1.7rem); line-height: 1.18; overflow-wrap: anywhere; text-wrap: balance; white-space: normal; }
 .club-context-actions { min-width: 0; flex: 1 1 24rem; margin-left: auto; justify-content: flex-end; }
 .club-workspace-dashboard-grid { min-width: 0; align-items: start; }
-.club-mobile-panels-viewport,.club-mobile-panels-track,.club-mobile-panel { min-width: 0; }
+.club-mobile-panels-viewport,.club-mobile-panels-track,.club-mobile-panel { box-sizing: border-box; min-width: 0; }
 .club-session-panel { min-width: 0; align-self: start; }
-.leaderboard-board-header { box-sizing: border-box; min-height: 76px; padding: 16px 20px !important; display: flex; align-items: center; }
-.leaderboard-board-header-row { width: 100%; align-items: center !important; }
-.leaderboard-board-header h2 { margin: 0; }
+
+/* Session and Leaderboard intentionally share one card/header contract. */
+.view-card {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin-inline: auto;
+  border: 1px solid rgb(var(--line));
+  border-radius: 8px;
+  background: rgb(var(--surface));
+  box-shadow: 0 1px 2px rgb(var(--shadow) / .08);
+  overflow: hidden;
+}
+.view-header {
+  position: relative;
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 76px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border: 0;
+  border-bottom: 1px solid rgb(var(--line));
+  border-radius: 0;
+  background: rgb(var(--surface));
+  color: rgb(var(--ink));
+  box-shadow: none;
+}
+.view-header-copy { min-width: 0; flex: 1 1 auto; }
+.view-header-title {
+  margin: 0;
+  color: rgb(var(--ink));
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+.view-header-action-slot { position: relative; display: flex; flex: 0 0 40px; align-items: center; justify-content: center; }
+.view-header-action {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  flex: 0 0 40px;
+  place-items: center;
+  border: 1px solid rgb(var(--line));
+  border-radius: 4px;
+  background: rgb(var(--surface-2));
+  padding: 0;
+  color: rgb(var(--ink));
+  box-shadow: none;
+  cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease;
+}
+.view-header-action svg { width: 16px; height: 16px; }
+.view-header-action:hover { border-color: rgb(var(--bamboo) / .55); background: rgb(var(--bamboo) / .1); color: rgb(var(--bamboo)); }
+.view-header-action:focus-visible { outline: 2px solid rgb(var(--gold)); outline-offset: 2px; }
 .club-header-roster-summary { display: inline-flex; min-width: 0; flex: 0 1 auto; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: .35rem; margin: 0; color: rgb(var(--muted)); }
 .club-header-roster-summary button { display: inline-flex; align-items: baseline; gap: .28rem; min-height: 30px; padding: .28rem .55rem; border: 1px solid rgb(var(--line)); border-radius: 999px; background: rgb(var(--surface-2) / .7); box-shadow: 0 2px 0 rgb(var(--shadow) / .04); cursor: pointer; transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease; }
 .club-header-roster-summary button + button { border-left: 1px solid rgb(var(--line)); }
@@ -1395,39 +1460,56 @@ html.dark .club-tool-sidebar-panel { box-shadow: inset 0 1px 0 rgb(238 231 207 /
   .club-tool-sidebar-toggle { width: auto !important; height: 44px !important; flex-basis: auto !important; gap: .5rem; border-color: rgb(var(--line)); border-radius: 999px; padding: 0 .78rem !important; background: rgb(var(--surface-1)); box-shadow: 3px 4px 0 rgb(var(--shadow) / .08); }
   .club-tool-sidebar.is-expanded .club-tool-sidebar-panel { position: fixed; inset: 0 auto 0 0; z-index: 71; display: flex; width: min(86vw, 320px) !important; height: 100dvh; flex-direction: column; overflow: hidden; border-width: 0 1px 0 0; border-radius: 0 18px 18px 0; background: rgb(var(--surface-1)); box-shadow: 18px 0 50px rgb(var(--shadow) / .24); }
   .club-tool-sidebar.is-expanded .club-tool-sidebar-heading { min-height: calc(76px + env(safe-area-inset-top)); flex: 0 0 auto; padding: max(.85rem, env(safe-area-inset-top)) .85rem .75rem 1rem; }
+  .club-tool-sidebar.is-expanded .club-tool-sidebar-identity { flex: 1 1 auto; }
+  .club-tool-sidebar.is-expanded .club-tool-sidebar-title {
+    overflow: visible;
+    white-space: normal;
+  }
   .club-tool-sidebar.is-expanded .club-tool-sidebar-toggle { height: 42px !important; border-radius: 10px; padding-inline: .65rem !important; box-shadow: none; }
   .club-tool-sidebar.is-expanded .club-tool-sidebar-nav { display: grid; flex: 1 1 auto; gap: 1rem; overflow-y: auto; overscroll-behavior: contain; padding: .85rem .75rem max(1rem, env(safe-area-inset-bottom)); }
   .club-tool-sidebar.is-expanded .club-tool-sidebar-action { min-height: 62px; padding: .62rem .68rem; }
   .club-tool-sidebar.is-expanded .club-tool-sidebar-group-label { padding-inline: .68rem; }
   .club-tool-sidebar.is-expanded .club-tool-sidebar-backdrop { display: block; position: fixed; inset: 0; z-index: 70; border: 0; border-radius: 0; background: rgb(2 10 8 / .58); backdrop-filter: blur(3px); }
   .club-tool-sidebar:not(.is-expanded) .club-tool-sidebar-action::after { display: none; }
-  .club-workspace-header { min-height: 0; margin-bottom: .65rem; padding: 1rem .7rem .7rem !important; }
-  .club-workspace-header > .club-workspace-heading { width: 100%; flex: 0 1 auto; flex-direction: column; align-items: flex-start; gap: .45rem; }
-  .club-workspace-header h1 { flex: 0 1 auto; padding-right: 0; border-right: 0; overflow: visible; font-size: 1.15rem; line-height: 1.3; overflow-wrap: anywhere; text-align: left; text-overflow: clip; white-space: normal; }
-  .club-header-roster-summary { margin-top: 0; }
-  .club-header-roster-summary button { display: inline-grid; min-height: 44px; grid-auto-flow: column; align-content: center; align-items: baseline; padding: 0 .5rem; touch-action: manipulation; }
-  .club-header-roster-summary strong { font-size: .82rem; line-height: 1; }
-  .club-header-roster-summary small { font-size: .57rem; line-height: 1; }
-  .club-mobile-panels-viewport { overflow: hidden; }
+  .club-workspace-header { min-height: 0; margin-bottom: .45rem; padding: .6rem !important; }
+  .club-workspace-header > .club-workspace-heading { width: 100%; flex: 0 1 auto; flex-direction: column; align-items: flex-start; gap: .3rem; }
+  .club-workspace-header h1 { width: 100%; flex: 0 1 auto; padding-right: 0; border-right: 0; overflow: hidden; font-size: 1rem; line-height: 1.2; overflow-wrap: normal; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+  .club-header-roster-summary { gap: .25rem; margin-top: 0; }
+  .club-header-roster-summary button { display: inline-grid; min-height: 36px; grid-auto-flow: column; align-content: center; align-items: baseline; padding: 0 .45rem; touch-action: manipulation; }
+  .club-header-roster-summary strong { font-size: .76rem; line-height: 1; }
+  .club-header-roster-summary small { font-size: .52rem; line-height: 1; }
+  .club-mobile-panels-viewport { position: relative; width: 100%; max-width: 100%; margin-inline: auto; overflow: hidden; }
   .club-mobile-panels-track {
     display: flex;
+    width: 100%;
+    max-width: 100%;
     align-items: flex-start;
     touch-action: pan-y pinch-zoom;
     transition: height 280ms cubic-bezier(.22,1,.36,1);
     will-change: transform, height;
   }
-  .club-mobile-panel { box-sizing: border-box; width: 100%; max-width: 100%; flex: 0 0 100%; }
-  .club-workspace-header > .club-context-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; width: 100%; flex: 0 1 auto; margin-left: 0; gap: .4rem; }
-  .club-season-action, .club-id-action { min-height: 44px !important; justify-content: center; padding: .4rem .55rem !important; font-size: .72rem !important; touch-action: manipulation; }
-  .club-season-action select { min-width: 0; font-size: .78rem !important; }
+  .club-mobile-panel { box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; flex: 0 0 100%; margin: 0; }
+  .club-mobile-panel > * { box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; }
+  .club-workspace-header > .club-context-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; width: 100%; flex: 0 1 auto; margin-left: 0; gap: .3rem; }
+  .club-season-action, .club-id-action { min-height: 40px !important; justify-content: center; padding: .3rem .5rem !important; font-size: .68rem !important; touch-action: manipulation; }
+  .club-season-action select { min-width: 0; font-size: .74rem !important; }
   .club-action-status { grid-column: 1 / -1; min-height: 36px; justify-content: center; padding: .4rem .55rem !important; text-align: center; }
 
-  .leaderboard-board-header { padding: 11px 12px !important; }
-  .leaderboard-board-header h2 { font-size: 18px !important; line-height: normal !important; }
-  .leaderboard-board-header-row > div:first-child > p {
-    margin-top: 4px !important;
-    font-size: 10px !important;
-    line-height: normal !important;
+  .view-header {
+    min-height: 56px !important;
+    padding: 12px 14px !important;
+  }
+  .view-header-title {
+    font-size: 18px !important;
+    line-height: 1.2 !important;
+  }
+  .view-header-action-slot { flex-basis: 36px; }
+  .view-header-action {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
+    flex-basis: 36px !important;
   }
 
   .club-analytics-header { gap: .65rem !important; padding: .75rem !important; }
@@ -2663,5 +2745,36 @@ html.dark .brand-descriptor { color: rgb(255 249 226); }
   .wiki-tile-chart-group { padding: 1rem; border-radius: 14px; }
   .wiki-hand-card { padding: 1rem; border-radius: 14px; }
   .wiki-hand-tile-row { gap: .45rem; }
+}
+
+/* A shared, unhurried loading rhythm: ease into the turn, accelerate, then
+   settle before the next revolution. This also catches Tailwind spin utilities. */
+:root { --app-spinner-duration: 1.7s; }
+
+@keyframes app-spinner-turn {
+  0% {
+    transform: rotate(0deg);
+    animation-timing-function: cubic-bezier(.55, .06, .68, .19);
+  }
+  42% {
+    transform: rotate(95deg);
+    animation-timing-function: cubic-bezier(.22, .61, .36, 1);
+  }
+  100% { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation-name: app-spinner-turn;
+  animation-duration: var(--app-spinner-duration);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner,
+  .animate-spin {
+    animation-duration: 3s !important;
+    animation-timing-function: linear !important;
+  }
 }
 

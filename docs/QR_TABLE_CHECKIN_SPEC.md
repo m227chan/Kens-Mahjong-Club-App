@@ -42,16 +42,16 @@ The hot paths intentionally avoid request and query waterfalls:
 | QR generation and settings | `app/api/table-qr/route.ts`, `lib/qr-signing.ts` |
 | Check-in and table mutations | `app/api/table-checkin/route.ts`, `lib/server/table-checkin.ts` |
 | Client flow | `app/check-in/[publicId]/page.tsx`, `lib/table-checkin-client.ts` |
-| Focused scoring | `app/club/[clubId]/session/table/[tableNumber]/page.tsx` |
+| Focused scoring | `app/club/[clubId]/table/[tableNumber]/page.tsx` |
 | Printing | `app/club/[clubId]/session/qr-print/page.tsx` |
-| Database model | `supabase/migrations/0006_qr_table_checkin.sql` |
-| Tests | `__tests__/table-scoring.test.ts`, `__tests__/session-layout.test.ts` |
+| Database model | `supabase/migrations/0005_qr_table_checkin.sql`, `supabase/migrations/0006_qr_auto_enrollment.sql` |
+| Tests | `__tests__/focused-table-view.test.tsx`, `__tests__/table-scoring.test.ts`, `__tests__/session-layout.test.ts`, `__tests__/table-checkin.integration.test.ts` |
 
 ## Operating checklist
 
 1. Set one stable, randomly generated `QR_SIGNING_SECRET` in local and Vercel Production environments. Do not prefix it with `NEXT_PUBLIC_`.
 2. Set `NEXT_PUBLIC_APP_URL` to the canonical HTTPS production origin before printing codes.
-3. Apply migration `0006_qr_table_checkin.sql` through the protected migration workflow.
+3. Apply migrations `0005_qr_table_checkin.sql` and `0006_qr_auto_enrollment.sql` through the protected migration workflow.
 4. Print and scan every code after first setup and after any rotation.
 5. Keep automatic enrollment off when possession of a printed code should not grant regular membership.
 6. Rotate and reprint a code if its URL is shared outside the intended club.

@@ -6,6 +6,7 @@ import type { GameDoc, PlayerDoc, PlayerStatsDoc } from '@/lib/types'
 import { titleForStanding } from '@/lib/players'
 import { DEFAULT_TITLE_RULES, type TitleRules } from '@/lib/title-rules'
 import { aggregatePlayerGames, boundsForPreset, competitionRanks, gamesInBounds, subtractCalendarMonths, type StandingsDatePreset } from '@/lib/standings-analytics'
+import ViewHeader from '@/components/ViewHeader'
 
 type SortKey = 'rank' | 'name' | 'points' | 'skill' | 'games' | 'wins' | 'losses' | 'winRate'
 type SortDirection = 'asc' | 'desc'
@@ -33,7 +34,6 @@ function Sparkline({ values }: { values: number[] }) {
 export function LeaderboardPanel({
   clubId,
   seasonNumber,
-  scopeLabel,
   compact = false,
   players: suppliedPlayers,
   stats: suppliedStats,
@@ -54,7 +54,7 @@ export function LeaderboardPanel({
   const [subscribedPlayers, setSubscribedPlayers] = useState<PlayerDoc[]>([])
   const [subscribedStats, setSubscribedStats] = useState<PlayerStatsDoc[]>([])
   const [games, setGames] = useState<GameDoc[]>([])
-  const [gamesLoading, setGamesLoading] = useState(false)
+  const [, setGamesLoading] = useState(false)
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({})
   const [mobileExpanded, setMobileExpanded] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>('points')
@@ -141,20 +141,17 @@ export function LeaderboardPanel({
   const visibleRows = compact ? rows.slice(0, 8) : rows
   const mobileRows = mobileExpanded ? visibleRows : visibleRows.slice(0, 5)
   const filterCount = [activeOnly, preset !== 'all', Boolean(nameFilter), Boolean(minimumGames)].filter(Boolean).length
-  const presets: Array<{ value: StandingsDatePreset; label: string }> = [{ value: 'all', label: 'All time' }, { value: '30d', label: '30 days' }, { value: '3m', label: '3 months' }, { value: 'ytd', label: 'This year' }, { value: 'custom', label: 'Custom' }]
-
   return (
-    <section data-tour="leaderboard" className="leaderboard-board overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-      <header className="leaderboard-board-header border-b border-slate-200 px-5 py-4">
-        <div className="leaderboard-board-header-row flex items-center justify-between gap-3">
-          <div className="min-w-0"><h2 className="text-2xl font-black leading-none text-slate-900">Leaderboard</h2><p className="mt-2 break-words text-sm font-medium text-slate-500">{gamesLoading ? 'Loading date history…' : `${rows.length} ranked players · ${scopeLabel ? `${scopeLabel} · ` : ''}${preset === 'all' ? 'all time' : presets.find((item) => item.value === preset)?.label}`}</p></div>
-          <div className="flex items-center gap-2">
-            <button type="button" aria-expanded={filtersOpen} aria-label={`Filter leaderboard${filterCount ? `, ${filterCount} active` : ''}`} onClick={() => setFiltersOpen((value) => !value)} className="relative grid h-10 w-10 place-items-center rounded border border-slate-300 bg-slate-50 text-slate-700">
-              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" className="h-4 w-4"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
-            </button>
-          </div>
-        </div>
-      </header>
+    <section data-tour="leaderboard" className="leaderboard-board view-card overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <ViewHeader
+        className="leaderboard-board-header"
+        title="Leaderboard"
+        action={(
+          <button type="button" aria-expanded={filtersOpen} aria-label={`Filter leaderboard${filterCount ? `, ${filterCount} active` : ''}`} onClick={() => setFiltersOpen((value) => !value)} className="view-header-action">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+          </button>
+        )}
+      />
       {filtersOpen ? <div className="grid gap-3 border-b border-slate-200 bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-xs font-bold text-slate-600">Date range<select value={preset} onChange={(event) => setPreset(event.target.value as StandingsDatePreset)} className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm"><option value="all">All time</option><option value="30d">Last 30 days</option><option value="3m">Last 3 months</option><option value="ytd">Year to date</option><option value="custom">Custom dates</option></select></label>
         <label className="text-xs font-bold text-slate-600">Player<input type="search" value={nameFilter} onChange={(event) => setNameFilter(event.target.value)} placeholder="Filter names…" className="mt-1 min-h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm" /></label>

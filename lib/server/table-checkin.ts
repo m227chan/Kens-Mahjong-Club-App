@@ -2,7 +2,7 @@ import 'server-only'
 
 import { randomBytes } from 'node:crypto'
 import type { PoolClient } from 'pg'
-import { normalizeSessionLayout } from '@/lib/session-layout'
+import { clampSessionTableCount, normalizeSessionLayout } from '@/lib/session-layout'
 import { verifyTableQr } from '@/lib/qr-signing'
 import { scoringRulesFromRow } from '@/lib/scoring-rules'
 import { addPlayerToActiveSession } from '@/lib/server/roster-session'
@@ -25,7 +25,7 @@ let lastStaleSweepAt = 0
 function sessionPayload(row: SessionRow | undefined) {
   if (!row) return null
   const participants = (row.participants as string[]) ?? []
-  const tableCount = Number(row.table_count)
+  const tableCount = clampSessionTableCount(Number(row.table_count))
   const normalized = normalizeSessionLayout(
     participants,
     tableCount,
@@ -569,7 +569,7 @@ export async function mutateTable(
     return { status: 'ok' as const, session: sessionPayload(row) }
   }
 
-  if (isGuest && targetTable > Number(row.table_count)) {
+  if (isGuest && targetTable > clampSessionTableCount(Number(row.table_count))) {
     throw new Error(
       'That table is no longer available. Ask a club member to add it to the session.',
     )
@@ -607,14 +607,14 @@ export async function mutateTable(
   }
 
   const nextCount = isGuest
-    ? Number(row.table_count)
-    : Math.max(Number(row.table_count), targetTable)
+    ? clampSessionTableCount(Number(row.table_count))
+    : Math.max(clampSessionTableCount(Number(row.table_count)), targetTable)
   const participants = [
     ...new Set(((row.participants as string[]) ?? []).map(String)),
   ]
   const normalized = normalizeSessionLayout(
     participants,
-    Number(row.table_count),
+    clampSessionTableCount(Number(row.table_count)),
     (row.tables as Record<string, string[]>) ?? {},
     (row.sideline as string[]) ?? [],
   )

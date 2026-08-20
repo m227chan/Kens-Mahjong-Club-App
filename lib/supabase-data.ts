@@ -5,6 +5,7 @@ import { auth } from '@/lib/firebase'
 import { getSupabaseBrowserClient } from '@/lib/supabase'
 import { realtimeChannelName } from '@/lib/realtime-channel'
 import {
+  clampSessionTableCount,
   createInitialSessionLayout,
   normalizeSessionLayout,
 } from '@/lib/session-layout'
@@ -182,7 +183,7 @@ function mapStats(row: Row): PlayerStatsDoc & { id: string } {
 }
 function mapSession(row: Row): SessionDoc {
   const participants = (row.participants as string[]) ?? []
-  const tableCount = Number(row.table_count)
+  const tableCount = clampSessionTableCount(Number(row.table_count))
   const rawTables = (row.tables as Record<string, string[]>) ?? {}
   const { tables, sideline } = normalizeSessionLayout(
     participants,
@@ -898,9 +899,10 @@ export async function createSession(
     sideline?: string[]
   },
 ) {
+  const tableCount = clampSessionTableCount(input.tableCount)
   const initialLayout = createInitialSessionLayout(
     input.participants,
-    input.tableCount,
+    tableCount,
   )
   const tables = input.tables ?? initialLayout.tables
   const assigned = new Set(Object.values(tables).flat())
@@ -909,7 +911,7 @@ export async function createSession(
     initialLayout.sideline.filter((playerId) => !assigned.has(playerId))
   return serverAction<string>('createSession', {
     clubId,
-    input: { ...input, tables, sideline },
+    input: { ...input, tableCount, tables, sideline },
   })
 }
 export async function updateSession(
@@ -920,7 +922,7 @@ export async function updateSession(
   const mapped: Row = {}
   if (values.seasonNumber != null) mapped.season_number = values.seasonNumber
   if (values.isActive != null) mapped.is_active = values.isActive
-  if (values.tableCount != null) mapped.table_count = values.tableCount
+  if (values.tableCount != null) mapped.table_count = clampSessionTableCount(values.tableCount)
   if (values.participants) mapped.participants = values.participants
   if (values.tables) mapped.tables = values.tables
   if (values.sideline) mapped.sideline = values.sideline

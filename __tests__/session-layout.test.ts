@@ -1,10 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
+  MAX_SESSION_TABLES,
+  clampSessionTableCount,
   createInitialSessionLayout,
   normalizeSessionLayout,
 } from '../lib/session-layout'
 
 describe('session layouts', () => {
+  it('limits sessions to 99 tables', () => {
+    expect(clampSessionTableCount(100)).toBe(MAX_SESSION_TABLES)
+    expect(Object.keys(createInitialSessionLayout([], 100).tables)).toHaveLength(MAX_SESSION_TABLES)
+    expect(Object.keys(normalizeSessionLayout([], 100).tables)).toHaveLength(MAX_SESSION_TABLES)
+  })
+
   it('starts every selected player on the sideline', () => {
     expect(createInitialSessionLayout(['a', 'b', 'c', 'd', 'e'], 2)).toEqual({
       tables: { '1': [], '2': [] },

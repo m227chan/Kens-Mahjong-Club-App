@@ -26,7 +26,7 @@ Mahjong Messiah keeps a club's live session and long-term history in one shared 
 
 ### Built for a real Mahjong night
 
-- **Fast live sessions.** Pick attendees, arrange tables, swap or sideline players, and record self-draws, discard wins, or draws. Seat changes appear immediately while the database catches up.
+- **Fast live sessions.** Pick attendees, arrange up to 99 tables, swap or sideline players, and record self-draws, discard wins, or draws. Seat changes appear immediately while the database catches up.
 - **Offline-safe scoring.** New games are stored on the device before syncing. If a connection drops or times out, the app keeps the result, clearly marks it as pending, and retries when connectivity returns.
 - **Focused table mode.** Open a clean, phone-friendly scorekeeping view for one table, or print permanent signed QR codes so players can check in at the physical table.
 - **Guest table try-out.** From the login page, enter a club code and pick an active table to score without signing in—seat players, record wins or draws, and clear the table. Guests stay locked to that table and cannot create tables, expand the session, or use club management tools.

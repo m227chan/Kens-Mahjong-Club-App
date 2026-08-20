@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { adminAuth } from '@/lib/firebase-admin'
 import { withTransaction } from '@/lib/postgres-admin'
-import { normalizeSessionLayout } from '@/lib/session-layout'
+import { MAX_SESSION_TABLES, normalizeSessionLayout } from '@/lib/session-layout'
 import { apiError, bearerToken, jsonObject } from '@/lib/server/api'
 import {
   assertGuestTableScope,
@@ -550,7 +550,7 @@ export async function POST(request: NextRequest) {
             ? input.participants.map(String)
             : []
         const tableCount = Math.min(
-            99,
+            MAX_SESSION_TABLES,
             Math.max(1, Math.floor(Number(input.tableCount) || 1)),
           ),
           seasonNumber = Math.floor(Number(input.seasonNumber) || 0)
