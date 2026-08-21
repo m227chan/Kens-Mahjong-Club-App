@@ -166,6 +166,7 @@ describe('session manager optimistic table changes', () => {
     render(<SessionManager clubId="TEST" seasonNumber={1} players={players} onAddPlayer={onAddPlayer} />)
 
     fireEvent.click(await screen.findByRole('button', { name: 'Session actions' }))
+    expect(screen.getByRole('dialog', { name: 'Session actions' }).parentElement).toBe(document.body)
     fireEvent.click(screen.getByRole('button', { name: /Add player/i }))
 
     expect(onAddPlayer).toHaveBeenCalledOnce()

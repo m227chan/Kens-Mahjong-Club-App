@@ -1840,6 +1840,7 @@ html.dark .club-workspace-header {
   .club-settings-body > .border-amber-200 button { width: 100%; min-height: 44px; }
 }
 .modal-panel-scroll { overflow-y: auto !important; overscroll-behavior: contain; }
+.club-roster-scroll { scroll-padding-block: 1rem; overflow-anchor: none; }
 .modal-controls { min-height: 0; }
 .viewport-overlay { min-height: 0; overflow: hidden; overscroll-behavior: contain; }
 .focused-table-actions {

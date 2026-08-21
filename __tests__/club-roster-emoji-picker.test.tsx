@@ -75,6 +75,7 @@ const membership = {
   joinedAt: Timestamp.now(),
   active: true,
 } satisfies ClubMembershipDoc
+const managerMembership = { ...membership, role: 'manager' as const }
 
 describe('club roster emoji picker', () => {
   beforeEach(() => vi.clearAllMocks())
@@ -131,5 +132,26 @@ describe('club roster emoji picker', () => {
 
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search roster players' }), { target: { value: 'missing' } })
     expect(screen.getByText('No roster players match “missing”.')).not.toBeNull()
+  })
+
+  it('snaps a manager roster field above the mobile keyboard viewport', () => {
+    const requestAnimationFrame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callback(0)
+      return 1
+    })
+    render(<ClubWorkspace clubId="CLUB1" membership={managerMembership} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open roster' }))
+
+    expect(screen.getByRole('heading', { name: 'Club managers' })).not.toBeNull()
+    const scroller = document.querySelector<HTMLElement>('.club-roster-scroll')!
+    const playerName = screen.getByLabelText('Player name')
+    vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue({ top: 100, bottom: 400 } as DOMRect)
+    vi.spyOn(playerName, 'getBoundingClientRect').mockReturnValue({ top: 520, bottom: 564 } as DOMRect)
+
+    fireEvent.focus(playerName)
+
+    expect(scroller.scrollTop).toBe(404)
+    expect(playerName.getAttribute('autocomplete')).toBe('off')
+    requestAnimationFrame.mockRestore()
   })
 })

@@ -121,6 +121,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
   const [activeTableId, setActiveTableId] = useState<string | null>(null)
   const [sidelineCollapsed, setSidelineCollapsed] = useState(true)
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
+  const [headerMenuAnchor, setHeaderMenuAnchor] = useState({ top: 0, right: 12 })
   const [savingSession, setSavingSession] = useState(false)
   const [qrAutoEnroll, setQrAutoEnroll] = useState<boolean | null>(null)
   const [savingQrEnrollment, setSavingQrEnrollment] = useState(false)
@@ -1782,13 +1783,13 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         .menu-item {
           display: flex; width: 100%; align-items: center; gap: 10px;
           padding: 12px 16px; border: none;
-          background: white; text-align: left;
+          background: rgb(var(--surface)); text-align: left;
           font-size: 15px; font-weight: 600;
-          cursor: pointer; color: #2d3748;
-          border-bottom: 1px solid #f0f0f0;
+          cursor: pointer; color: rgb(var(--ink));
+          border-bottom: 1px solid rgb(var(--line));
         }
         .menu-item:last-child { border-bottom: none; }
-        .menu-item:hover { background: #f7fafc; }
+        .menu-item:hover { background: rgb(var(--surface-2)); }
         .session-action-icon { width:18px; height:18px; flex:0 0 18px; }
         .qr-enrollment-setting { padding:12px 16px; border-bottom:1px solid rgb(var(--line)); background:rgb(var(--surface)); }
         .qr-enrollment-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
@@ -2069,7 +2070,14 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           <button
             className="view-header-action"
             type="button"
-            onClick={() => setHeaderMenuOpen((current) => !current)}
+            onClick={(event) => {
+              const rect = event.currentTarget.getBoundingClientRect()
+              setHeaderMenuAnchor({
+                top: rect.bottom + 8,
+                right: Math.max(12, window.innerWidth - rect.right),
+              })
+              setHeaderMenuOpen((current) => !current)
+            }}
             id="btnMenu"
             aria-label="Session actions"
             title="Session actions"
@@ -2084,7 +2092,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
               <circle cx="19" cy="12" r="1.5" />
             </svg>
           </button>
-          {headerMenuOpen ? (
+          {headerMenuOpen && typeof document !== 'undefined' ? createPortal(
             <div
               id="headerMenu"
               className="session-actions-menu"
@@ -2092,15 +2100,17 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
               aria-label="Session actions"
               style={{
                 display: 'block',
-                position: 'absolute',
-                top: 44,
-                right: 10,
-                background: 'white',
+                position: 'fixed',
+                top: headerMenuAnchor.top,
+                right: headerMenuAnchor.right,
+                background: 'rgb(var(--surface))',
                 borderRadius: 10,
                 boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-                overflow: 'hidden',
-                zIndex: 200,
-                minWidth: 320
+                overflowX: 'hidden',
+                overflowY: 'auto',
+                zIndex: 30020,
+                minWidth: 320,
+                maxHeight: `calc(100dvh - ${headerMenuAnchor.top + 12}px)`,
               }}
             >
               <button type="button" onClick={() => { setPage('setup'); setHeaderMenuOpen(false) }} className="menu-item"><SessionActionIcon name="edit" /><span>Edit Session</span></button>
@@ -2109,7 +2119,8 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
               {isManager ? <div className="qr-enrollment-setting"><div className="qr-enrollment-row"><span className="qr-enrollment-label">Automatic club enrollment</span><button type="button" role="switch" aria-checked={qrAutoEnroll === true} aria-label="Automatic club enrollment through table QR codes" disabled={qrAutoEnroll === null || savingQrEnrollment} onClick={() => void toggleQrEnrollment()} className="qr-enrollment-switch"><span /></button></div><p className="qr-enrollment-help">When on, anyone with a table QR can join this club immediately. When off, new people must be approved by a manager first.</p></div> : null}
               <button type="button" onClick={() => { clearAllTables(); setHeaderMenuOpen(false) }} className="menu-item"><SessionActionIcon name="clear-tables" /><span>Clear All Tables</span></button>
               <button type="button" onClick={() => { confirmClearSession(); setHeaderMenuOpen(false) }} className="menu-item danger-item"><SessionActionIcon name="reset" /><span>Reset Session</span></button>
-            </div>
+            </div>,
+            document.body,
           ) : null}
         </div>}
       />

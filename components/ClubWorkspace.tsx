@@ -86,6 +86,19 @@ function blocksWorkspaceSwipe(target: EventTarget | null) {
   ].join(',')))
 }
 
+function blocksPanelCarouselDrag(target: EventTarget | null) {
+  if (!(target instanceof Element)) return false
+  return Boolean(target.closest([
+    'input',
+    'select',
+    'textarea',
+    '[contenteditable="true"]',
+    '[draggable="true"]',
+    '[role="dialog"]',
+    '[data-workspace-swipe-ignore]',
+  ].join(',')))
+}
+
 const CLUB_SUMMARY_DEFINITIONS = {
   players: {
     label: 'Players',
@@ -168,13 +181,16 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
     duration: 30,
     loop: false,
     skipSnaps: false,
-    watchDrag: (_api, event) => !blocksWorkspaceSwipe(event.target),
+    // Embla suppresses the eventual click once a drag crosses its threshold,
+    // so ordinary buttons can safely be both tappable and swipeable.
+    watchDrag: (_api, event) => !blocksPanelCarouselDrag(event.target),
     breakpoints: {
       '(min-width: 768px)': { active: false },
       '(prefers-reduced-motion: reduce)': { duration: 0 },
     },
   })
   const addPlayerSectionRef = useRef<HTMLElement>(null)
+  const rosterScrollRef = useRef<HTMLDivElement>(null)
   const clubDashboardRef = useRef<HTMLDivElement>(null)
   const mobileToolsButtonRef = useRef<HTMLButtonElement>(null)
   const mobileWorkspaceTabsRef = useRef<HTMLElement>(null)
@@ -352,6 +368,40 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
     ? players.filter((player) => player.displayName.toLocaleLowerCase().includes(normalizedRosterSearch))
     : players
   const clubModalOpen = summaryDefinition !== null || rosterOpen || analyticsOpen || gameLogsOpen || networkOpen || settingsOpen || deleteConfirmOpen
+
+  const snapRosterFieldIntoView = useCallback((field: HTMLElement) => {
+    const scroller = rosterScrollRef.current
+    if (!scroller || !scroller.contains(field)) return
+
+    window.requestAnimationFrame(() => {
+      const scrollerRect = scroller.getBoundingClientRect()
+      const fieldRect = field.getBoundingClientRect()
+      const inset = 16
+      const targetTop = scrollerRect.top + inset
+      const visibleBottom = scrollerRect.bottom - inset
+
+      if (fieldRect.top < targetTop || fieldRect.bottom > visibleBottom) {
+        scroller.scrollTop += fieldRect.top - targetTop
+      }
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!rosterOpen) return
+    const keepFocusedFieldVisible = () => {
+      const activeElement = document.activeElement
+      if (activeElement instanceof HTMLElement) snapRosterFieldIntoView(activeElement)
+    }
+    const viewport = window.visualViewport
+    viewport?.addEventListener('resize', keepFocusedFieldVisible)
+    viewport?.addEventListener('scroll', keepFocusedFieldVisible)
+    window.addEventListener('resize', keepFocusedFieldVisible)
+    return () => {
+      viewport?.removeEventListener('resize', keepFocusedFieldVisible)
+      viewport?.removeEventListener('scroll', keepFocusedFieldVisible)
+      window.removeEventListener('resize', keepFocusedFieldVisible)
+    }
+  }, [rosterOpen, snapRosterFieldIntoView])
 
   const handleWorkspaceTouchStart = (event: ReactTouchEvent<HTMLDivElement>) => {
     if (clubModalOpen || event.touches.length !== 1 || blocksWorkspaceSwipe(event.target)) {
@@ -1121,7 +1171,11 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            <div
+              ref={rosterScrollRef}
+              className="club-roster-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]"
+              onFocusCapture={(event) => snapRosterFieldIntoView(event.target as HTMLElement)}
+            >
               {isManager ? (
                 <section className="mb-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
                   <h4 className="text-sm font-black uppercase tracking-[0.16em] text-slate-700">Club managers</h4>
@@ -1152,7 +1206,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                 <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_140px_auto]">
                   <label className="text-sm font-bold text-slate-700">
                     Player name
-                    <input value={playerName} onChange={(event) => setPlayerName(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-teal-500" />
+                    <input type="text" name="new-roster-player-name" autoComplete="off" enterKeyHint="next" value={playerName} onChange={(event) => setPlayerName(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-teal-500" />
                   </label>
                   <label className="text-sm font-bold text-slate-700">
                     Player emoji

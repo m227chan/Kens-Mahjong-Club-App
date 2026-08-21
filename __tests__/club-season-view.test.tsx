@@ -95,12 +95,14 @@ const emblaMock = vi.hoisted(() => {
 
   return {
     api,
+    options: undefined as Record<string, unknown> | undefined,
     viewportRef: vi.fn((node: HTMLElement | null) => { viewportNode = node }),
     reset() {
       handlers.clear()
       selected = 0
       progress = 0
       viewportNode = null
+      this.options = undefined
     },
     dragTo(index: number, intermediateProgress = index) {
       emit('pointerDown')
@@ -118,7 +120,10 @@ const emblaMock = vi.hoisted(() => {
     emit,
   }
 })
-vi.mock('embla-carousel-react', () => ({ default: () => [emblaMock.viewportRef, emblaMock.api] }))
+vi.mock('embla-carousel-react', () => ({ default: (options: Record<string, unknown>) => {
+  emblaMock.options = options
+  return [emblaMock.viewportRef, emblaMock.api]
+} }))
 vi.mock('@/components/ClubToolSidebar', () => ({
   default: ({ expanded, onAnalytics, onExpandedChange, onSettings }: { expanded: boolean; onAnalytics: () => void; onExpandedChange: (value: boolean) => void; onSettings: () => void }) => <>
     <output data-testid="club-sidebar-expanded">{String(expanded)}</output>
@@ -323,6 +328,20 @@ describe('club season navigation', () => {
     }))
     swipe(workspace, { x: 250, y: 100 }, { x: 100, y: 105 })
     expect(leaderboardButton.getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('allows panel swipes to begin on buttons while preserving nested gesture controls', () => {
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+
+    const watchDrag = emblaMock.options?.watchDrag as ((api: unknown, event: { target: EventTarget | null }) => boolean)
+    const ordinaryButton = screen.getByRole('button', { name: 'Leaderboard' })
+    const ignoredControl = document.createElement('button')
+    ignoredControl.setAttribute('data-workspace-swipe-ignore', '')
+    const textInput = document.createElement('input')
+
+    expect(watchDrag(null, { target: ordinaryButton })).toBe(true)
+    expect(watchDrag(null, { target: ignoredControl })).toBe(false)
+    expect(watchDrag(null, { target: textInput })).toBe(false)
   })
 
   it('keeps both workspace panels available on desktop', () => {
