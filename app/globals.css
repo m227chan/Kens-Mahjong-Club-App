@@ -1475,7 +1475,7 @@ html.dark .club-tool-sidebar-panel { box-shadow: inset 0 1px 0 rgb(238 231 207 /
   .club-workspace-header > .club-workspace-heading { width: 100%; flex: 0 1 auto; flex-direction: column; align-items: flex-start; gap: .3rem; }
   .club-workspace-header h1 { width: 100%; flex: 0 1 auto; padding-right: 0; border-right: 0; overflow: hidden; font-size: 1rem; line-height: 1.2; overflow-wrap: normal; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
   .club-header-roster-summary { gap: .25rem; margin-top: 0; }
-  .club-header-roster-summary button { display: inline-grid; min-height: 36px; grid-auto-flow: column; align-content: center; align-items: baseline; padding: 0 .45rem; touch-action: manipulation; }
+  .club-header-roster-summary button { display: inline-flex; min-height: 36px; align-items: center; column-gap: .42rem; padding: 0 .5rem; white-space: nowrap; touch-action: manipulation; }
   .club-header-roster-summary strong { font-size: .76rem; line-height: 1; }
   .club-header-roster-summary small { font-size: .52rem; line-height: 1; }
   .club-mobile-panels-viewport { position: relative; width: 100%; max-width: 100%; margin-inline: auto; overflow: hidden; }
