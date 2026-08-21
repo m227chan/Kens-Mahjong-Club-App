@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Timestamp } from '@/lib/timestamp'
 import type { ClubMembershipDoc } from '@/lib/types'
@@ -19,7 +19,7 @@ const dataMocks = vi.hoisted(() => ({
     callback([
       { id: '1', seasonNumber: 1, name: 'Season 1', kind: 'season', active: false },
       { id: '2', seasonNumber: 2, name: 'Season 2', kind: 'season', active: true },
-      { id: '3', seasonNumber: 3, name: 'Summer Open', kind: 'tournament', active: false },
+      { id: '3', seasonNumber: 3, name: 'Summer Open', kind: 'tournament', active: false, editableUntil: { toMillis: () => Date.now() + 24 * 60 * 60 * 1000 }, tournamentDurationHours: 24 },
     ])
     return vi.fn()
   }),
@@ -27,6 +27,11 @@ const dataMocks = vi.hoisted(() => ({
   ensureConfig: vi.fn().mockResolvedValue(undefined),
   ensureSeasons: vi.fn().mockResolvedValue(undefined),
   setActiveSeason: vi.fn(),
+  setCurrentCompetition: vi.fn(),
+  reopenTournament: vi.fn(),
+  updateTournamentDuration: vi.fn(),
+  endTournament: vi.fn(),
+  deleteTournament: vi.fn(),
   startNewSeason: vi.fn().mockResolvedValue(3),
   startNewTournament: vi.fn().mockResolvedValue({ seasonNumber: 4, name: 'Tournament 2', kind: 'tournament' }),
   createPlayer: vi.fn(),
@@ -49,8 +54,8 @@ vi.mock('@/components/SessionManager', () => ({ default: ({ seasonNumber }: { se
 vi.mock('@/components/DashboardContent', () => ({ default: ({ seasonNumber }: { seasonNumber?: number }) => <div data-testid="analytics-season">{seasonNumber ?? 'all'}</div> }))
 vi.mock('@/components/GameLogsModal', () => ({ default: () => null }))
 vi.mock('@/components/NetworkGraphModal', () => ({ default: () => null }))
-vi.mock('@/components/ScoringRulesSettings', () => ({ default: () => null }))
-vi.mock('@/components/TitleRulesSettings', () => ({ default: () => null }))
+vi.mock('@/components/ScoringRulesSettings', () => ({ default: ({ embedded }: { embedded?: boolean }) => <output data-testid="scoring-settings-mode">{embedded ? 'embedded' : 'card'}</output> }))
+vi.mock('@/components/TitleRulesSettings', () => ({ default: ({ embedded }: { embedded?: boolean }) => <output data-testid="title-settings-mode">{embedded ? 'embedded' : 'card'}</output> }))
 vi.mock('@/components/ActivitySettings', () => ({ default: () => null }))
 const emblaMock = vi.hoisted(() => {
   type Handler = (api: unknown, event: string) => void
@@ -376,17 +381,74 @@ describe('club season navigation', () => {
     await waitFor(() => expect(screen.getByTestId('session-season').textContent).toBe('2'))
   })
 
+  it('uses one colored status dot and shows the countdown for the current tournament without replacing the active season', async () => {
+    dataMocks.subscribeClub.mockImplementationOnce((_clubId: string, callback: (club: unknown) => void) => {
+      callback({ id: 'CLUB1', name: 'Test Club', activeSeasonNumber: 2, currentCompetitionNumber: 3, active: true })
+      return vi.fn()
+    })
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+
+    const selector = screen.getByLabelText('Season')
+    expect(document.querySelectorAll('.club-season-action > .competition-status-dot')).toHaveLength(1)
+    await waitFor(() => expect((selector as HTMLSelectElement).value).toBe('3'))
+    expect(document.querySelector('.club-season-action > .competition-status-dot')?.classList.contains('is-tournament-editable')).toBe(true)
+    const timer = screen.getByRole('timer')
+    expect(timer.getAttribute('aria-label')).toContain('Summer Open tournament clock')
+    expect(within(timer).queryByText('Summer Open')).toBeNull()
+    expect(screen.queryByText(/current/i, { selector: 'option' })).toBeNull()
+    await waitFor(() => expect(screen.getByTestId('session-season').textContent).toBe('3'))
+    expect(dataMocks.setActiveSeason).not.toHaveBeenCalled()
+  })
+
+  it('keeps the season selector view-only and lets managers inspect an ended tournament', async () => {
+    dataMocks.subscribeSeasons.mockImplementationOnce((_clubId: string, callback: (seasons: unknown[]) => void) => {
+      callback([
+        { id: '1', seasonNumber: 1, name: 'Season 1', kind: 'season', active: false },
+        { id: '2', seasonNumber: 2, name: 'Season 2', kind: 'season', active: true },
+        { id: '3', seasonNumber: 3, name: 'Test 2', kind: 'tournament', active: false, editableUntil: null, tournamentSecondsRemaining: 0, tournamentDurationHours: 24 },
+      ])
+      return vi.fn()
+    })
+    render(<ClubWorkspace clubId="CLUB1" membership={managerMembership} />)
+
+    const selector = screen.getByLabelText('Season')
+    fireEvent.change(selector, { target: { value: '3' } })
+
+    await waitFor(() => expect((selector as HTMLSelectElement).value).toBe('3'))
+    expect(screen.getByText('Test 2 is read-only')).toBeTruthy()
+    expect(screen.getByTestId('leaderboard-season').textContent).toBe('3')
+    expect(dataMocks.setCurrentCompetition).not.toHaveBeenCalled()
+  })
+
+  it('moves every member to a newly current competition when the club update arrives', async () => {
+    let publishClub: ((club: unknown) => void) | null = null
+    dataMocks.subscribeClub.mockImplementationOnce((_clubId: string, callback: (club: unknown) => void) => {
+      publishClub = callback
+      callback({ id: 'CLUB1', name: 'Test Club', activeSeasonNumber: 2, currentCompetitionNumber: 2, active: true })
+      return vi.fn()
+    })
+    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+    const selector = screen.getByLabelText('Season')
+    fireEvent.change(selector, { target: { value: '1' } })
+    await waitFor(() => expect((selector as HTMLSelectElement).value).toBe('1'))
+
+    act(() => publishClub?.({ id: 'CLUB1', name: 'Test Club', activeSeasonNumber: 2, currentCompetitionNumber: 3, active: true }))
+
+    await waitFor(() => expect((selector as HTMLSelectElement).value).toBe('3'))
+    expect(screen.getByRole('timer').getAttribute('aria-label')).toContain('Summer Open tournament clock')
+  })
+
   it('combines every season and tournament in leaderboard and analytics', async () => {
     render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
 
     await waitFor(() => expect((screen.getByLabelText('Season') as HTMLSelectElement).value).toBe('2'))
-    expect(screen.getByRole('option', { name: 'All seasons' })).toBeTruthy()
+    expect(screen.getByRole('option', { name: 'All-time club history' })).toBeTruthy()
 
     fireEvent.change(screen.getByLabelText('Season'), { target: { value: 'all' } })
 
     await waitFor(() => expect(screen.getByTestId('leaderboard-season').textContent).toBe('all'))
     expect(dataMocks.subscribeAllCompetitionStats).toHaveBeenCalledWith('CLUB1', expect.any(Function))
-    expect(screen.getByText('All seasons combined')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'All-time club history' })).toBeTruthy()
     expect(screen.queryByTestId('session-season')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Open analytics' }))
@@ -395,40 +457,173 @@ describe('club season navigation', () => {
 
   it('lets a manager start a custom-named tournament from season controls', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    dataMocks.subscribeSeasons.mockImplementationOnce((_clubId: string, callback: (seasons: unknown[]) => void) => {
+      callback([
+        { id: '1', seasonNumber: 1, name: 'Season 1', kind: 'season', active: false },
+        { id: '2', seasonNumber: 2, name: 'Season 2', kind: 'season', active: true },
+        { id: '3', seasonNumber: 3, name: 'Spring Open', kind: 'tournament', active: false, editableUntil: null, tournamentSecondsRemaining: 0, tournamentDurationHours: 24 },
+      ])
+      return vi.fn()
+    })
+    dataMocks.startNewTournament.mockResolvedValueOnce({ seasonNumber: 4, name: 'Summer Open', kind: 'tournament' })
     render(<ClubWorkspace clubId="CLUB1" membership={managerMembership} />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open settings' }))
-    const manageControls = screen.getByRole('button', { name: 'Manage season controls' })
-    expect(manageControls.getAttribute('aria-expanded')).toBe('false')
-    expect(screen.queryByLabelText(/Tournament name/)).toBeNull()
-
-    fireEvent.click(manageControls)
-    expect(screen.getByRole('button', { name: 'Collapse season controls' }).getAttribute('aria-expanded')).toBe('true')
-    const nameInput = screen.getByLabelText(/Tournament name/)
+    const settingsTrigger = screen.getByRole('button', { name: 'Open settings' })
+    settingsTrigger.focus()
+    fireEvent.click(settingsTrigger)
+    expect(screen.getByRole('navigation', { name: 'Club settings' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Seasons & Tournaments/ }).getAttribute('aria-current')).toBe('page')
+    expect(screen.getByRole('heading', { name: 'Seasons & Tournaments' })).toBeTruthy()
+    const nameInput = screen.getByLabelText(/Tournament Name/i)
     expect(nameInput.getAttribute('placeholder')).toBe('Tournament 2')
 
     fireEvent.change(nameInput, { target: { value: 'Summer Open' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Start tournament' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Start Tournament' }))
 
     await waitFor(() => expect(dataMocks.startNewTournament).toHaveBeenCalledWith('CLUB1', {
       createdBy: 'member-1',
       name: 'Summer Open',
+      durationHours: 24,
     }))
+    await waitFor(() => expect((screen.getByLabelText('Season') as HTMLSelectElement).value).toBe('4'))
+    expect(screen.getByRole('option', { name: 'Summer Open · Tournament' })).toBeTruthy()
+    expect(screen.queryByRole('option', { name: 'Season 4' })).toBeNull()
+    expect(document.querySelector('.club-workspace-main')?.classList.contains('tournament-mode')).toBe(true)
+    expect(screen.getByRole('timer').getAttribute('aria-label')).toContain('Summer Open tournament clock')
     expect(screen.queryByRole('dialog', { name: 'Test Club' })).toBeNull()
+    await waitFor(() => expect(document.activeElement).toBe(settingsTrigger))
     confirm.mockRestore()
   })
 
-  it('makes the underlying club workspace inert while settings are open', () => {
-    render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
+  it('explains in settings that another tournament cannot start until the active one ends', () => {
+    render(<ClubWorkspace clubId="CLUB1" membership={managerMembership} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open settings' }))
+
+    expect(screen.getByText(/must wait until Summer Open is over/i)).toBeTruthy()
+    expect((screen.getByRole('button', { name: 'Tournament in Progress' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('changes the shared current tournament only from manager settings', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<ClubWorkspace clubId="CLUB1" membership={managerMembership} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open settings' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Make Current Tournament' }))
+
+    await waitFor(() => expect(dataMocks.setCurrentCompetition).toHaveBeenCalledWith('CLUB1', 3))
+    expect((screen.getByLabelText('Season') as HTMLSelectElement).value).toBe('3')
+    expect(document.querySelector('main')?.classList.contains('tournament-mode')).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.getByRole('timer').getAttribute('aria-label')).toContain('Summer Open tournament clock')
+    confirm.mockRestore()
+  })
+
+  it('stacks competition controls and lets a manager configure, restart, end, or delete a tournament', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<ClubWorkspace clubId="CLUB1" membership={managerMembership} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open settings' }))
+
+    const controls = document.querySelector('#season-controls-content > div')!
+    expect(controls.className).toContain('flex-col')
+    fireEvent.click(screen.getByRole('button', { name: 'Set as Active Season' }))
+    await waitFor(() => expect(dataMocks.setActiveSeason).toHaveBeenCalledWith('CLUB1', 1))
+
+    const durationInput = screen.getByLabelText('Summer Open clock duration in hours')
+    fireEvent.change(durationInput, { target: { value: '36' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Clock Duration' }))
+    await waitFor(() => expect(dataMocks.updateTournamentDuration).toHaveBeenCalledWith('CLUB1', 3, 36))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Restart 36-Hour Clock' }))
+    await waitFor(() => expect(dataMocks.reopenTournament).toHaveBeenCalledWith('CLUB1', 3))
+
+    fireEvent.click(screen.getByRole('button', { name: 'End Tournament…' }))
+    await waitFor(() => expect(dataMocks.endTournament).toHaveBeenCalledWith('CLUB1', 3))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Tournament' }))
+    expect(screen.queryByLabelText('Summer Open clock duration in hours')).toBeNull()
+    await waitFor(() => expect(dataMocks.deleteTournament).toHaveBeenCalledWith('CLUB1', 3))
+    confirm.mockRestore()
+  })
+
+  it('uses an adaptive mobile settings list with direct, draft-preserving detail editors', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query === '(max-width: 767px)',
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })))
+    render(<ClubWorkspace clubId="CLUB1" membership={managerMembership} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open settings' }))
+
+    const layout = document.querySelector('.club-settings-layout')!
+    const navigation = document.querySelector('.club-settings-navigation')!
+    const detail = document.querySelector('.club-settings-detail')!
+    await waitFor(() => {
+      expect(navigation.getAttribute('aria-hidden')).toBeNull()
+      expect(detail.getAttribute('aria-hidden')).toBe('true')
+    })
+    const scoring = screen.getByRole('button', { name: /House Scoring/ })
+    fireEvent.click(scoring)
+
+    expect(layout.className).toContain('is-detail-open')
+    expect(scoring.getAttribute('aria-current')).toBe('page')
+    await waitFor(() => {
+      expect(navigation.getAttribute('aria-hidden')).toBe('true')
+      expect(detail.getAttribute('aria-hidden')).toBeNull()
+      expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'House Scoring' }))
+    })
+    const scoringEditor = screen.getByTestId('scoring-settings-mode')
+    expect(scoringEditor.textContent).toBe('embedded')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    fireEvent.click(screen.getByRole('button', { name: /Club Titles/ }))
+    expect(scoringEditor.parentElement?.hidden).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    fireEvent.click(scoring)
+    expect(screen.getByTestId('scoring-settings-mode')).toBe(scoringEditor)
+    expect(scoringEditor.parentElement?.hidden).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    expect(layout.className).not.toContain('is-detail-open')
+    expect(navigation.getAttribute('aria-hidden')).toBeNull()
+    expect(detail.getAttribute('aria-hidden')).toBe('true')
+  })
+
+  it('hands focus to club deletion and returns to its settings row on Escape', async () => {
+    render(<ClubWorkspace clubId="CLUB1" membership={managerMembership} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open settings' }))
+    fireEvent.click(screen.getByRole('button', { name: /Club Access/ }))
+
+    const deleteClubRow = screen.getByRole('button', { name: 'Delete Club…' })
+    fireEvent.click(deleteClubRow)
+
+    const confirmation = screen.getByRole('dialog', { name: 'Delete Test Club?' })
+    const confirmationInput = screen.getByRole('textbox', { name: 'Type Test Club to confirm club deletion' })
+    expect(confirmation).toBeTruthy()
+    expect(screen.queryByRole('dialog', { name: 'Test Club' })).toBeNull()
+    expect(document.getElementById('club-settings-dialog')?.closest('[aria-hidden="true"]')).toBeTruthy()
+    await waitFor(() => expect(document.activeElement).toBe(confirmationInput))
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+
+    expect(screen.queryByRole('dialog', { name: 'Delete Test Club?' })).toBeNull()
+    expect(screen.getByRole('dialog', { name: 'Test Club' })).toBeTruthy()
+    await waitFor(() => expect(document.activeElement).toBe(deleteClubRow))
+  })
+
+  it('makes the full underlying app inert while settings are open', async () => {
+    const { container } = render(<ClubWorkspace clubId="CLUB1" membership={membership} />)
 
     const workspace = document.querySelector('.club-workspace-dashboard-grid')
     expect(workspace?.hasAttribute('inert')).toBe(false)
 
     fireEvent.click(screen.getByRole('button', { name: 'Open settings' }))
     expect(workspace?.hasAttribute('inert')).toBe(true)
+    await waitFor(() => expect(container.hasAttribute('inert')).toBe(true))
 
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
     expect(workspace?.hasAttribute('inert')).toBe(false)
+    expect(container.hasAttribute('inert')).toBe(false)
   })
 
   it('opens analytics with All time selected by default', async () => {

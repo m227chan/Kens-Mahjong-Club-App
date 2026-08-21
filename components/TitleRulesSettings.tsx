@@ -24,10 +24,12 @@ export default function TitleRulesSettings({
   clubId,
   rules,
   isManager,
+  embedded = false,
 }: {
   clubId: string
   rules: TitleRules
   isManager: boolean
+  embedded?: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
   const [draft, setDraft] = useState<TitleRules>(rules)
@@ -35,8 +37,8 @@ export default function TitleRulesSettings({
   const [message, setMessage] = useState<{ text: string; tone: 'success' | 'error' } | null>(null)
 
   useEffect(() => {
-    if (!expanded) setDraft(rules)
-  }, [expanded, rules])
+    if (!expanded || embedded) setDraft(rules)
+  }, [embedded, expanded, rules])
 
   const previewSizes = useMemo(() => titleBandSizes(20, draft), [draft])
   const modeLabel = rules.mode === 'proportion' ? 'proportional allocation' : 'exact top/bottom counts'
@@ -129,7 +131,7 @@ export default function TitleRulesSettings({
     }
   }
 
-  if (!expanded) return (
+  if (!expanded && !embedded) return (
     <section aria-labelledby="club-title-rules-heading" className="club-settings-card rounded-xl border border-[rgb(var(--line))] bg-[rgb(var(--surface-2))] p-4 text-[rgb(var(--ink))] sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -147,7 +149,7 @@ export default function TitleRulesSettings({
     <section aria-labelledby="club-title-rules-heading" className="club-settings-card rounded-xl border border-[rgb(var(--line))] bg-[rgb(var(--surface-2))] p-4 text-[rgb(var(--ink))] sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div><div className="flex flex-wrap items-center gap-2"><h4 id="club-title-rules-heading" className="text-sm font-black">Club titles</h4>{dirty ? <span className="rounded-full bg-[rgb(var(--gold)/.14)] px-2 py-1 text-[11px] font-bold text-[rgb(var(--ink))]">Unsaved changes</span> : null}</div><p className="mt-1 text-xs text-[rgb(var(--muted))]">Ordered from highest rank to lowest rank.</p></div>
-        <button type="button" onClick={() => setExpanded(false)} aria-expanded="true" aria-controls="club-title-rules-content" className="min-h-11 w-full rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] px-3 text-sm font-bold sm:w-auto">Collapse</button>
+        {embedded ? null : <button type="button" onClick={() => setExpanded(false)} aria-expanded="true" aria-controls="club-title-rules-content" className="min-h-11 w-full rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] px-3 text-sm font-bold sm:w-auto">Collapse</button>}
       </div>
       <div id="club-title-rules-content">
 

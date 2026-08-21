@@ -243,7 +243,7 @@ Actions include:
 - approve or decline join requests;
 - promote a manager now or save a pending email-based grant;
 - create, deactivate, link, unlink, and update players;
-- create and select seasons;
+- create regular seasons, select the one active season, and create/reopen/delete tournaments;
 - create, update, delete, import, or rebuild games and statistics;
 - mutate table seating and initialize club configuration.
 
@@ -255,12 +255,12 @@ The authoritative schema is the ordered SQL in `supabase/migrations`. The follow
 
 | Relation                 | Purpose and important fields                                                                                    |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `clubs`                  | Club identity, manager metadata, active season, active/deleted state, global/default flag, and rebuild metadata |
+| `clubs`                  | Club identity, manager metadata, active regular season, current competition, active/deleted state, global/default flag, and rebuild metadata |
 | `user_profiles`          | Firebase UID, display metadata, and persisted sound preference                                                  |
 | `club_members`           | Club-to-Firebase-user membership, role, active state, and join metadata                                         |
 | `join_requests`          | Pending/approved/declined membership requests and resolution audit fields                                       |
 | `players`                | Club-scoped tracked player, display name, emoji, optional Firebase UID link, and soft-active state              |
-| `seasons`                | Club-scoped numbered seasons and active state                                                                   |
+| `seasons`                | Club-scoped numbered seasons/tournaments, the single active regular-season flag, tournament deadline, and paused seconds remaining |
 | `app_configs`            | Club-scoped scoring rules, customizable leaderboard title rules, and ELO tuning                                  |
 | `games`                  | Game metadata: time, season, table, result type, winner/loser, fan, notes, creator, and historical flag         |
 | `game_entries`           | One score per game/player; cascade-deleted with the game                                                        |
@@ -366,7 +366,8 @@ Shared client-facing types live in `lib/types.ts`:
 ### Seasons
 
 - Each club begins with a first season.
-- Managers can create the next numbered season and switch the active season. Selecting an existing season updates local club/season state immediately after the API confirms, causing the leaderboard, session, analytics, and logs to resubscribe without a manual browser refresh. Creating a season transactionally closes the previous live session and refreshes the workspace so every season-scoped subscription restarts cleanly.
+- Exactly one regular season is active and editable per club; the database enforces that invariant. Managers can create the next season or select an existing regular season as active. Changing the active season closes any live table session and causes season-scoped subscriptions to restart without a manual refresh.
+- Starting a tournament does not deactivate the regular season or make season games read-only. A club can have only one unfinished tournament at a time; managers must wait for it to finish or end it early before starting another. A tournament has separate scores, ratings, and standings plus its own manager-configurable active-time clock, which defaults to 24 hours. Making the active regular season current pauses that clock; making the tournament current from Settings resumes its saved remainder. Managers can change or restart the saved duration, end a tournament early, or delete an ended tournament and its competition-specific sessions, games, events, and standings. Delete and end operations are safe to repeat, and duplicate start attempts are serialized. The header shows an `HH:MM:SS` countdown beside the selector without repeating the tournament name. The season selector is view-only for managers and members, so anyone can inspect a current or historical season, an ended tournament, or all-time club history without changing the club. When a manager changes the shared current competition in Settings, every connected member returns to it automatically. Green, red, and grey status dots represent the active season, the current running tournament, and read-only history respectively. All-time club history includes games from both regular seasons and tournaments.
 - Leaderboard, session, analytics, and logs can be season-scoped.
 - All-time and season statistics are stored separately but rebuilt from the same authoritative history.
 
@@ -399,7 +400,7 @@ Shared client-facing types live in `lib/types.ts`:
 
 ### Scoring and game recording
 
-Each club stores its minimum fan, maximum fan cap, and fan-to-base-point mapping in `app_configs`. New clubs default to the original 3–13+ mapping. Managers edit these house rules from the collapsed settings card; live session scoring, focused-table scoring, server validation, and the in-app guide all consume the same club-specific values. Existing stored scores are not rewritten. For normal results:
+Each club stores its minimum fan, maximum fan cap, and fan-to-base-point mapping in `app_configs`. New clubs default to the original 3–13+ mapping. Managers edit these house rules from the House Scoring detail in Club Settings; live session scoring, focused-table scoring, server validation, and the in-app guide all consume the same club-specific values. Existing stored scores are not rewritten. For normal results:
 
 - **Self draw:** the winner receives three times the base value; each other player loses one base value.
 - **Discard win:** the winner receives twice the base value; the discarder loses twice the base value; uninvolved players receive zero.
@@ -435,7 +436,7 @@ Every stored game must contain two to four distinct players, finite numeric scor
 
 #### Rank-title distribution
 
-Titles are recalculated from the player’s position in current points standings; they are not stored as a permanent achievement. Each club stores an ordered title system in `app_configs.title_bands`, and managers edit it through a collapsed settings card. Titles can be added, removed, renamed, and reordered.
+Titles are recalculated from the player’s position in current points standings; they are not stored as a permanent achievement. Each club stores an ordered title system in `app_configs.title_bands`, and managers edit it from the Club Titles detail in Club Settings. Titles can be added, removed, renamed, and reordered.
 
 The default system distributes nine titles using these proportions:
 
@@ -606,6 +607,10 @@ Content sits on distinct surface layers with borders, restrained offset shadows,
 - Selection must be expressed by more than a faint background change.
 - Destructive actions require explicit confirmation; club deletion requires exact-name input.
 - Dialogs need clear close/cancel paths, bounded viewport height, and scroll containment.
+- Club Settings uses grouped settings navigation rather than one long card stack: desktop keeps the category list beside the selected detail, while mobile drills into one detail at a time and provides a Back control. House scoring and title editors open directly in their detail pages.
+- Account Settings uses the same concise grouped-row language for preferences, identity, sign-out, and a final isolated destructive action. The full account-deletion explanation belongs in its confirmation step, not the root settings list.
+- The Session ellipsis is a command menu, not a settings dialog. It uses `menu`/`menuitem` semantics, logical action groups, concise title-case labels, an On/Off checkbox item for automatic QR enrollment, arrow-key navigation, Escape/outside dismissal, and focus restoration. On phones the same commands appear in a safe-area-aware bottom sheet.
+- Menu icons are code-native, familiar, and consistent within a group. Avoid decorative or ambiguous icons, repeated card borders, and explanatory paragraphs inside quick menus.
 - Loading and error states should describe what happened without exposing internal errors or secrets.
 - Respect `prefers-reduced-motion`; motion must enhance comprehension, not gate functionality.
 

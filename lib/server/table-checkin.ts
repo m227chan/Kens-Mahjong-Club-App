@@ -6,6 +6,7 @@ import { clampSessionTableCount, normalizeSessionLayout } from '@/lib/session-la
 import { verifyTableQr } from '@/lib/qr-signing'
 import { scoringRulesFromRow } from '@/lib/scoring-rules'
 import { addPlayerToActiveSession } from '@/lib/server/roster-session'
+import { assertClubCompetitionEditable } from '@/lib/server/season-management'
 import type { AuthCaller } from '@/lib/server/auth-caller'
 import { assertGuestTableScope } from '@/lib/server/auth-caller'
 
@@ -303,7 +304,7 @@ export async function getTableContext(
     return {
       clubId: normalizedClub,
       clubName: String(context.name),
-      seasonNumber: Number(context.active_season_number),
+      seasonNumber: session.seasonNumber,
       tableNumber: normalizedTable,
       session,
       players,
@@ -330,12 +331,13 @@ export async function getTableContext(
   ).rows[0]
   if (!context) throw new Error('You are not an active member of this club.')
   const players = context.players as Awaited<ReturnType<typeof roster>>
+  const session = sessionPayload(context.active_session as SessionRow | undefined)
   return {
     clubId: normalizedClub,
     clubName: String(context.name),
-    seasonNumber: Number(context.active_season_number),
+    seasonNumber: session?.seasonNumber ?? Number(context.active_season_number),
     tableNumber: normalizedTable,
-    session: sessionPayload(context.active_session as SessionRow | undefined),
+    session,
     players,
     linkedPlayer:
       players.find((player) => player.authUid === memberUid) ?? null,
@@ -527,13 +529,14 @@ export async function mutateTable(
     `session:${clubId}`,
   ])
   await clearStaleTables(db)
-  const seasonNumber = Number(state.active_season_number)
   let row = (
     await db.query(
       'select * from sessions where club_id=$1 and is_active for update',
       [clubId],
     )
   ).rows[0]
+  const seasonNumber = Number(row?.season_number ?? state.active_season_number)
+  await assertClubCompetitionEditable(db, clubId, seasonNumber)
 
   let playerId = input.playerId
   if (input.action === 'checkIn') {

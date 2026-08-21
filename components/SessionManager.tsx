@@ -1,8 +1,9 @@
 'use client'
 
-import { type PointerEvent as ReactPointerEvent, type ReactNode, type WheelEvent as ReactWheelEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
+import MenuGlyph from '@/components/MenuGlyph'
 import ViewHeader from '@/components/ViewHeader'
 import ScoreCelebration, { type ScoreCelebrationResult } from '@/components/ScoreCelebration'
 import { useAuth } from '@/contexts/AuthContext'
@@ -25,6 +26,7 @@ import {
   type ScoringRules,
 } from '@/lib/scoring-rules'
 import { getQrEnrollmentSetting, setQrEnrollmentSetting, tableAction, type TableSession } from '@/lib/table-checkin-client'
+import { useModalFocus } from '@/lib/use-modal-focus'
 import {
   optimisticallyClearAllTables,
   optimisticallyClearTable,
@@ -77,20 +79,12 @@ const fromTableSession = (next: TableSession): SessionState => ({
   sideline: next.sideline,
 })
 
-type SessionActionIconName = 'edit' | 'add-player' | 'qr' | 'clear-tables' | 'reset'
-
-function SessionActionIcon({ name }: { name: SessionActionIconName }) {
-  const paths: Record<SessionActionIconName, ReactNode> = {
-    edit: <><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" /></>,
-    'add-player': <><path d="M15 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><path d="M19 8v6M16 11h6" /></>,
-    qr: <><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3z" /><path d="M14 14h3v3h-3zM18 18h3v3h-3zM18 14h3M14 19v2" /></>,
-    'clear-tables': <><path d="M4 5h16M6 9h12M8 13h8" /><path d="m9 17 3 3 3-3M12 14v6" /></>,
-    reset: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></>,
-  }
-
+function AddPlayerActionIcon() {
   return (
     <svg className="session-action-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      {paths[name]}
+      <path d="M15 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="8.5" cy="7" r="4" />
+      <path d="M19 8v6M16 11h6" />
     </svg>
   )
 }
@@ -121,7 +115,13 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
   const [activeTableId, setActiveTableId] = useState<string | null>(null)
   const [sidelineCollapsed, setSidelineCollapsed] = useState(true)
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
-  const [headerMenuAnchor, setHeaderMenuAnchor] = useState({ top: 0, right: 12 })
+  const [headerMenuMobile, setHeaderMenuMobile] = useState(false)
+  const [headerMenuAnchor, setHeaderMenuAnchor] = useState<{
+    top: number | 'auto'
+    bottom: number | 'auto'
+    right: number
+    maxHeight: number
+  }>({ top: 0, bottom: 'auto', right: 12, maxHeight: 420 })
   const [savingSession, setSavingSession] = useState(false)
   const [qrAutoEnroll, setQrAutoEnroll] = useState<boolean | null>(null)
   const [savingQrEnrollment, setSavingQrEnrollment] = useState(false)
@@ -142,6 +142,57 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
   const pendingLayoutMutationsRef = useRef(0)
   const layoutMutationQueueRef = useRef<Promise<void>>(Promise.resolve())
   const initializedSessionLayoutRef = useRef('')
+  const headerMenuTriggerRef = useRef<HTMLButtonElement>(null)
+  const headerMenuRef = useRef<HTMLDivElement>(null)
+  const headerMenuLayerRef = useRef<HTMLDivElement>(null)
+  const headerMenuSurfaceRef = useRef<HTMLElement>(null)
+  const setupHeadingRef = useRef<HTMLHeadingElement>(null)
+  const headerMenuInitialFocusRef = useRef<'first' | 'last'>('first')
+
+  const positionHeaderMenu = useCallback((trigger: HTMLButtonElement | null = headerMenuTriggerRef.current) => {
+    if (!trigger) return
+    const rect = trigger.getBoundingClientRect()
+    const gap = 8
+    const viewportMargin = 12
+    const availableBelow = Math.max(0, window.innerHeight - rect.bottom - gap - viewportMargin)
+    const availableAbove = Math.max(0, rect.top - gap - viewportMargin)
+    const desiredHeight = Math.min(420, Math.max(0, window.innerHeight - viewportMargin * 2))
+    const placeAbove = availableBelow < desiredHeight && availableAbove > availableBelow
+    setHeaderMenuAnchor({
+      top: placeAbove ? 'auto' : Math.max(viewportMargin, rect.bottom + gap),
+      bottom: placeAbove ? Math.max(viewportMargin, window.innerHeight - rect.top + gap) : 'auto',
+      right: Math.max(12, window.innerWidth - rect.right),
+      maxHeight: placeAbove ? availableAbove : availableBelow,
+    })
+  }, [])
+
+  const closeHeaderMenu = useCallback((restoreFocus = false) => {
+    setHeaderMenuOpen(false)
+    if (restoreFocus) {
+      window.requestAnimationFrame(() => headerMenuTriggerRef.current?.focus())
+    }
+  }, [])
+
+  const dismissHeaderMenu = useCallback(() => closeHeaderMenu(true), [closeHeaderMenu])
+  const getHeaderMenuInitialFocus = useCallback(
+    () => headerMenuRef.current?.querySelector<HTMLElement>('[data-session-action]') ?? null,
+    [],
+  )
+
+  useModalFocus({
+    open: headerMenuOpen && headerMenuMobile,
+    layerRef: headerMenuLayerRef,
+    dialogRef: headerMenuSurfaceRef,
+    getInitialFocus: getHeaderMenuInitialFocus,
+    onEscape: dismissHeaderMenu,
+  })
+
+  const openHeaderMenu = useCallback((trigger: HTMLButtonElement, initialFocus: 'first' | 'last' = 'first') => {
+    headerMenuInitialFocusRef.current = initialFocus
+    setHeaderMenuMobile(window.matchMedia?.('(max-width: 767px)').matches ?? window.innerWidth <= 767)
+    positionHeaderMenu(trigger)
+    setHeaderMenuOpen(true)
+  }, [positionHeaderMenu])
 
   const showSession = useCallback((next: SessionState) => {
     sessionRef.current = next
@@ -238,15 +289,51 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
   }, [flash])
 
   useEffect(() => {
-    const handleClick = (event: MouseEvent) => {
-      const target = event.target as HTMLElement
-      if (!target.closest('#btnMenu') && !target.closest('#headerMenu')) {
-        setHeaderMenuOpen(false)
-      }
-    }
-    document.addEventListener('click', handleClick)
-    return () => document.removeEventListener('click', handleClick)
+    const media = window.matchMedia?.('(max-width: 767px)')
+    const sync = () => setHeaderMenuMobile(media?.matches ?? window.innerWidth <= 767)
+    sync()
+    media?.addEventListener?.('change', sync)
+    return () => media?.removeEventListener?.('change', sync)
   }, [])
+
+  useEffect(() => {
+    if (!headerMenuOpen || headerMenuMobile) return
+    const frame = window.requestAnimationFrame(() => {
+      const items = Array.from(headerMenuRef.current?.querySelectorAll<HTMLElement>(
+        '[role="menuitem"], [role="menuitemcheckbox"]',
+      ) ?? []).filter((item) => item.getAttribute('aria-disabled') !== 'true' && !('disabled' in item && item.disabled))
+      const item = headerMenuInitialFocusRef.current === 'last' ? items[items.length - 1] : items[0]
+      items.forEach((candidate) => { candidate.tabIndex = candidate === item ? 0 : -1 })
+      item?.focus()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [headerMenuMobile, headerMenuOpen])
+
+  useEffect(() => {
+    if (!headerMenuOpen) return
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      closeHeaderMenu(true)
+    }
+    const syncPresentation = () => {
+      const mobile = window.matchMedia?.('(max-width: 767px)').matches ?? window.innerWidth <= 767
+      setHeaderMenuMobile(mobile)
+      if (!mobile) positionHeaderMenu()
+    }
+    if (!headerMenuMobile) document.addEventListener('keydown', handleEscape)
+    window.addEventListener('resize', syncPresentation)
+    if (!headerMenuMobile) window.addEventListener('scroll', syncPresentation)
+    return () => {
+      if (!headerMenuMobile) document.removeEventListener('keydown', handleEscape)
+      window.removeEventListener('resize', syncPresentation)
+      if (!headerMenuMobile) window.removeEventListener('scroll', syncPresentation)
+    }
+  }, [closeHeaderMenu, headerMenuMobile, headerMenuOpen, positionHeaderMenu])
+
+  useEffect(() => {
+    if (page !== 'session' && headerMenuOpen) closeHeaderMenu(false)
+  }, [closeHeaderMenu, headerMenuOpen, page])
 
   const playerInfo = useCallback((playerId: string) => {
     const player = players.find((item) => item.id === playerId)
@@ -456,8 +543,51 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
   }
 
   const openAddPlayerFlow = () => {
-    setHeaderMenuOpen(false)
+    closeHeaderMenu(false)
     onAddPlayer?.()
+  }
+
+  const handleHeaderMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Tab') {
+      event.preventDefault()
+      const trigger = headerMenuTriggerRef.current
+      const focusableSelector = [
+        'a[href]',
+        'button:not([disabled])',
+        'input:not([disabled])',
+        'select:not([disabled])',
+        'textarea:not([disabled])',
+        '[tabindex]:not([tabindex="-1"])',
+      ].join(',')
+      const focusableOutsideMenu = Array.from(document.querySelectorAll<HTMLElement>(focusableSelector))
+        .filter((candidate) => !candidate.closest('.session-actions-layer'))
+        .filter((candidate) => !candidate.closest('[hidden], [aria-hidden="true"]'))
+        .filter((candidate) => candidate.getClientRects().length > 0)
+      const triggerIndex = trigger ? focusableOutsideMenu.indexOf(trigger) : -1
+      const destination = triggerIndex < 0
+        ? trigger
+        : event.shiftKey
+          ? focusableOutsideMenu[Math.max(0, triggerIndex - 1)]
+          : focusableOutsideMenu[Math.min(focusableOutsideMenu.length - 1, triggerIndex + 1)]
+      closeHeaderMenu(false)
+      window.requestAnimationFrame(() => (destination ?? trigger)?.focus())
+      return
+    }
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
+    const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
+      '[role="menuitem"], [role="menuitemcheckbox"]',
+    )).filter((item) => item.getAttribute('aria-disabled') !== 'true' && !('disabled' in item && item.disabled))
+    if (items.length === 0) return
+
+    event.preventDefault()
+    const currentIndex = items.indexOf(document.activeElement as HTMLElement)
+    let nextIndex = 0
+    if (event.key === 'End') nextIndex = items.length - 1
+    else if (event.key === 'ArrowUp') nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1
+    else if (event.key === 'ArrowDown') nextIndex = currentIndex < 0 || currentIndex === items.length - 1 ? 0 : currentIndex + 1
+
+    items.forEach((item, index) => { item.tabIndex = index === nextIndex ? 0 : -1 })
+    items[nextIndex]?.focus()
   }
 
   const queueTableAction = (
@@ -657,20 +787,22 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
   }
 
   const confirmClearSession = async () => {
-    if (!window.confirm('Clear this session? Table assignments and participation will be reset.')) return
+    if (!window.confirm('Reset this session? Table assignments and participation will be cleared.')) return false
     if (session.id) {
       try {
         await closeSession(clubId, session.id)
       } catch {
         showToast('Unable to reset session.')
-        return
+        return false
       }
     }
     acceptServerSession(initialSession)
     setSetupParticipants([])
     setSetupTableCount(1)
     setPage('setup')
+    window.requestAnimationFrame(() => setupHeadingRef.current?.focus())
     showToast('Session cleared!')
+    return true
   }
 
   const clearAllTables = () => {
@@ -1780,28 +1912,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         .divider { height: 1px; background: var(--border); margin: 10px 0; }
         .error-msg { background: #fff5f5; color: #c53030; border-radius: 6px; padding: 8px 10px; font-size: 11px; margin-top: 6px; display: none; }
 
-        .menu-item {
-          display: flex; width: 100%; align-items: center; gap: 10px;
-          padding: 12px 16px; border: none;
-          background: rgb(var(--surface)); text-align: left;
-          font-size: 15px; font-weight: 600;
-          cursor: pointer; color: rgb(var(--ink));
-          border-bottom: 1px solid rgb(var(--line));
-        }
-        .menu-item:last-child { border-bottom: none; }
-        .menu-item:hover { background: rgb(var(--surface-2)); }
         .session-action-icon { width:18px; height:18px; flex:0 0 18px; }
-        .qr-enrollment-setting { padding:12px 16px; border-bottom:1px solid rgb(var(--line)); background:rgb(var(--surface)); }
-        .qr-enrollment-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-        .qr-enrollment-label { color:rgb(var(--ink)); font-size:14px; font-weight:800; }
-        .qr-enrollment-help { margin-top:6px; color:rgb(var(--muted)); font-size:12px; line-height:1.4; }
-        .qr-enrollment-switch { position:relative; width:42px; height:24px; flex:none; border:1px solid rgb(var(--line)); border-radius:999px; background:rgb(var(--surface-2)); transition:background .15s; }
-        .qr-enrollment-switch span { position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:rgb(var(--muted)); transition:transform .15s,background .15s; }
-        .qr-enrollment-switch[aria-checked="true"] { background:rgb(var(--bamboo)); }
-        .qr-enrollment-switch[aria-checked="true"] span { transform:translateX(18px); background:white; }
-        .qr-enrollment-switch:disabled { opacity:.45; cursor:wait; }
-        .danger-item { color: #e53e3e; }
-        .danger-item:hover { background: #fff5f5; }
 
         .chip-remove-btn {
           position: absolute; top: -3px; left: -3px;
@@ -1967,8 +2078,6 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         .session-manager .winner-choice.selected,.session-manager .winner-selected { border-color:rgb(var(--bamboo))!important; background:rgb(var(--bamboo))!important; color:#fff!important; box-shadow:0 0 0 2px rgb(var(--bamboo)/.25)!important; }
         .session-manager .discard-choice.selected,.session-manager .discard-selected { border-color:rgb(var(--cinnabar))!important; background:rgb(var(--cinnabar))!important; color:#fff!important; box-shadow:0 0 0 2px rgb(var(--cinnabar)/.22)!important; }
         .session-manager #pickerOverlay,.session-manager #swapPickerOverlay { position:fixed!important; inset:0!important; top:0!important; align-items:center!important; justify-content:center!important; overscroll-behavior:contain; }
-        .session-manager .menu-item { background:rgb(var(--surface)); color:rgb(var(--ink)); border-color:rgb(var(--line)); }
-        .session-manager .menu-item:hover { background:rgb(var(--surface-2)); }
         .session-manager .btn-submit-game, .session-manager .btn-cancel-win { font-size:14px; padding:10px 14px; }
         .session-manager .score-preview-name { font-size:12px; }
         .session-manager .score-preview-val { font-size:15px; }
@@ -2068,22 +2177,24 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         title="Session"
         action={<div className="header-actions">
           <button
+            ref={headerMenuTriggerRef}
             className="view-header-action"
             type="button"
             onClick={(event) => {
-              const rect = event.currentTarget.getBoundingClientRect()
-              setHeaderMenuAnchor({
-                top: rect.bottom + 8,
-                right: Math.max(12, window.innerWidth - rect.right),
-              })
-              setHeaderMenuOpen((current) => !current)
+              if (headerMenuOpen) closeHeaderMenu(false)
+              else openHeaderMenu(event.currentTarget)
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+              event.preventDefault()
+              openHeaderMenu(event.currentTarget, event.key === 'ArrowUp' ? 'last' : 'first')
             }}
             id="btnMenu"
             aria-label="Session actions"
             title="Session actions"
-            aria-haspopup="dialog"
+            aria-haspopup={headerMenuMobile ? 'dialog' : 'menu'}
             aria-expanded={headerMenuOpen}
-            aria-controls="headerMenu"
+            aria-controls={headerMenuMobile ? 'headerMenuSurface' : 'headerMenu'}
             style={{ display: page === 'session' ? '' : 'none' }}
           >
             <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor">
@@ -2094,31 +2205,142 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           </button>
           {headerMenuOpen && typeof document !== 'undefined' ? createPortal(
             <div
-              id="headerMenu"
-              className="session-actions-menu"
-              role="dialog"
-              aria-label="Session actions"
-              style={{
-                display: 'block',
-                position: 'fixed',
-                top: headerMenuAnchor.top,
-                right: headerMenuAnchor.right,
-                background: 'rgb(var(--surface))',
-                borderRadius: 10,
-                boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-                overflowX: 'hidden',
-                overflowY: 'auto',
-                zIndex: 30020,
-                minWidth: 320,
-                maxHeight: `calc(100dvh - ${headerMenuAnchor.top + 12}px)`,
+              ref={headerMenuLayerRef}
+              className="session-actions-layer"
+              onPointerDown={(event) => {
+                if (event.target === event.currentTarget) closeHeaderMenu(true)
               }}
             >
-              <button type="button" onClick={() => { setPage('setup'); setHeaderMenuOpen(false) }} className="menu-item"><SessionActionIcon name="edit" /><span>Edit Session</span></button>
-              {onAddPlayer ? <button type="button" onClick={openAddPlayerFlow} className="menu-item"><SessionActionIcon name="add-player" /><span>Add player</span></button> : null}
-              <Link href={`/club/${encodeURIComponent(clubId)}/session/qr-print`} target="_blank" onClick={() => setHeaderMenuOpen(false)} className="menu-item"><SessionActionIcon name="qr" /><span>Print table QR codes</span></Link>
-              {isManager ? <div className="qr-enrollment-setting"><div className="qr-enrollment-row"><span className="qr-enrollment-label">Automatic club enrollment</span><button type="button" role="switch" aria-checked={qrAutoEnroll === true} aria-label="Automatic club enrollment through table QR codes" disabled={qrAutoEnroll === null || savingQrEnrollment} onClick={() => void toggleQrEnrollment()} className="qr-enrollment-switch"><span /></button></div><p className="qr-enrollment-help">When on, anyone with a table QR can join this club immediately. When off, new people must be approved by a manager first.</p></div> : null}
-              <button type="button" onClick={() => { clearAllTables(); setHeaderMenuOpen(false) }} className="menu-item"><SessionActionIcon name="clear-tables" /><span>Clear All Tables</span></button>
-              <button type="button" onClick={() => { confirmClearSession(); setHeaderMenuOpen(false) }} className="menu-item danger-item"><SessionActionIcon name="reset" /><span>Reset Session</span></button>
+              <section
+                ref={headerMenuSurfaceRef}
+                id="headerMenuSurface"
+                role={headerMenuMobile ? 'dialog' : undefined}
+                aria-modal={headerMenuMobile ? true : undefined}
+                aria-labelledby={headerMenuMobile ? 'session-actions-title' : undefined}
+                className="session-actions-menu"
+                style={{
+                  position: 'fixed',
+                  top: headerMenuAnchor.top,
+                  bottom: headerMenuAnchor.bottom,
+                  right: headerMenuAnchor.right,
+                  maxHeight: headerMenuAnchor.maxHeight,
+                  overflowX: 'hidden',
+                  overflowY: 'auto',
+                  zIndex: 30020,
+                }}
+              >
+                <div className="session-actions-menu-header">
+                  <strong id="session-actions-title">Session Actions</strong>
+                  <button type="button" aria-label="Close session actions" onClick={() => closeHeaderMenu(true)}>×</button>
+                </div>
+                <div
+                  id="headerMenu"
+                  ref={headerMenuRef}
+                  className="app-menu-list"
+                  role={headerMenuMobile ? undefined : 'menu'}
+                  aria-label={headerMenuMobile ? undefined : 'Session actions'}
+                  onKeyDown={headerMenuMobile ? undefined : handleHeaderMenuKeyDown}
+                >
+                  <div className="app-menu-group" role={headerMenuMobile ? undefined : 'group'} aria-label="Session">
+                    <button
+                      data-session-action
+                      type="button"
+                      role={headerMenuMobile ? undefined : 'menuitem'}
+                      tabIndex={headerMenuMobile ? 0 : -1}
+                      className="app-menu-row"
+                      onClick={() => {
+                        setPage('setup')
+                        closeHeaderMenu(false)
+                        window.requestAnimationFrame(() => setupHeadingRef.current?.focus())
+                      }}
+                    >
+                      <MenuGlyph name="edit" />
+                      <span className="app-menu-row-copy"><strong>Edit Session…</strong></span>
+                    </button>
+                    {onAddPlayer ? (
+                      <button type="button" role={headerMenuMobile ? undefined : 'menuitem'} tabIndex={headerMenuMobile ? 0 : -1} className="app-menu-row" onClick={openAddPlayerFlow}>
+                        <MenuGlyph name="add-player" />
+                        <span className="app-menu-row-copy"><strong>Add Player…</strong></span>
+                      </button>
+                    ) : null}
+                  </div>
+
+                  <div className="app-menu-group" role={headerMenuMobile ? undefined : 'group'} aria-label="Table QR tools">
+                    <Link
+                      href={`/club/${encodeURIComponent(clubId)}/session/qr-print`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      role={headerMenuMobile ? undefined : 'menuitem'}
+                      tabIndex={headerMenuMobile ? 0 : -1}
+                      onClick={() => closeHeaderMenu(false)}
+                      className="app-menu-row"
+                    >
+                      <MenuGlyph name="qr" />
+                      <span className="app-menu-row-copy"><strong>Print Table QR Codes</strong></span>
+                    </Link>
+                    {isManager ? (
+                      <button
+                        type="button"
+                        role={headerMenuMobile ? 'switch' : 'menuitemcheckbox'}
+                        tabIndex={headerMenuMobile ? 0 : -1}
+                        aria-checked={qrAutoEnroll === true}
+                        aria-busy={savingQrEnrollment}
+                        aria-disabled={qrAutoEnroll === null || savingQrEnrollment}
+                        onClick={() => void toggleQrEnrollment()}
+                        className="app-menu-row"
+                      >
+                        <MenuGlyph name="auto-join" />
+                        <span className="app-menu-row-copy"><strong>Automatic QR Enrollment</strong></span>
+                        <span className="app-menu-trailing" aria-hidden="true">
+                          {savingQrEnrollment ? 'Saving…' : qrAutoEnroll === null ? 'Unavailable' : qrAutoEnroll ? 'On' : 'Off'}
+                          <span className="app-menu-check">✓</span>
+                        </span>
+                      </button>
+                    ) : null}
+                  </div>
+
+                  <div className="app-menu-group" role={headerMenuMobile ? undefined : 'group'} aria-label="Table assignments">
+                    <button
+                      type="button"
+                      role={headerMenuMobile ? undefined : 'menuitem'}
+                      tabIndex={headerMenuMobile ? 0 : -1}
+                      aria-label="Clear All Tables"
+                      aria-describedby="session-clear-all-description"
+                      onClick={() => { clearAllTables(); closeHeaderMenu(true) }}
+                      className="app-menu-row"
+                    >
+                      <MenuGlyph name="clear-tables" />
+                      <span className="app-menu-row-copy">
+                        <strong>Clear All Tables</strong>
+                        <small id="session-clear-all-description">Move every player to the sideline</small>
+                      </span>
+                    </button>
+                  </div>
+
+                  <div className="app-menu-group" role={headerMenuMobile ? undefined : 'group'} aria-label="Destructive actions">
+                    <button
+                      type="button"
+                      role={headerMenuMobile ? undefined : 'menuitem'}
+                      tabIndex={headerMenuMobile ? 0 : -1}
+                      aria-label="Reset Session…"
+                      aria-describedby="session-reset-description"
+                      onClick={() => {
+                        closeHeaderMenu(false)
+                        void confirmClearSession().then((didReset) => {
+                          if (!didReset) window.requestAnimationFrame(() => headerMenuTriggerRef.current?.focus())
+                        })
+                      }}
+                      className="app-menu-row app-menu-danger"
+                    >
+                      <MenuGlyph name="reset" />
+                      <span className="app-menu-row-copy">
+                        <strong>Reset Session…</strong>
+                        <small id="session-reset-description">End this session and clear participation</small>
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </section>
             </div>,
             document.body,
           ) : null}
@@ -2133,7 +2355,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
 
       <div id="setupPage" className={`page ${page === 'setup' ? 'active' : ''}`}>
         <div className="setup-card">
-          <h3>📋 Number of Tables</h3>
+          <h3 ref={setupHeadingRef} tabIndex={-1}>📋 Number of Tables</h3>
           <div className="desktop-table-count">
             <input
               type="number"
@@ -2298,7 +2520,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
               </div>
               {onAddPlayer ? (
                 <button type="button" className="session-mobile-add-player" aria-label="Add a new player" onClick={openAddPlayerFlow} data-workspace-swipe-ignore>
-                  <SessionActionIcon name="add-player" />
+                  <AddPlayerActionIcon />
                   <span>Add player</span>
                 </button>
               ) : null}

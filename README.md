@@ -40,7 +40,7 @@ Mahjong Messiah keeps a club's live session and long-term history in one shared 
 - Score and Skill analytics, detailed game logs, and a co-play/network view
 - CSV import and export for historical data and external analysis
 - Member-managed linked player names and emoji, plus 24-hour correction access for games a member created
-- Manager tools for seasons, rosters, memberships, permissions, scoring rules, titles, and safe club deletion
+- Manager tools for selecting one active season and one unfinished tournament at a time, configurable tournament clocks (24 hours by default), early tournament endings, rosters, memberships, permissions, scoring rules, titles, and safe deletion
 - Light and dark themes, responsive dialogs, reduced-motion support, and accessible touch targets
 
 ## Mobile first
@@ -126,6 +126,8 @@ Open [http://localhost:3000](http://localhost:3000). The checked-in `.nvmrc` and
 ## Database and deployment
 
 Versioned, immutable SQL migrations live in [`supabase/migrations`](supabase/migrations). `npm run supabase:schema` applies pending files in order and records each applied filename.
+
+Migrations `0020` through `0022` are required before tournament lifecycle actions are available. They add persisted edit deadlines, pause/resume state, the shared current-competition clock, and per-tournament duration settings; the server reports an actionable migration error instead of creating a tournament with incomplete behavior.
 
 Pull requests run secret and dependency scanning, linting, type checking, tests, and a production build. Merges to `main` pass the same gates before the GitHub Actions-driven Vercel deployment. Production database migrations remain a separate, manually confirmed workflow that creates an encrypted backup before applying SQL; scheduled backup runs are currently paused, while manual backups remain available.
 

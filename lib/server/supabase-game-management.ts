@@ -10,6 +10,10 @@ import {
 import { calculateSkillRound, initialSkillState } from '@/lib/skill-rating'
 import { withTransaction } from '@/lib/postgres-admin'
 import { basePointsForFan, scoringRulesFromRow } from '@/lib/scoring-rules'
+import {
+  competitionSchemaCapabilities,
+  competitionEditablePredicate,
+} from '@/lib/server/season-management'
 
 type Entry = { playerId: string; score: number }
 type QueryClient = Pick<PoolClient, 'query'>
@@ -174,12 +178,13 @@ export async function insertGame(
   const idempotencyKey = input.idempotencyKey?.trim().slice(0, 100) || null
   const datetime = dateOf(input.datetime)
   const seasonNumber = Math.max(1, Math.floor(input.seasonNumber ?? 1))
+  const capabilities = await competitionSchemaCapabilities(client)
   const preflight = (
     await client.query(
       `select
         (select id from games where club_id=$1 and idempotency_key=$2) existing_game_id,
         (select count(*)::int from players where club_id=$1 and active and id=any($3::text[])) player_count,
-        exists(select 1 from seasons where club_id=$1 and season_number=$4) season_exists,
+        exists(select 1 from seasons where club_id=$1 and season_number=$4 and ${competitionEditablePredicate(capabilities.editWindows, '', capabilities.pausable)}) season_exists,
         (select scoring_min_fan from app_configs where club_id=$1) scoring_min_fan,
         (select scoring_max_fan from app_configs where club_id=$1) scoring_max_fan,
         (select fan_points from app_configs where club_id=$1) fan_points`,
@@ -195,7 +200,7 @@ export async function insertGame(
     return { gameId: String(preflight.existing_game_id), created: false }
   if (Number(preflight.player_count) !== entries.length)
     throw new Error('Every game player must be active in this club.')
-  if (!preflight.season_exists) throw new Error('That season no longer exists.')
+  if (!preflight.season_exists) throw new Error('That competition is read-only.')
 
   const gameId = id()
   const { winType, winnerPlayerId } = resultType(entries, input.winType)

@@ -1263,6 +1263,10 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
 .club-workspace-heading { display: flex; min-width: 0; flex: 1 1 26rem; flex-wrap: wrap; align-items: center; gap: .75rem 1.1rem; }
 .club-workspace-heading h1 { min-width: 0; max-width: 28rem; flex: 0 1 auto; margin: 0; padding-right: 1.1rem; border-right: 1px solid rgb(var(--line)); font-size: clamp(1.35rem, 2vw, 1.7rem); line-height: 1.18; overflow-wrap: anywhere; text-wrap: balance; white-space: normal; }
 .club-context-actions { min-width: 0; flex: 1 1 24rem; margin-left: auto; justify-content: flex-end; }
+.competition-status-dot { display:inline-block; width:.62rem; height:.62rem; flex:0 0 .62rem; border:1px solid rgb(var(--line)); border-radius:999px; box-shadow:0 0 0 2px rgb(var(--surface-1)); }
+.competition-status-dot.is-season-active { border-color:rgb(var(--bamboo)); background:rgb(var(--bamboo)); }
+.competition-status-dot.is-tournament-editable { border-color:rgb(var(--cinnabar)); background:rgb(var(--cinnabar)); }
+.competition-status-dot.is-inactive { border-color:rgb(var(--muted)/.45); background:rgb(var(--muted)/.38); }
 .club-workspace-dashboard-grid { min-width: 0; align-items: start; }
 .club-mobile-panels-viewport,.club-mobile-panels-track,.club-mobile-panel { box-sizing: border-box; min-width: 0; }
 .club-session-panel { min-width: 0; align-self: start; }
@@ -1277,8 +1281,31 @@ html.dark .login-card{box-shadow:7px 9px 0 rgb(0 8 5/.25),0 28px 75px rgb(0 8 5/
   border: 1px solid rgb(var(--line));
   border-radius: 8px;
   background: rgb(var(--surface));
-  box-shadow: 0 1px 2px rgb(var(--shadow) / .08);
+  box-shadow: 5px 7px 0 rgb(var(--shadow) / .08), 0 14px 32px rgb(var(--shadow) / .12);
   overflow: hidden;
+}
+
+/* Shared card elevation across the product. Keep controls flat while giving
+   content containers the same depth as the tools rail and Session card. */
+.session-manager,
+.club-workspace-header,
+.club-settings-card,
+.home-club-card,
+section.rounded-lg,
+article.rounded-lg,
+div.rounded-lg.border.bg-white {
+  box-shadow: 5px 7px 0 rgb(var(--shadow) / .08), 0 14px 32px rgb(var(--shadow) / .12) !important;
+}
+
+html.dark .view-card,
+html.dark .session-manager,
+html.dark .club-workspace-header,
+html.dark .club-settings-card,
+html.dark .home-club-card,
+html.dark section.rounded-lg,
+html.dark article.rounded-lg,
+html.dark div.rounded-lg.border.bg-white {
+  box-shadow: 5px 7px 0 rgb(0 8 5 / .22), 0 16px 38px rgb(0 8 5 / .34) !important;
 }
 .view-header {
   position: relative;
@@ -1756,6 +1783,252 @@ div.rounded-lg.border.bg-white {
   pointer-events: auto;
   backdrop-filter: blur(10px);
 }
+
+/* Hong Kong tournament event skin. It is deliberately scoped to the club
+   workspace so every control keeps its normal geometry and behavior. */
+.club-workspace-main.tournament-mode {
+  --canvas: 244 236 211;
+  --canvas-top: 255 250 232;
+  --canvas-bottom: 232 216 177;
+  --surface-0: 248 240 216;
+  --surface-1: 255 248 235;
+  --surface-2: 247 233 213;
+  --surface-3: 229 203 176;
+  --surface: var(--surface-1);
+  --ink: 55 35 30;
+  --muted: 108 80 70;
+  --line: 194 145 122;
+  --bamboo: 143 55 47;
+  --bamboo-bright: 180 73 62;
+  --cinnabar: 190 55 45;
+  --gold: 184 130 78;
+  --action-muted: 240 219 197;
+  --action-muted-hover: 230 197 168;
+  position: relative;
+  background-color: rgb(var(--canvas));
+  background-image:
+    radial-gradient(circle at 4% -8%, rgb(var(--cinnabar) / .11), transparent 34rem),
+    radial-gradient(circle at 96% 0%, rgb(var(--gold) / .17), transparent 38rem),
+    linear-gradient(180deg, rgb(255 253 242 / .74), transparent 62%);
+}
+.tournament-mode .club-workspace-header {
+  border-color: rgb(var(--gold));
+  background:
+    linear-gradient(90deg, rgb(121 20 24 / .08), transparent 18% 82%, rgb(121 20 24 / .08)),
+    rgb(var(--surface-1));
+  box-shadow: 0 12px 28px rgb(1 18 13 / .24), inset 0 3px 0 rgb(var(--cinnabar));
+}
+.tournament-mode :is(.club-workspace-card, .leaderboard-card, .session-card, [data-tour="leaderboard"], [data-tour="session"]) {
+  border-color: rgb(var(--gold) / .72) !important;
+  box-shadow: 0 14px 30px rgb(1 18 13 / .2), inset 0 1px 0 rgb(255 255 255 / .7);
+}
+.tournament-live-indicator {
+  display: inline-flex;
+  min-height: 2.45rem;
+  align-items: center;
+  gap: .55rem;
+  padding: .35rem .65rem;
+  border: 1px solid rgb(var(--cinnabar) / .6);
+  border-radius: 8px;
+  background: rgb(96 16 20);
+  color: rgb(255 246 216);
+  box-shadow: 0 5px 14px rgb(66 7 11 / .22), inset 0 0 0 1px rgb(231 183 74 / .22);
+  white-space: nowrap;
+}
+.tournament-live-seal {
+  color: rgb(255 213 99);
+  font-size: .58rem;
+  font-weight: 900;
+  letter-spacing: .13em;
+}
+.tournament-live-seal::before {
+  content: "";
+  display: inline-block;
+  width: .45rem;
+  height: .45rem;
+  margin-right: .35rem;
+  border-radius: 50%;
+  background: rgb(255 77 65);
+  box-shadow: 0 0 0 3px rgb(255 77 65 / .14);
+}
+.tournament-live-copy { display: grid; gap: .05rem; line-height: 1.05; }
+.tournament-live-copy small { color: rgb(255 226 146); font-family: var(--font-mono), ui-monospace, monospace; font-size: .75rem; font-variant-numeric: tabular-nums; font-weight: 900; letter-spacing: .06em; }
+
+html.dark .club-workspace-main.tournament-mode {
+  --canvas: 38 20 21;
+  --canvas-top: 59 27 28;
+  --canvas-bottom: 25 16 17;
+  --surface-0: 43 24 24;
+  --surface-1: 47 27 26;
+  --surface-2: 62 35 31;
+  --surface-3: 83 47 39;
+  --ink: 248 237 202;
+  --muted: 198 187 150;
+  --line: 154 113 48;
+  --bamboo: 201 92 76;
+  --bamboo-bright: 230 116 95;
+  --cinnabar: 220 83 67;
+  --gold: 194 143 76;
+  --action-muted: 77 44 38;
+  --action-muted-hover: 98 53 44;
+}
+html.dark .tournament-mode .club-workspace-header {
+  background: linear-gradient(90deg, rgb(104 16 21 / .4), transparent 28%), rgb(var(--surface-1));
+}
+
+@media (max-width: 767px) {
+  .tournament-live-indicator { min-height: 2.2rem; padding: .3rem .48rem; }
+  .tournament-live-copy small { font-size: .68rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tournament-live-seal::before { box-shadow: none; }
+}
+
+/* Shared menu language: concise rows, uniform icons, logical groups, and
+   destructive commands kept in their own section. */
+.app-menu-list { display: grid; gap: .75rem; }
+.app-menu-group {
+  overflow: hidden;
+  border: 1px solid rgb(var(--line));
+  border-radius: 12px;
+  background: rgb(var(--surface-1));
+  box-shadow: 0 5px 16px rgb(var(--shadow) / .055);
+}
+.app-menu-group-label {
+  margin: 0 0 .38rem;
+  padding-inline: .35rem;
+  color: rgb(var(--muted));
+  font-size: .66rem;
+  font-weight: 850;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+.app-menu-row {
+  display: flex;
+  width: 100%;
+  min-height: 52px;
+  align-items: center;
+  gap: .75rem;
+  border: 0;
+  border-bottom: 1px solid rgb(var(--line) / .76);
+  background: transparent;
+  padding: .68rem .8rem;
+  color: rgb(var(--ink));
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.app-menu-row:last-child { border-bottom: 0; }
+.app-menu-row:hover { background: rgb(var(--surface-2)); }
+.app-menu-row:focus-visible { position: relative; z-index: 1; outline: 2px solid rgb(var(--focus-ring)); outline-offset: -2px; }
+.app-menu-row[aria-current="page"],
+.app-menu-row.is-selected { background: rgb(var(--bamboo) / .09); }
+.app-menu-row:disabled,
+.app-menu-row[aria-disabled="true"] { opacity: .45; cursor: default; }
+.app-menu-row:disabled:hover,
+.app-menu-row[aria-disabled="true"]:hover { background: transparent; }
+.app-menu-icon {
+  display: grid;
+  width: 1.85rem;
+  height: 1.85rem;
+  flex: 0 0 1.85rem;
+  place-items: center;
+  border-radius: 7px;
+  background: rgb(var(--bamboo) / .1);
+  color: rgb(var(--bamboo));
+}
+.app-menu-icon svg { width: 1.05rem; height: 1.05rem; }
+.app-menu-row-copy { display: grid; min-width: 0; flex: 1 1 auto; gap: .12rem; }
+.app-menu-row-copy strong { overflow: hidden; font-size: .84rem; line-height: 1.22; text-overflow: ellipsis; }
+.app-menu-row-copy small { overflow: hidden; color: rgb(var(--muted)); font-size: .7rem; line-height: 1.35; text-overflow: ellipsis; }
+.app-menu-trailing { display: inline-flex; flex: 0 0 auto; align-items: center; gap: .4rem; color: rgb(var(--muted)); font-size: .72rem; font-weight: 750; }
+.app-menu-chevron { width: .48rem; height: .48rem; border-top: 1.5px solid currentColor; border-right: 1.5px solid currentColor; transform: rotate(45deg); }
+.app-menu-check {
+  display: grid;
+  width: 1.25rem;
+  height: 1.25rem;
+  place-items: center;
+  border-radius: 999px;
+  color: transparent;
+  font-size: .82rem;
+  font-weight: 950;
+}
+.app-menu-row[aria-pressed="true"] .app-menu-check,
+.app-menu-row[aria-checked="true"] .app-menu-check { background: rgb(var(--bamboo)); color: rgb(var(--on-accent)); }
+.app-menu-danger { color: rgb(var(--cinnabar)); }
+.app-menu-danger .app-menu-icon { background: rgb(var(--cinnabar) / .1); color: rgb(var(--cinnabar)); }
+.app-menu-danger .app-menu-row-copy small { color: rgb(var(--cinnabar) / .78); }
+
+.club-settings-dialog { max-width: 58rem !important; }
+.club-settings-layout { display: grid; grid-template-columns: minmax(13.5rem, 15.5rem) minmax(0, 1fr); min-height: 0; flex: 1; }
+.club-settings-navigation { min-height: 0; overflow-y: auto; border-right: 1px solid rgb(var(--line)); background: rgb(var(--surface-2) / .55); padding: 1rem; }
+.club-settings-detail { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 1.15rem; }
+.club-settings-detail-header { display: grid; gap: .22rem; margin-bottom: 1rem; }
+.club-settings-detail-header h4 { margin: 0; color: rgb(var(--ink)); font-size: 1.08rem; }
+.club-settings-detail-header p { margin: 0; color: rgb(var(--muted)); font-size: .78rem; line-height: 1.45; }
+.club-settings-mobile-back { display: none; }
+
+.user-settings-dialog:not(.is-deleting) { width: min(22rem, calc(100vw - 2rem)) !important; }
+.user-settings-menu { padding: .85rem; background: rgb(var(--surface-2) / .5); }
+.user-settings-account-row { cursor: default; }
+.user-settings-account-row:hover { background: transparent; }
+
+.session-actions-layer { position: fixed; inset: 0; z-index: 30019; }
+.session-actions-menu {
+  overflow: hidden;
+  width: min(20rem, calc(100vw - 1.5rem));
+  border: 1px solid rgb(var(--line));
+  border-radius: 12px;
+  background: rgb(var(--surface-1));
+  box-shadow: 0 18px 48px rgb(0 8 5 / .25);
+}
+.session-actions-menu-header { display: none; }
+.session-actions-menu .app-menu-list { gap: 0; }
+.session-actions-menu .app-menu-group { border: 0; border-radius: 0; box-shadow: none; }
+.session-actions-menu .app-menu-group + .app-menu-group { border-top: 6px solid rgb(var(--surface-2)); }
+.session-actions-menu .app-menu-row { min-height: 48px; padding: .62rem .75rem; }
+.session-actions-menu .app-menu-row-copy strong { font-size: .84rem; }
+.session-actions-menu .app-menu-row-copy small { white-space: normal; }
+
+@media (max-width: 767px) {
+  .app-menu-row { min-height: 56px; padding: .72rem .85rem; }
+  .session-manager .view-header-action { min-width: 44px; min-height: 44px; }
+  .club-settings-layout { display: block; overflow: hidden; }
+  .club-settings-navigation,
+  .club-settings-detail { height: 100%; border-right: 0; }
+  .club-settings-navigation { display: block; padding: .85rem; }
+  .club-settings-detail { display: none; padding: .9rem; }
+  .club-settings-layout.is-detail-open .club-settings-navigation { display: none; }
+  .club-settings-layout.is-detail-open .club-settings-detail { display: block; }
+  .club-settings-mobile-back {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    gap: .4rem;
+    margin: 0 0 .8rem;
+    border: 0;
+    background: transparent;
+    padding: 0 .2rem;
+    color: rgb(var(--bamboo));
+    font-size: .82rem;
+    font-weight: 850;
+  }
+  .session-actions-layer { background: rgb(0 8 5 / .58); backdrop-filter: blur(5px); }
+  .session-actions-menu {
+    position: fixed !important;
+    top: auto !important;
+    right: max(.5rem, env(safe-area-inset-right)) !important;
+    bottom: max(.5rem, env(safe-area-inset-bottom)) !important;
+    left: max(.5rem, env(safe-area-inset-left)) !important;
+    width: auto !important;
+    max-height: calc(var(--visual-viewport-height,100svh) - 1rem) !important;
+    border-radius: 16px !important;
+  }
+  .session-actions-menu-header { display: flex; min-height: 52px; align-items: center; justify-content: space-between; border-bottom: 1px solid rgb(var(--line)); padding: .65rem .9rem; }
+  .session-actions-menu-header strong { font-size: .9rem; }
+  .session-actions-menu-header button { min-width: 44px; min-height: 44px; border: 0; border-radius: 999px; background: rgb(var(--surface-2)); color: rgb(var(--ink)); font-size: 1.25rem; }
+}
 .club-workspace-dashboard-grid.is-modal-covered {
   pointer-events: none;
   user-select: none;
@@ -1780,7 +2053,7 @@ html.dark .club-workspace-header {
     rgb(var(--surface-1));
 }
 .club-settings-body { background: rgb(var(--surface-2) / .42); }
-.club-settings-home-link { width: max-content; max-width: 100%; }
+.club-settings-home-link { width: 100%; max-width: 100%; }
 .club-settings-kicker {
   margin: 0;
   color: rgb(var(--cinnabar));
@@ -1830,7 +2103,7 @@ html.dark .club-workspace-header {
     gap: .85rem !important;
     padding: 1rem max(1rem, env(safe-area-inset-right)) max(1.25rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left)) !important;
   }
-  .club-settings-home-link { width: 100%; justify-content: center; }
+  .club-settings-home-link { width: 100%; justify-content: flex-start; }
   .club-settings-current { width: 100%; min-width: 0; }
   .club-settings-group-heading { display: block; margin-top: .5rem; }
   .club-settings-group-heading > p:last-child { margin-top: .25rem; font-size: .7rem; text-align: left; }

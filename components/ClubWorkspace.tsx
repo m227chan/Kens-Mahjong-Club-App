@@ -4,6 +4,7 @@ import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState, useRef, type TouchEvent as ReactTouchEvent } from 'react'
+import { createPortal } from 'react-dom'
 import useEmblaCarousel from 'embla-carousel-react'
 import GameLogsModal from '@/components/GameLogsModal'
 import NetworkGraphModal from '@/components/NetworkGraphModal'
@@ -13,22 +14,30 @@ import ScoringRulesSettings from '@/components/ScoringRulesSettings'
 import TitleRulesSettings from '@/components/TitleRulesSettings'
 import ActivitySettings from '@/components/ActivitySettings'
 import ClubToolSidebar from '@/components/ClubToolSidebar'
+import TournamentLiveIndicator from '@/components/TournamentLiveIndicator'
+import MenuGlyph from '@/components/MenuGlyph'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSound } from '@/contexts/SoundContext'
 import {
   createPlayer,
   deleteClub,
+  deleteTournament,
+  endTournament,
   ensureConfig,
   ensureSeasons,
   removePlayer,
   rebuildClubStats,
   promoteManagerByEmail,
   resolveJoinRequest,
+  reopenTournament,
+  setActiveSeason,
+  setCurrentCompetition,
   setPlayerAuthLink,
   startNewSeason,
   startNewTournament,
   updatePlayerIcon,
   updatePlayerName,
+  updateTournamentDuration,
   subscribeClub,
   subscribeClubMembers,
   subscribeJoinRequests,
@@ -53,6 +62,8 @@ import {
   type SessionPointWindow,
   type SessionPointWindowHours,
 } from '@/lib/session-point-window'
+import { useModalFocus } from '@/lib/use-modal-focus'
+import { Timestamp } from '@/lib/timestamp'
 
 const DashboardContent = dynamic(() => import('@/components/DashboardContent'), {
   loading: () => <div className="rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface-1))] p-5 text-sm font-bold text-[rgb(var(--muted))]" role="status">Loading analytics…</div>,
@@ -68,6 +79,11 @@ const ANALYTICS_TIME_WINDOWS = [
 
 const CLUB_SIDEBAR_PREFERENCE_KEY = 'club-tools-sidebar'
 const MOBILE_WORKSPACE_SWIPE_DISTANCE = 56
+const DEFAULT_TOURNAMENT_DURATION_HOURS = 24
+const MIN_TOURNAMENT_DURATION_HOURS = 1
+const MAX_TOURNAMENT_DURATION_HOURS = 720
+
+type ClubSettingsSection = 'competition' | 'scoring' | 'activity' | 'titles' | 'access'
 
 function blocksWorkspaceSwipe(target: EventTarget | null) {
   if (!(target instanceof Element)) return false
@@ -152,13 +168,18 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [gameLogsOpen, setGameLogsOpen] = useState(false)
   const [networkOpen, setNetworkOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [seasonControlsOpen, setSeasonControlsOpen] = useState(false)
+  const [clubSettingsSection, setClubSettingsSection] = useState<ClubSettingsSection>('competition')
+  const [clubSettingsDetailOpen, setClubSettingsDetailOpen] = useState(false)
   const [clubToolsExpanded, setClubToolsExpanded] = useState(false)
   const [summaryDefinition, setSummaryDefinition] = useState<keyof typeof CLUB_SUMMARY_DEFINITIONS | null>(null)
   const [seasons, setSeasons] = useState<SeasonDoc[]>([])
   const [viewedSeasonNumber, setViewedSeasonNumber] = useState<number | 'all' | null>(null)
-  const [seasonAction, setSeasonAction] = useState<'season' | 'tournament' | null>(null)
+  const [optimisticCompetitionNumber, setOptimisticCompetitionNumber] = useState<number | null>(null)
+  const [seasonAction, setSeasonAction] = useState<string | null>(null)
+  const [competitionNow, setCompetitionNow] = useState(() => Date.now())
   const [tournamentName, setTournamentName] = useState('')
+  const [tournamentDurationHours, setTournamentDurationHours] = useState(String(DEFAULT_TOURNAMENT_DURATION_HOURS))
+  const [tournamentDurationDrafts, setTournamentDurationDrafts] = useState<Record<string, string>>({})
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null)
   const [editingPlayerEmojiChoices, setEditingPlayerEmojiChoices] = useState<string[]>([])
   const [customEmojiValue, setCustomEmojiValue] = useState('')
@@ -196,11 +217,81 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const mobileWorkspaceTabsRef = useRef<HTMLElement>(null)
   const sessionPanelRef = useRef<HTMLElement>(null)
   const leaderboardPanelRef = useRef<HTMLElement>(null)
+  const clubSettingsCloseRef = useRef<HTMLButtonElement>(null)
+  const clubSettingsReturnFocusRef = useRef<HTMLElement | null>(null)
+  const clubSettingsDetailTitleRef = useRef<HTMLHeadingElement>(null)
+  const clubSettingsLayerRef = useRef<HTMLDivElement>(null)
+  const clubSettingsDialogRef = useRef<HTMLDivElement>(null)
+  const deleteClubLayerRef = useRef<HTMLDivElement>(null)
+  const deleteClubDialogRef = useRef<HTMLDivElement>(null)
+  const deleteClubButtonRef = useRef<HTMLButtonElement>(null)
+  const deleteConfirmInputRef = useRef<HTMLInputElement>(null)
+  const returnToDeleteClubButtonRef = useRef(false)
+  const previousServerCompetitionNumberRef = useRef<number | null>(null)
   const workspaceSwipeStartRef = useRef<{
     x: number
     y: number
     destination: 'tools' | 'session' | 'standings'
   } | null>(null)
+
+  const closeClubSettings = useCallback(() => {
+    setSettingsOpen(false)
+    setClubSettingsDetailOpen(false)
+    window.requestAnimationFrame(() => clubSettingsReturnFocusRef.current?.focus())
+  }, [])
+
+  const selectClubSettingsSection = useCallback((section: ClubSettingsSection) => {
+    setClubSettingsSection(section)
+    setClubSettingsDetailOpen(true)
+    window.requestAnimationFrame(() => clubSettingsDetailTitleRef.current?.focus())
+  }, [])
+
+  const showClubSettingsList = useCallback(() => {
+    setClubSettingsDetailOpen(false)
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>('.club-settings-navigation [aria-current="page"]')?.focus()
+    })
+  }, [])
+
+  const getClubSettingsInitialFocus = useCallback(() => {
+    if (returnToDeleteClubButtonRef.current) {
+      returnToDeleteClubButtonRef.current = false
+      return deleteClubButtonRef.current
+    }
+    return clubSettingsCloseRef.current
+  }, [])
+
+  const openDeleteClubDialog = useCallback(() => {
+    setDeleteConfirmName('')
+    setDeleteConfirmOpen(true)
+  }, [])
+
+  const closeDeleteClubDialog = useCallback(() => {
+    if (deletingClub) return
+    returnToDeleteClubButtonRef.current = true
+    setDeleteConfirmOpen(false)
+    setDeleteConfirmName('')
+  }, [deletingClub])
+
+  const getDeleteClubInitialFocus = useCallback(() => deleteConfirmInputRef.current, [])
+
+  useModalFocus({
+    open: settingsOpen && !deleteConfirmOpen,
+    layerRef: clubSettingsLayerRef,
+    dialogRef: clubSettingsDialogRef,
+    getInitialFocus: getClubSettingsInitialFocus,
+    onEscape: closeClubSettings,
+    allowOutsideSelector: '.real-tour-layer',
+  })
+
+  useModalFocus({
+    open: deleteConfirmOpen,
+    layerRef: deleteClubLayerRef,
+    dialogRef: deleteClubDialogRef,
+    getInitialFocus: getDeleteClubInitialFocus,
+    onEscape: closeDeleteClubDialog,
+    escapeDisabled: deletingClub,
+  })
 
   useEffect(() => {
     const desktop = window.matchMedia?.('(min-width: 768px)')
@@ -350,13 +441,37 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const usedIconKeys = new Set(players.map((player) => player.icon.trim().toLocaleLowerCase()))
   const latestSeasonNumber = seasons.length ? seasons[seasons.length - 1].seasonNumber : club?.activeSeasonNumber ?? 1
   const activeSeasonNumber = club?.activeSeasonNumber ?? latestSeasonNumber
+  const serverCompetitionNumber = club?.currentCompetitionNumber ?? activeSeasonNumber
+  const currentCompetitionNumber = optimisticCompetitionNumber ?? serverCompetitionNumber
   const viewingAllCompetitions = viewedSeasonNumber === 'all'
-  const selectedSeasonNumber = viewingAllCompetitions ? undefined : viewedSeasonNumber ?? activeSeasonNumber
+  const selectedSeasonNumber = viewingAllCompetitions ? undefined : viewedSeasonNumber ?? currentCompetitionNumber
   const seasonSelectValue = viewingAllCompetitions ? 'all' : String(selectedSeasonNumber)
-  const activeCompetition = seasons.find((season) => season.seasonNumber === activeSeasonNumber) ?? null
+  const activeCompetition = seasons.find((season) => season.seasonNumber === currentCompetitionNumber) ?? null
   const selectedCompetition = seasons.find((season) => season.seasonNumber === selectedSeasonNumber) ?? null
-  const viewingHistoricalCompetition = viewingAllCompetitions || selectedSeasonNumber !== activeSeasonNumber
+  const selectedCompetitionEditable = Boolean(
+    selectedCompetition && (
+      (selectedCompetition.kind === 'season' && selectedCompetition.seasonNumber === activeSeasonNumber) ||
+      (selectedCompetition.kind === 'tournament' &&
+        selectedCompetition.seasonNumber === currentCompetitionNumber &&
+        competitionNow > 0 &&
+        (selectedCompetition.editableUntil?.toMillis() ?? 0) > competitionNow)
+    ),
+  )
+  const viewingHistoricalCompetition = viewingAllCompetitions || !selectedCompetitionEditable
   const nextTournamentNumber = seasons.filter((season) => season.kind === 'tournament').length + 1
+  const unfinishedTournament = seasons.find((season) => season.kind === 'tournament' && (
+    ((season.editableUntil?.toMillis() ?? 0) > competitionNow) ||
+    (season.editableUntil === null && (season.tournamentSecondsRemaining ?? 0) > 0)
+  )) ?? null
+  const activeTournament = seasons.find((season) =>
+    season.kind === 'tournament' &&
+    season.seasonNumber === currentCompetitionNumber &&
+    season.seasonNumber === selectedSeasonNumber &&
+    (season.editableUntil?.toMillis() ?? 0) > competitionNow,
+  ) ?? null
+  const tournamentSecondsRemaining = activeTournament
+    ? Math.max(0, Math.ceil(((activeTournament.editableUntil?.toMillis() ?? competitionNow) - competitionNow) / 1000))
+    : 0
   const linkedPlayerForUser = user ? players.find((player) => player.authUid === user.uid) ?? null : null
   const analyticsWindowValue = analyticsWindow.mode === 'all'
     ? 'all'
@@ -368,6 +483,35 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
     ? players.filter((player) => player.displayName.toLocaleLowerCase().includes(normalizedRosterSearch))
     : players
   const clubModalOpen = summaryDefinition !== null || rosterOpen || analyticsOpen || gameLogsOpen || networkOpen || settingsOpen || deleteConfirmOpen
+
+  useEffect(() => {
+    if (optimisticCompetitionNumber === serverCompetitionNumber) setOptimisticCompetitionNumber(null)
+  }, [optimisticCompetitionNumber, serverCompetitionNumber])
+
+  useEffect(() => {
+    const previous = previousServerCompetitionNumberRef.current
+    previousServerCompetitionNumberRef.current = serverCompetitionNumber
+    if (previous !== null && previous !== serverCompetitionNumber) setViewedSeasonNumber(null)
+  }, [serverCompetitionNumber])
+
+  useEffect(() => {
+    setTournamentDurationDrafts((current) => {
+      const next: Record<string, string> = {}
+      seasons.forEach((season) => {
+        if (season.kind !== 'tournament') return
+        next[season.id] = current[season.id] ?? String(season.tournamentDurationHours ?? DEFAULT_TOURNAMENT_DURATION_HOURS)
+      })
+      return next
+    })
+  }, [seasons])
+
+  useEffect(() => {
+    setCompetitionNow(Date.now())
+    const current = seasons.find((season) => season.seasonNumber === currentCompetitionNumber)
+    if (current?.kind !== 'tournament' || (current.editableUntil?.toMillis() ?? 0) <= Date.now()) return
+    const timer = window.setInterval(() => setCompetitionNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [currentCompetitionNumber, seasons])
 
   const snapRosterFieldIntoView = useCallback((field: HTMLElement) => {
     const scroller = rosterScrollRef.current
@@ -769,10 +913,12 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
     const seasonNumber = Number(value)
     const competition = seasons.find((season) => season.seasonNumber === seasonNumber)
     if (!seasonNumber || !competition) return
-    setViewedSeasonNumber(seasonNumber === activeSeasonNumber ? null : seasonNumber)
-    setSeasonMessage(seasonNumber === activeSeasonNumber
-      ? `Showing current ${competition.name}.`
-      : `Viewing ${competition.name} history.`)
+    setViewedSeasonNumber(seasonNumber === currentCompetitionNumber ? null : seasonNumber)
+    setSeasonMessage(competition.kind === 'tournament'
+      ? `Viewing ${competition.name}${competition.seasonNumber === currentCompetitionNumber ? ', the club’s current tournament' : ' history'}.`
+      : competition.seasonNumber === activeSeasonNumber
+        ? `Viewing active ${competition.name}.`
+        : `Viewing ${competition.name} history.`)
   }
 
   const createNextSeason = async () => {
@@ -785,7 +931,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
       setViewedSeasonNumber(null)
       const regularSeasonNumber = seasons.filter((season) => season.kind !== 'tournament').length + 1
       setSeasonMessage(`Season ${regularSeasonNumber} started.`)
-      setSettingsOpen(false)
+      closeClubSettings()
     } catch (error) {
       setSeasonMessage(error instanceof Error ? error.message : 'Unable to start a new season.')
       play('error')
@@ -796,19 +942,50 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
 
   const createTournament = async () => {
     if (!user) return
+    if (unfinishedTournament) {
+      setSeasonMessage(`${unfinishedTournament.name} must end before another tournament can start.`)
+      play('error')
+      return
+    }
     const proposedName = tournamentName.trim() || `Tournament ${nextTournamentNumber}`
-    if (!window.confirm(`Start ${proposedName}? The active session will reset, and its scores and stats will stay separate from regular seasons.`)) return
+    const durationHours = Number(tournamentDurationHours)
+    if (!Number.isInteger(durationHours) || durationHours < MIN_TOURNAMENT_DURATION_HOURS || durationHours > MAX_TOURNAMENT_DURATION_HOURS) {
+      setSeasonMessage(`Tournament duration must be a whole number from ${MIN_TOURNAMENT_DURATION_HOURS} to ${MAX_TOURNAMENT_DURATION_HOURS} hours.`)
+      play('error')
+      return
+    }
+    if (!window.confirm(`Start ${proposedName} with a ${durationHours}-hour clock? The active regular season will remain available.`)) return
     setSeasonAction('tournament')
     setSeasonMessage(null)
     try {
       const tournament = await startNewTournament(clubId, {
         createdBy: user.uid,
         ...(tournamentName.trim() ? { name: tournamentName.trim() } : {}),
+        durationHours,
       })
-      setViewedSeasonNumber(null)
+      const now = Date.now()
+      setSeasons((current) => [
+        ...current.filter((season) => season.seasonNumber !== tournament.seasonNumber),
+        {
+          id: String(tournament.seasonNumber),
+          seasonNumber: tournament.seasonNumber,
+          name: tournament.name,
+          kind: 'tournament' as const,
+          createdAt: Timestamp.fromMillis(now),
+          createdBy: user.uid,
+          active: false,
+          editableUntil: Timestamp.fromMillis(now + durationHours * 3_600_000),
+          tournamentSecondsRemaining: durationHours * 3600,
+          tournamentDurationHours: durationHours,
+        },
+      ].sort((left, right) => left.seasonNumber - right.seasonNumber))
+      setOptimisticCompetitionNumber(tournament.seasonNumber)
+      setCompetitionNow(now)
+      setViewedSeasonNumber(tournament.seasonNumber)
       setTournamentName('')
-      setSeasonMessage(`${tournament.name} started.`)
-      setSettingsOpen(false)
+      setTournamentDurationHours(String(DEFAULT_TOURNAMENT_DURATION_HOURS))
+      setSeasonMessage(`${tournament.name} started with a ${durationHours}-hour clock.`)
+      closeClubSettings()
     } catch (error) {
       setSeasonMessage(error instanceof Error ? error.message : 'Unable to start the tournament.')
       play('error')
@@ -817,8 +994,191 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
     }
   }
 
+  const makeCompetitionCurrent = async (competition: SeasonDoc) => {
+    if (!window.confirm(`Set ${competition.name} as the one active regular season? Any live table session will close.`)) return
+    setSeasonAction(`activate:${competition.seasonNumber}`)
+    setSeasonMessage(null)
+    try {
+      await setActiveSeason(clubId, competition.seasonNumber)
+      setViewedSeasonNumber(null)
+      setSeasonMessage(`${competition.name} is now current and editable.`)
+    } catch (error) {
+      setSeasonMessage(error instanceof Error ? error.message : 'Unable to change the current competition.')
+      play('error')
+    } finally {
+      setSeasonAction(null)
+    }
+  }
+
+  const makeTournamentCurrent = async (competition: SeasonDoc) => {
+    if (!window.confirm(`Make ${competition.name} the club’s current tournament? Its saved clock will resume.`)) return
+    setSeasonAction(`current:${competition.seasonNumber}`)
+    setSeasonMessage(null)
+    try {
+      await setCurrentCompetition(clubId, competition.seasonNumber)
+      const now = Date.now()
+      const remainingSeconds = competition.tournamentSecondsRemaining ?? Math.max(
+        0,
+        Math.ceil(((competition.editableUntil?.toMillis() ?? now) - now) / 1000),
+      )
+      setOptimisticCompetitionNumber(competition.seasonNumber)
+      setViewedSeasonNumber(null)
+      setCompetitionNow(now)
+      setSeasons((current) => current.map((season) => season.seasonNumber === competition.seasonNumber ? {
+        ...season,
+        editableUntil: Timestamp.fromMillis(now + remainingSeconds * 1000),
+      } : season))
+      setSeasonMessage(`${competition.name} is now current and its clock is running.`)
+    } catch (error) {
+      setSeasonMessage(error instanceof Error ? error.message : 'Unable to make that tournament current.')
+      play('error')
+    } finally {
+      setSeasonAction(null)
+    }
+  }
+
+  const reopenCompetitionTournament = async (competition: SeasonDoc) => {
+    setSeasonAction(`reopen:${competition.seasonNumber}`)
+    setSeasonMessage(null)
+    try {
+      await reopenTournament(clubId, competition.seasonNumber)
+      const durationHours = competition.tournamentDurationHours ?? DEFAULT_TOURNAMENT_DURATION_HOURS
+      const now = Date.now()
+      setOptimisticCompetitionNumber(competition.seasonNumber)
+      setViewedSeasonNumber(competition.seasonNumber)
+      setCompetitionNow(now)
+      setSeasons((current) => current.map((season) => season.seasonNumber === competition.seasonNumber ? {
+        ...season,
+        editableUntil: Timestamp.fromMillis(now + durationHours * 3_600_000),
+        tournamentSecondsRemaining: durationHours * 3600,
+      } : season))
+      setSeasonMessage(`${competition.name} restarted with its ${durationHours}-hour clock.`)
+    } catch (error) {
+      setSeasonMessage(error instanceof Error ? error.message : 'Unable to reopen the tournament.')
+      play('error')
+    } finally {
+      setSeasonAction(null)
+    }
+  }
+
+  const saveTournamentDuration = async (competition: SeasonDoc) => {
+    const durationHours = Number(tournamentDurationDrafts[competition.id])
+    if (!Number.isInteger(durationHours) || durationHours < MIN_TOURNAMENT_DURATION_HOURS || durationHours > MAX_TOURNAMENT_DURATION_HOURS) {
+      setSeasonMessage(`Tournament duration must be a whole number from ${MIN_TOURNAMENT_DURATION_HOURS} to ${MAX_TOURNAMENT_DURATION_HOURS} hours.`)
+      play('error')
+      return
+    }
+    if (competition.tournamentDurationHours === durationHours) {
+      setSeasonMessage(`${competition.name} already uses a ${durationHours}-hour clock.`)
+      return
+    }
+    setSeasonAction(`duration:${competition.seasonNumber}`)
+    setSeasonMessage(null)
+    try {
+      await updateTournamentDuration(clubId, competition.seasonNumber, durationHours)
+      const now = Date.now()
+      const tournamentWasUnfinished = (
+        (competition.editableUntil?.toMillis() ?? 0) > now ||
+        (competition.editableUntil === null && (competition.tournamentSecondsRemaining ?? 0) > 0)
+      )
+      setCompetitionNow(now)
+      setSeasons((current) => current.map((season) => season.seasonNumber === competition.seasonNumber ? {
+        ...season,
+        tournamentDurationHours: durationHours,
+        tournamentSecondsRemaining: tournamentWasUnfinished
+          ? durationHours * 3600
+          : season.tournamentSecondsRemaining,
+        editableUntil: tournamentWasUnfinished && competition.seasonNumber === currentCompetitionNumber
+          ? Timestamp.fromMillis(now + durationHours * 3_600_000)
+          : season.editableUntil,
+      } : season))
+      setSeasonMessage(`${competition.name} now uses a ${durationHours}-hour clock.`)
+    } catch (error) {
+      setSeasonMessage(error instanceof Error ? error.message : 'Unable to update the tournament clock.')
+      play('error')
+    } finally {
+      setSeasonAction(null)
+    }
+  }
+
+  const endCompetitionTournament = async (competition: SeasonDoc) => {
+    if (!window.confirm(`End ${competition.name} now? Its clock will stop and the tournament will become read-only.`)) return
+    setSeasonAction(`end:${competition.seasonNumber}`)
+    setSeasonMessage(null)
+    try {
+      await endTournament(clubId, competition.seasonNumber)
+      setSeasons((current) => current.map((season) => season.seasonNumber === competition.seasonNumber ? {
+        ...season,
+        editableUntil: null,
+        tournamentSecondsRemaining: 0,
+      } : season))
+      if (competition.seasonNumber === currentCompetitionNumber) {
+        setOptimisticCompetitionNumber(activeSeasonNumber)
+        setViewedSeasonNumber(null)
+      }
+      setCompetitionNow(Date.now())
+      setSeasonMessage(`${competition.name} ended. The active regular season is current again.`)
+    } catch (error) {
+      setSeasonMessage(error instanceof Error ? error.message : 'Unable to end the tournament.')
+      play('error')
+    } finally {
+      setSeasonAction(null)
+    }
+  }
+
+  const removeCompetitionTournament = async (competition: SeasonDoc) => {
+    if (!window.confirm(`Delete ${competition.name} and all of its games, sessions, and standings? This cannot be undone.`)) return
+    const previousSeasons = seasons
+    const previousDurationDraft = tournamentDurationDrafts[competition.id]
+    setSeasonAction(`delete:${competition.seasonNumber}`)
+    setSeasonMessage(null)
+    setSeasons((current) => current.filter((season) => season.seasonNumber !== competition.seasonNumber))
+    setTournamentDurationDrafts((current) => {
+      const next = { ...current }
+      delete next[competition.id]
+      return next
+    })
+    try {
+      await deleteTournament(clubId, competition.seasonNumber)
+      if (selectedSeasonNumber === competition.seasonNumber) setViewedSeasonNumber(null)
+      setSeasonMessage(`${competition.name} was deleted.`)
+    } catch (error) {
+      setSeasons(previousSeasons)
+      if (previousDurationDraft !== undefined) {
+        setTournamentDurationDrafts((current) => ({ ...current, [competition.id]: previousDurationDraft }))
+      }
+      setSeasonMessage(error instanceof Error ? error.message : 'Unable to delete the tournament.')
+      play('error')
+    } finally {
+      setSeasonAction(null)
+    }
+  }
+
+  const clubSettingsDetailMeta: Record<ClubSettingsSection, { title: string; description: string }> = {
+    competition: {
+      title: 'Seasons & Tournaments',
+      description: 'Start, activate, reopen, or remove club competitions.',
+    },
+    scoring: {
+      title: 'House Scoring',
+      description: 'Choose the fan range and point values used for new games.',
+    },
+    activity: {
+      title: 'Active Players',
+      description: 'Set the activity window used to identify currently active players.',
+    },
+    titles: {
+      title: 'Club Titles',
+      description: 'Control leaderboard titles and how players receive them.',
+    },
+    access: {
+      title: 'Club Access',
+      description: 'Review permanent club-level controls.',
+    },
+  }
+
   return (
-    <main className="club-workspace-main px-4 py-6">
+    <main className={`club-workspace-main px-4 py-6${activeTournament ? ' tournament-mode' : ''}`} data-tournament-mode={activeTournament ? 'active' : undefined}>
       <div
         className="club-workspace-shell"
         data-sidebar-expanded={clubToolsExpanded}
@@ -845,7 +1205,12 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           onAnalytics={() => { setAnalyticsPlayerId(null); setAnalyticsOpen(true) }}
           onGameLogs={() => setGameLogsOpen(true)}
           onNetwork={() => setNetworkOpen(true)}
-          onSettings={() => { setSeasonControlsOpen(false); setSettingsOpen(true) }}
+          onSettings={() => {
+            clubSettingsReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+            setClubSettingsSection('competition')
+            setClubSettingsDetailOpen(false)
+            setSettingsOpen(true)
+          }}
         />
         <div className="club-workspace-content">
       <div data-tour="club-header" className="club-workspace-header mb-5 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
@@ -861,22 +1226,28 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           <div className="contents">
           <label data-tour="season-selector" className="club-season-action flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
             <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Season</span>
+            <span
+              className={`competition-status-dot ${selectedCompetition?.kind === 'tournament' && selectedCompetitionEditable ? 'is-tournament-editable' : selectedCompetition?.seasonNumber === activeSeasonNumber ? 'is-season-active' : 'is-inactive'}`}
+              aria-label={selectedCompetition?.kind === 'tournament' && selectedCompetitionEditable ? 'Tournament edit window open' : selectedCompetition?.seasonNumber === activeSeasonNumber ? 'Active season' : 'Read-only competition'}
+              title={selectedCompetition?.kind === 'tournament' && selectedCompetitionEditable ? 'Tournament edit window open' : selectedCompetition?.seasonNumber === activeSeasonNumber ? 'Active season' : 'Read-only competition'}
+            />
             <select
               value={seasonSelectValue}
-              onChange={(event) => changeSeason(event.target.value)}
+              onChange={(event) => void changeSeason(event.target.value)}
               disabled={seasonAction !== null}
               className="bg-transparent text-sm font-black text-slate-900 outline-none disabled:opacity-50"
               aria-label="Season"
             >
-              <option value="all">All seasons</option>
+              <option value="all">All-time club history</option>
               {!viewingAllCompetitions && seasons.some((season) => season.seasonNumber === selectedSeasonNumber) ? null : !viewingAllCompetitions ? (
                 <option value={selectedSeasonNumber}>Season {selectedSeasonNumber}</option>
               ) : null}
               {seasons.map((season) => (
-                <option key={season.id} value={season.seasonNumber}>{season.name}{season.kind === 'tournament' ? ' · Tournament' : ''}{season.seasonNumber === activeSeasonNumber && !isMobileViewport ? ' (current)' : ''}</option>
+                <option key={season.id} value={season.seasonNumber}>{season.name}{season.kind === 'tournament' ? ' · Tournament' : ''}</option>
               ))}
             </select>
           </label>
+          {activeTournament ? <TournamentLiveIndicator name={activeTournament.name} secondsRemaining={tournamentSecondsRemaining} /> : null}
           <button
             type="button"
             onClick={copyShare}
@@ -904,9 +1275,9 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
         </div>
       ) : null}
 
-      {settingsOpen ? (
-        <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
-          <div id="club-settings-dialog" data-tour="settings-modal" role="dialog" aria-modal="true" aria-labelledby="club-settings-title" className="club-settings-dialog responsive-modal-panel flex max-h-[calc(100dvh-3rem)] min-h-0 w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+      {settingsOpen && typeof document !== 'undefined' ? createPortal(
+        <div ref={clubSettingsLayerRef} aria-hidden={deleteConfirmOpen ? 'true' : undefined} className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
+          <div ref={clubSettingsDialogRef} id="club-settings-dialog" data-tour="settings-modal" role="dialog" aria-modal={deleteConfirmOpen ? undefined : true} aria-labelledby="club-settings-title" tabIndex={-1} className="club-settings-dialog responsive-modal-panel flex max-h-[calc(100dvh-3rem)] min-h-0 w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
             <div className="club-settings-header shrink-0 border-b border-slate-200 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -915,138 +1286,200 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                   <p className="mt-1 text-sm text-slate-500">Manage competitions, scoring, standings, and club access.</p>
                 </div>
                 <button
+                  ref={clubSettingsCloseRef}
                   data-tour="settings-close"
                   type="button"
-                  onClick={() => setSettingsOpen(false)}
+                  onClick={closeClubSettings}
                   className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600"
                 >
                   Close
                 </button>
               </div>
             </div>
-            <div className="club-settings-body grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-              <Link
-                href="/"
-                className="club-settings-home-link inline-flex min-h-11 items-center gap-2 rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] px-4 py-3 text-sm font-black text-[rgb(var(--ink))] transition hover:border-[rgb(var(--bamboo))] hover:bg-[rgb(var(--bamboo)/.07)]"
+            <div className={`club-settings-layout${clubSettingsDetailOpen ? ' is-detail-open' : ''}`}>
+              <nav
+                className="club-settings-navigation"
+                aria-label="Club settings"
+                aria-hidden={isMobileViewport && clubSettingsDetailOpen ? true : undefined}
               >
-                <span aria-hidden="true">←</span> Back to homepage
-              </Link>
-              <section aria-labelledby="competition-settings-heading" className="club-settings-card rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <p className="club-settings-kicker">Competition</p>
-                    <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                      <h4 id="competition-settings-heading" className="text-base font-black text-slate-900">Season controls</h4>
-                      <p className="truncate text-xs font-semibold text-[rgb(var(--muted))]">
-                        <span className="font-black uppercase tracking-[.08em]">Current:</span>{' '}
-                        {activeCompetition?.name ?? `Season ${activeSeasonNumber}`} · {activeCompetition?.kind === 'tournament' ? 'Tournament' : 'Regular season'}
-                      </p>
+                <div className="app-menu-list">
+                  <div>
+                    <p className="app-menu-group-label">Competition</p>
+                    <div className="app-menu-group">
+                      <button type="button" className="app-menu-row" aria-label="Seasons & Tournaments" aria-current={clubSettingsSection === 'competition' ? 'page' : undefined} onClick={() => selectClubSettingsSection('competition')}>
+                        <MenuGlyph name="competition" />
+                        <span className="app-menu-row-copy"><strong>Seasons &amp; Tournaments</strong><small>{activeCompetition?.name ?? `Season ${activeSeasonNumber}`}</small></span>
+                        <span className="app-menu-chevron" aria-hidden="true" />
+                      </button>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    aria-expanded={seasonControlsOpen}
-                    aria-controls="season-controls-content"
-                    aria-label={seasonControlsOpen ? 'Collapse season controls' : 'Manage season controls'}
-                    onClick={() => setSeasonControlsOpen((open) => !open)}
-                    className="inline-flex min-h-10 w-full shrink-0 items-center justify-center gap-2 rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] px-3 text-sm font-black text-[rgb(var(--ink))] transition hover:border-[rgb(var(--bamboo))] hover:bg-[rgb(var(--bamboo)/.07)] sm:w-auto"
-                  >
-                    {seasonControlsOpen ? 'Hide' : 'Manage'}
-                    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" className={`h-4 w-4 transition-transform ${seasonControlsOpen ? 'rotate-180' : ''}`}><path d="m5 7.5 5 5 5-5" /></svg>
-                  </button>
+                  <div>
+                    <p className="app-menu-group-label">Club Rules</p>
+                    <div className="app-menu-group">
+                      <button type="button" className="app-menu-row" aria-label="House Scoring" aria-current={clubSettingsSection === 'scoring' ? 'page' : undefined} onClick={() => selectClubSettingsSection('scoring')}>
+                        <MenuGlyph name="scoring" />
+                        <span className="app-menu-row-copy"><strong>House Scoring</strong><small>Fan {scoringRules.minFan}–{scoringRules.maxFan}+</small></span>
+                        <span className="app-menu-chevron" aria-hidden="true" />
+                      </button>
+                      <button type="button" className="app-menu-row" aria-label="Active Players" aria-current={clubSettingsSection === 'activity' ? 'page' : undefined} onClick={() => selectClubSettingsSection('activity')}>
+                        <MenuGlyph name="activity" />
+                        <span className="app-menu-row-copy"><strong>Active Players</strong><small>{activitySettings.activePlayerMonths}-month activity window</small></span>
+                        <span className="app-menu-chevron" aria-hidden="true" />
+                      </button>
+                      <button type="button" className="app-menu-row" aria-label="Club Titles" aria-current={clubSettingsSection === 'titles' ? 'page' : undefined} onClick={() => selectClubSettingsSection('titles')}>
+                        <MenuGlyph name="titles" />
+                        <span className="app-menu-row-copy"><strong>Club Titles</strong><small>{titleRules.bands.length} leaderboard titles</small></span>
+                        <span className="app-menu-chevron" aria-hidden="true" />
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="app-menu-group-label">Club</p>
+                    <div className="app-menu-group">
+                      <button type="button" className="app-menu-row" aria-label="Club Access" aria-current={clubSettingsSection === 'access' ? 'page' : undefined} onClick={() => selectClubSettingsSection('access')}>
+                        <MenuGlyph name="access" />
+                        <span className="app-menu-row-copy"><strong>Club Access</strong><small>{club?.universal ? 'Protected shared club' : 'Permanent manager controls'}</small></span>
+                        <span className="app-menu-chevron" aria-hidden="true" />
+                      </button>
+                      <Link href="/" aria-label="Return Home" className="app-menu-row club-settings-home-link">
+                        <MenuGlyph name="home" />
+                        <span className="app-menu-row-copy"><strong>Return Home</strong><small>Leave the club workspace</small></span>
+                        <span className="app-menu-chevron" aria-hidden="true" />
+                      </Link>
+                    </div>
+                  </div>
                 </div>
-                {seasonControlsOpen ? (
-                  <div id="season-controls-content" className="mt-4 border-t border-slate-200 pt-4">
-                    <p className="max-w-xl text-sm leading-6 text-slate-500">Seasons build regular club history. Tournaments use separate scores, ratings, and standings.</p>
+              </nav>
+              <section
+                className="club-settings-detail"
+                aria-labelledby="club-settings-detail-title"
+                aria-hidden={isMobileViewport && !clubSettingsDetailOpen ? true : undefined}
+              >
+                <button type="button" className="club-settings-mobile-back" onClick={showClubSettingsList}><span aria-hidden="true">‹</span> Settings</button>
+                <header className="club-settings-detail-header">
+                  <h4 ref={clubSettingsDetailTitleRef} id="club-settings-detail-title" tabIndex={-1}>{clubSettingsDetailMeta[clubSettingsSection].title}</h4>
+                  <p>{clubSettingsDetailMeta[clubSettingsSection].description}</p>
+                </header>
+                {clubSettingsSection === 'competition' ? (
+                  <div id="season-controls-content">
+                    <p className="max-w-xl text-sm leading-6 text-[rgb(var(--muted))]">Seasons build regular club history. Tournaments keep separate scores, ratings, and standings.</p>
                     {isManager ? (
-                      <div className="mt-4 grid gap-3 md:grid-cols-2">
-                        <div className="club-competition-choice rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] p-4">
-                          <h5 className="text-sm font-black text-[rgb(var(--ink))]">Start a regular season</h5>
+                      <div className="mt-4 flex flex-col gap-3">
+                        <section className="club-competition-choice rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] p-4">
+                          <h5 className="text-sm font-black text-[rgb(var(--ink))]">Start a Regular Season</h5>
                           <p className="mt-1 text-xs leading-5 text-[rgb(var(--muted))]">Creates Season {seasons.filter((season) => season.kind !== 'tournament').length + 1} and resets the active table session.</p>
-                          <button
-                            type="button"
-                            onClick={createNextSeason}
-                            disabled={seasonAction !== null}
-                            className="mt-4 min-h-11 w-full rounded-lg border border-[rgb(var(--bamboo))] bg-[rgb(var(--bamboo))] px-4 text-sm font-bold text-white transition hover:bg-[rgb(var(--bamboo-bright))] disabled:opacity-50"
-                          >
-                            {seasonAction === 'season' ? 'Starting season…' : 'Start new season'}
+                          <button type="button" onClick={createNextSeason} disabled={seasonAction !== null} className="mt-4 min-h-11 w-full rounded-lg border border-[rgb(var(--bamboo))] bg-[rgb(var(--bamboo))] px-4 text-sm font-bold text-white transition hover:bg-[rgb(var(--bamboo-bright))] disabled:opacity-50">
+                            {seasonAction === 'season' ? 'Starting season…' : 'Start New Season'}
                           </button>
-                        </div>
-                        <div className="club-competition-choice club-competition-choice-tournament rounded-lg border border-[rgb(var(--gold)/.55)] bg-[rgb(var(--gold)/.07)] p-4">
-                          <h5 className="text-sm font-black text-[rgb(var(--ink))]">Start a tournament</h5>
-                          <p className="mt-1 text-xs leading-5 text-[rgb(var(--muted))]">Keeps tournament results separate from regular season totals.</p>
+                        </section>
+                        <section className="club-competition-choice club-competition-choice-tournament rounded-lg border border-[rgb(var(--gold)/.55)] bg-[rgb(var(--gold)/.07)] p-4">
+                          <h5 className="text-sm font-black text-[rgb(var(--ink))]">Start a Tournament</h5>
+                          <p className="mt-1 text-xs leading-5 text-[rgb(var(--muted))]">Keeps the regular season active and gives the tournament its own configurable clock.</p>
                           <label className="mt-3 block text-xs font-bold text-[rgb(var(--muted))]">
-                            Tournament name <span className="font-normal">(optional)</span>
-                            <input
-                              value={tournamentName}
-                              maxLength={80}
-                              onChange={(event) => setTournamentName(event.target.value)}
-                              placeholder={`Tournament ${nextTournamentNumber}`}
-                              className="mt-1 min-h-11 w-full rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] px-3 text-[rgb(var(--ink))] outline-none"
-                            />
+                            Tournament Name <span className="font-normal">(Optional)</span>
+                            <input value={tournamentName} maxLength={80} onChange={(event) => setTournamentName(event.target.value)} placeholder={`Tournament ${nextTournamentNumber}`} className="mt-1 min-h-11 w-full rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] px-3 text-[rgb(var(--ink))] outline-none" />
                           </label>
-                          <button
-                            type="button"
-                            onClick={createTournament}
-                            disabled={seasonAction !== null}
-                            className="mt-3 min-h-11 w-full rounded-lg border border-[rgb(var(--gold))] bg-[rgb(var(--gold)/.15)] px-4 text-sm font-black text-[rgb(var(--ink))] transition hover:bg-[rgb(var(--gold)/.25)] disabled:opacity-50"
-                          >
-                            {seasonAction === 'tournament' ? 'Starting tournament…' : 'Start tournament'}
+                          <label className="mt-3 block text-xs font-bold text-[rgb(var(--muted))]">
+                            Clock Duration <span className="font-normal">(Hours)</span>
+                            <input type="number" min={MIN_TOURNAMENT_DURATION_HOURS} max={MAX_TOURNAMENT_DURATION_HOURS} step="1" inputMode="numeric" value={tournamentDurationHours} onChange={(event) => setTournamentDurationHours(event.target.value)} className="mt-1 min-h-11 w-full rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] px-3 text-[rgb(var(--ink))] outline-none" />
+                          </label>
+                          {unfinishedTournament ? <p className="mt-3 rounded-lg border border-[rgb(var(--cinnabar)/.35)] bg-[rgb(var(--cinnabar)/.08)] px-3 py-2 text-xs font-bold leading-5 text-[rgb(var(--cinnabar))]">You must wait until {unfinishedTournament.name} is over before starting a new tournament. A manager can end it early below.</p> : null}
+                          <button type="button" onClick={createTournament} disabled={seasonAction !== null || unfinishedTournament !== null} className="mt-3 min-h-11 w-full rounded-lg border border-[rgb(var(--gold))] bg-[rgb(var(--gold)/.15)] px-4 text-sm font-black text-[rgb(var(--ink))] transition hover:bg-[rgb(var(--gold)/.25)] disabled:cursor-not-allowed disabled:opacity-50">
+                            {seasonAction === 'tournament' ? 'Starting tournament…' : unfinishedTournament ? 'Tournament in Progress' : 'Start Tournament'}
                           </button>
-                        </div>
+                        </section>
+                        <section className="club-competition-choice rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] p-4" aria-labelledby="manage-competitions-heading">
+                          <h5 id="manage-competitions-heading" className="text-sm font-black text-[rgb(var(--ink))]">Existing Competitions</h5>
+                          <p className="mt-1 text-xs leading-5 text-[rgb(var(--muted))]">Exactly one regular season is active. Each tournament keeps its own manager-controlled clock.</p>
+                          <div className="mt-3 flex flex-col gap-3">
+                            {seasons.map((competition) => {
+                              const isCurrent = competition.seasonNumber === currentCompetitionNumber
+                              const remainingMs = (competition.editableUntil?.toMillis() ?? 0) - competitionNow
+                              const tournamentEditable = competition.kind === 'tournament' && remainingMs > 0
+                              const tournamentUnfinished = competition.kind === 'tournament' && (
+                                tournamentEditable ||
+                                (competition.editableUntil === null && (competition.tournamentSecondsRemaining ?? 0) > 0)
+                              )
+                              return (
+                                <article key={competition.id} className="rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface-2)/.45)] p-3">
+                                  <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <strong className="text-sm text-[rgb(var(--ink))]">{competition.name}</strong>
+                                      <span className="rounded-full border border-[rgb(var(--line))] px-2 py-0.5 text-[10px] font-black uppercase tracking-[.08em] text-[rgb(var(--muted))]">{competition.kind === 'tournament' ? 'Tournament' : 'Season'}</span>
+                                      <span className={`competition-status-dot ${tournamentEditable ? 'is-tournament-editable' : isCurrent ? 'is-season-active' : 'is-inactive'}`} aria-label={tournamentEditable ? 'Tournament edit window open' : isCurrent ? 'Active season' : 'Read-only competition'} title={tournamentEditable ? 'Tournament edit window open' : isCurrent ? 'Active season' : 'Read-only competition'} />
+                                    </div>
+                                    <p className="mt-1 text-xs text-[rgb(var(--muted))]">{isCurrent ? 'Active and editable' : tournamentEditable ? `Editable for ${Math.max(1, Math.ceil(remainingMs / 3_600_000))} more hour${Math.ceil(remainingMs / 3_600_000) === 1 ? '' : 's'}` : tournamentUnfinished ? 'Paused with time remaining' : 'Read-only'}</p>
+                                  </div>
+                                  <div className="mt-3 flex flex-col gap-2">
+                                    {competition.kind === 'season' && !isCurrent ? <button type="button" onClick={() => void makeCompetitionCurrent(competition)} disabled={seasonAction !== null} className="min-h-10 w-full rounded-lg border border-[rgb(var(--bamboo))] px-3 text-xs font-black text-[rgb(var(--bamboo))] disabled:opacity-50">{seasonAction === `activate:${competition.seasonNumber}` ? 'Setting active…' : 'Set as Active Season'}</button> : null}
+                                    {competition.kind === 'tournament' && tournamentUnfinished && !isCurrent ? <button type="button" onClick={() => void makeTournamentCurrent(competition)} disabled={seasonAction !== null} className="min-h-10 w-full rounded-lg border border-[rgb(var(--bamboo))] px-3 text-xs font-black text-[rgb(var(--bamboo))] disabled:opacity-50">{seasonAction === `current:${competition.seasonNumber}` ? 'Making Current…' : 'Make Current Tournament'}</button> : null}
+                                    {competition.kind === 'tournament' ? <div className="rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface-1)/.72)] p-3">
+                                      <label className="block text-xs font-bold text-[rgb(var(--muted))]">
+                                        Clock Duration (Hours)
+                                        <input type="number" min={MIN_TOURNAMENT_DURATION_HOURS} max={MAX_TOURNAMENT_DURATION_HOURS} step="1" inputMode="numeric" aria-label={`${competition.name} clock duration in hours`} value={tournamentDurationDrafts[competition.id] ?? String(competition.tournamentDurationHours ?? DEFAULT_TOURNAMENT_DURATION_HOURS)} onChange={(event) => setTournamentDurationDrafts((current) => ({ ...current, [competition.id]: event.target.value }))} className="mt-1 min-h-11 w-full rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] px-3 text-sm font-bold text-[rgb(var(--ink))] outline-none" />
+                                      </label>
+                                      <button type="button" onClick={() => void saveTournamentDuration(competition)} disabled={seasonAction !== null} className="mt-2 min-h-10 w-full rounded-lg border border-[rgb(var(--bamboo))] px-3 text-xs font-black text-[rgb(var(--bamboo))] disabled:opacity-50">{seasonAction === `duration:${competition.seasonNumber}` ? 'Saving Clock…' : 'Save Clock Duration'}</button>
+                                    </div> : null}
+                                    {competition.kind === 'tournament' ? <button type="button" onClick={() => void reopenCompetitionTournament(competition)} disabled={seasonAction !== null} className="min-h-10 w-full rounded-lg border border-[rgb(var(--gold))] px-3 text-xs font-black text-[rgb(var(--ink))] disabled:opacity-50">{seasonAction === `reopen:${competition.seasonNumber}` ? 'Restarting…' : `Restart ${competition.tournamentDurationHours ?? DEFAULT_TOURNAMENT_DURATION_HOURS}-Hour Clock`}</button> : null}
+                                    {competition.kind === 'tournament' && tournamentUnfinished ? <button type="button" onClick={() => void endCompetitionTournament(competition)} disabled={seasonAction !== null} className="min-h-10 w-full rounded-lg border border-rose-300 px-3 text-xs font-black text-rose-700 disabled:opacity-50">{seasonAction === `end:${competition.seasonNumber}` ? 'Ending…' : 'End Tournament…'}</button> : null}
+                                    {competition.kind === 'tournament' ? <button type="button" onClick={() => void removeCompetitionTournament(competition)} disabled={seasonAction !== null || isCurrent || tournamentUnfinished} className="min-h-10 w-full rounded-lg border border-rose-300 px-3 text-xs font-black text-rose-700 disabled:cursor-not-allowed disabled:opacity-40">{seasonAction === `delete:${competition.seasonNumber}` ? 'Deleting…' : isCurrent ? 'Set Another Current Competition First' : tournamentUnfinished ? 'End Tournament Before Deleting' : 'Delete Tournament'}</button> : null}
+                                  </div>
+                                </article>
+                              )
+                            })}
+                          </div>
+                        </section>
                       </div>
-                    ) : (
-                      <p className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600">
-                        Only the club manager can start seasons or tournaments.
-                      </p>
-                    )}
+                    ) : <p className="rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] px-4 py-3 text-sm font-semibold text-[rgb(var(--muted))]">Only a club manager can start seasons or tournaments.</p>}
                   </div>
                 ) : null}
+                <div hidden={clubSettingsSection !== 'scoring'}>
+                  <ScoringRulesSettings clubId={clubId} rules={scoringRules} isManager={isManager} embedded />
+                </div>
+                <div hidden={clubSettingsSection !== 'activity'}>
+                  <ActivitySettings clubId={clubId} settings={activitySettings} isManager={isManager} />
+                </div>
+                <div hidden={clubSettingsSection !== 'titles'}>
+                  <TitleRulesSettings clubId={clubId} rules={titleRules} isManager={isManager} embedded />
+                </div>
+                {clubSettingsSection === 'access' ? (
+                  isManager && !club?.universal ? (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+                      <p className="text-sm font-black text-rose-700">Delete Club…</p>
+                      <p className="mt-1 text-sm leading-6 text-rose-700">Permanently delete this club and all club-specific records. You will confirm the club name before anything is removed.</p>
+                      <button ref={deleteClubButtonRef} type="button" onClick={openDeleteClubDialog} aria-haspopup="dialog" aria-controls="delete-club-dialog" className="mt-4 min-h-11 rounded-lg bg-rose-700 px-4 py-2 text-sm font-bold text-white hover:bg-rose-600">Delete Club…</button>
+                    </div>
+                  ) : isManager && club?.universal ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                      <p className="text-sm font-black text-amber-900">Universal Club Protection</p>
+                      <p className="mt-1 text-sm leading-6 text-amber-800">This club is shared by everyone and cannot be deleted, including by its managers.</p>
+                    </div>
+                  ) : <p className="rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface))] px-4 py-3 text-sm font-semibold text-[rgb(var(--muted))]">Only club managers can change permanent access settings.</p>
+                ) : null}
               </section>
-              <div className="club-settings-group-heading">
-                <p className="club-settings-kicker">Club rules</p>
-                <p>Scoring, activity, and leaderboard titles apply across the club.</p>
-              </div>
-              <ScoringRulesSettings clubId={clubId} rules={scoringRules} isManager={isManager} />
-              <ActivitySettings clubId={clubId} settings={activitySettings} isManager={isManager} />
-              <TitleRulesSettings clubId={clubId} rules={titleRules} isManager={isManager} />
-              <div className="club-settings-group-heading club-settings-danger-heading">
-                <p className="club-settings-kicker">Club access</p>
-                <p>Permanent club-level actions are kept separate from everyday settings.</p>
-              </div>
-              {isManager && !club?.universal ? (
-                <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
-                  <p className="text-sm font-black text-rose-700">Delete club</p>
-                  <p className="mt-1 text-sm text-rose-700">Permanently delete this club and all of its club-specific database records. This cannot be undone.</p>
-                  <button type="button" onClick={() => setDeleteConfirmOpen(true)} aria-haspopup="dialog" aria-controls="delete-club-dialog" className="mt-4 rounded-lg bg-rose-700 px-4 py-2 text-sm font-bold text-white hover:bg-rose-600">Delete club</button>
-                </div>
-              ) : isManager && club?.universal ? (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-                  <p className="text-sm font-black text-amber-900">Universal club protection</p>
-                  <p className="mt-1 text-sm text-amber-800">The universal club is shared by everyone and cannot be deleted, including by its managers.</p>
-                </div>
-              ) : null}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
 
-      {deleteConfirmOpen && club && isManager && !club.universal ? (
-        <div className="responsive-modal fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-slate-950/80 px-4 py-6">
-          <div id="delete-club-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-club-title" aria-describedby="delete-club-description" className="responsive-modal-panel modal-panel-scroll w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl bg-white p-6 shadow-2xl">
+      {deleteConfirmOpen && club && isManager && !club.universal && typeof document !== 'undefined' ? createPortal(
+        <div ref={deleteClubLayerRef} className="responsive-modal fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-slate-950/80 px-4 py-6">
+          <div ref={deleteClubDialogRef} id="delete-club-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-club-title" aria-describedby="delete-club-description" tabIndex={-1} className="responsive-modal-panel modal-panel-scroll w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl bg-white p-6 shadow-2xl">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-rose-600">Permanent action</p>
             <h3 id="delete-club-title" className="mt-2 text-xl font-black text-slate-950">Delete {club.name}?</h3>
             <p id="delete-club-description" className="mt-2 text-sm leading-6 text-slate-600">
               This permanently deletes the club for every member, including its roster and player links, memberships and join requests, games and scores, statistics and rankings, seasons, sessions and table layouts, QR codes, settings, and club audit history. Your account and other clubs are not affected. This cannot be undone.
             </p>
             <p className="mt-3 text-sm font-bold leading-6 text-rose-700">Type <strong>{club.name}</strong> exactly to confirm.</p>
-            <input value={deleteConfirmName} onChange={(event) => setDeleteConfirmName(event.target.value)} className="mt-4 w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-rose-500" placeholder={club.name} />
+            <input ref={deleteConfirmInputRef} aria-label={`Type ${club.name} to confirm club deletion`} value={deleteConfirmName} onChange={(event) => setDeleteConfirmName(event.target.value)} className="mt-4 w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-rose-500" placeholder={club.name} />
             <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => { setDeleteConfirmOpen(false); setDeleteConfirmName('') }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700">Cancel</button>
+              <button type="button" onClick={closeDeleteClubDialog} disabled={deletingClub} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 disabled:opacity-40">Cancel</button>
               <button type="button" onClick={confirmDeleteClub} disabled={deleteConfirmName !== club.name || deletingClub} className="rounded-lg bg-rose-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">{deletingClub ? 'Deleting...' : 'Delete club'}</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
 
       <nav
@@ -1106,12 +1539,12 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
               {viewingHistoricalCompetition ? (
                 <section className="rounded-lg border border-amber-200 bg-amber-50 p-5 text-amber-950">
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-700">{viewingAllCompetitions ? 'Club history' : `Historical ${selectedCompetition?.kind === 'tournament' ? 'tournament' : 'season'}`}</p>
-                  <h2 className="mt-2 text-lg font-black">{viewingAllCompetitions ? 'All seasons combined' : `${selectedCompetition?.name ?? `Season ${selectedSeasonNumber}`} is read-only`}</h2>
-                  <p className="mt-1 text-sm leading-6 text-amber-900">{viewingAllCompetitions ? 'Leaderboard and analytics combine every regular season and tournament in this club.' : `Standings and analytics show ${selectedCompetition?.name ?? `Season ${selectedSeasonNumber}`}.`} Return to {activeCompetition?.name ?? `Season ${activeSeasonNumber}`} to manage the current session.</p>
+                  <h2 className="mt-2 text-lg font-black">{viewingAllCompetitions ? 'All-time club history' : `${selectedCompetition?.name ?? `Season ${selectedSeasonNumber}`} is read-only`}</h2>
+                  <p className="mt-1 text-sm leading-6 text-amber-900">{viewingAllCompetitions ? 'Leaderboard and analytics combine every regular season and tournament in this club.' : selectedCompetition?.kind === 'tournament' ? `${selectedCompetition.name}'s clock has ended. A manager can restart it from Settings.` : `Standings and analytics show ${selectedCompetition?.name ?? `Season ${selectedSeasonNumber}`}.`} Return to {activeCompetition?.name ?? `Season ${activeSeasonNumber}`} to manage the current session.</p>
                   <button type="button" onClick={() => changeSeason(String(activeSeasonNumber))} className="mt-4 min-h-10 rounded border border-amber-300 bg-white px-3 text-sm font-bold text-amber-900">Return to current</button>
                 </section>
               ) : (
-                <SessionManager clubId={clubId} seasonNumber={activeSeasonNumber} players={players} isManager={isManager} scoringRules={scoringRules} onAddPlayer={() => openRoster(true)} />
+                <SessionManager clubId={clubId} seasonNumber={selectedCompetition?.seasonNumber ?? activeSeasonNumber} players={players} isManager={isManager} scoringRules={scoringRules} onAddPlayer={() => openRoster(true)} />
               )}
             </aside>
 

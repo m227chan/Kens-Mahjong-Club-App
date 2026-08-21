@@ -8,6 +8,7 @@ export interface ClubDoc {
   managerDisplayName: string | null
   createdAt: Timestamp
   activeSeasonNumber?: number
+  currentCompetitionNumber?: number
   active: boolean
   universal?: boolean
 }
@@ -158,4 +159,7 @@ export interface SeasonDoc {
   createdAt: Timestamp
   createdBy: string
   active: boolean
+  editableUntil: Timestamp | null
+  tournamentSecondsRemaining: number | null
+  tournamentDurationHours: number | null
 }

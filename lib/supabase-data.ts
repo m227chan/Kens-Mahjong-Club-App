@@ -106,6 +106,7 @@ function mapClub(row: Row): ClubDoc {
     managerDisplayName: row.manager_display_name as string | null,
     createdAt: ts(row.created_at),
     activeSeasonNumber: Number(row.active_season_number),
+    currentCompetitionNumber: Number(row.current_competition_number ?? row.active_season_number),
     active: Boolean(row.active),
     universal: Boolean(row.universal),
   }
@@ -842,6 +843,13 @@ export function subscribeSeasons(
       createdAt: ts(row.created_at),
       createdBy: String(row.created_by),
       active: Boolean(row.active),
+      editableUntil: row.editable_until ? ts(row.editable_until) : null,
+      tournamentSecondsRemaining: row.tournament_seconds_remaining == null
+        ? null
+        : Number(row.tournament_seconds_remaining),
+      tournamentDurationHours: row.tournament_duration_hours == null
+        ? null
+        : Number(row.tournament_duration_hours),
     }))
   }
   return realtime(
@@ -856,10 +864,20 @@ export const ensureSeasons = (clubId: string, userId = 'system') =>
   serverAction<void>('ensureSeasons', { clubId, userId })
 export const startNewSeason = (clubId: string, input: { createdBy: string }) =>
   serverAction<number>('startNewSeason', { clubId, input })
-export const startNewTournament = (clubId: string, input: { createdBy: string; name?: string }) =>
+export const startNewTournament = (clubId: string, input: { createdBy: string; name?: string; durationHours?: number }) =>
   serverAction<{ seasonNumber: number; name: string; kind: 'tournament' }>('startNewTournament', { clubId, input })
 export const setActiveSeason = (clubId: string, seasonNumber: number) =>
   serverAction<void>('setActiveSeason', { clubId, seasonNumber })
+export const setCurrentCompetition = (clubId: string, seasonNumber: number) =>
+  serverAction<void>('setCurrentCompetition', { clubId, seasonNumber })
+export const reopenTournament = (clubId: string, seasonNumber: number) =>
+  serverAction<void>('reopenTournament', { clubId, seasonNumber })
+export const updateTournamentDuration = (clubId: string, seasonNumber: number, durationHours: number) =>
+  serverAction<void>('updateTournamentDuration', { clubId, seasonNumber, durationHours })
+export const endTournament = (clubId: string, seasonNumber: number) =>
+  serverAction<void>('endTournament', { clubId, seasonNumber })
+export const deleteTournament = (clubId: string, seasonNumber: number) =>
+  serverAction<void>('deleteTournament', { clubId, seasonNumber })
 export function subscribeActiveSession(
   clubId: string,
   seasonNumber: number,

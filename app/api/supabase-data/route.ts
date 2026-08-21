@@ -23,9 +23,15 @@ import {
   normalizeSessionPointWindow,
 } from '@/lib/server/session-points'
 import {
+  assertClubCompetitionEditable,
+  deleteClubTournament,
+  endClubTournament,
+  reopenClubTournament,
+  setClubCurrentCompetition,
   setClubActiveSeason,
   startNewClubSeason,
   startNewClubTournament,
+  updateClubTournamentDuration,
 } from '@/lib/server/season-management'
 import { addPlayerToActiveSession } from '@/lib/server/roster-session'
 
@@ -536,11 +542,42 @@ export async function POST(request: NextRequest) {
           body.clubId,
           caller.uid,
           typeof body.input?.name === 'string' ? body.input.name : undefined,
+          body.input?.durationHours == null ? undefined : Number(body.input.durationHours),
         )
       }
       if (action === 'setActiveSeason') {
         await requireManager(body.clubId)
         await setClubActiveSeason(db, body.clubId, Number(body.seasonNumber))
+        return null
+      }
+      if (action === 'setCurrentCompetition') {
+        await requireManager(body.clubId)
+        await setClubCurrentCompetition(db, body.clubId, Number(body.seasonNumber))
+        return null
+      }
+      if (action === 'reopenTournament') {
+        await requireManager(body.clubId)
+        await reopenClubTournament(db, body.clubId, Number(body.seasonNumber))
+        return null
+      }
+      if (action === 'updateTournamentDuration') {
+        await requireManager(body.clubId)
+        await updateClubTournamentDuration(
+          db,
+          body.clubId,
+          Number(body.seasonNumber),
+          Number(body.durationHours),
+        )
+        return null
+      }
+      if (action === 'endTournament') {
+        await requireManager(body.clubId)
+        await endClubTournament(db, body.clubId, Number(body.seasonNumber))
+        return null
+      }
+      if (action === 'deleteTournament') {
+        await requireManager(body.clubId)
+        await deleteClubTournament(db, body.clubId, Number(body.seasonNumber))
         return null
       }
       if (action === 'createSession') {
@@ -558,18 +595,8 @@ export async function POST(request: NextRequest) {
           throw new Error('Select at least 4 players.')
         if (new Set(participants).size !== participants.length)
           throw new Error('A player can only be selected once per session.')
-        if (
-          !seasonNumber ||
-          !(
-            await db.query(
-              'select 1 from seasons where club_id=$1 and season_number=$2',
-              [body.clubId, seasonNumber],
-            )
-          ).rowCount
-        )
-          throw new Error(
-            'That season no longer exists. Refresh the app and try again.',
-          )
+        if (!seasonNumber) throw new Error('Choose a valid competition.')
+        await assertClubCompetitionEditable(db, body.clubId, seasonNumber)
         const validPlayers = await db.query(
           'select id from players where club_id=$1 and active and id=any($2::text[])',
           [body.clubId, participants],

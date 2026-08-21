@@ -22,13 +22,16 @@ const dataMocks = vi.hoisted(() => ({
   subscribeTitleRules: vi.fn(() => vi.fn()),
   subscribeActivitySettings: vi.fn(() => vi.fn()),
   subscribeSeasons: vi.fn((_clubId: string, callback: (seasons: unknown[]) => void) => {
-    callback([{ id: '1', seasonNumber: 1, name: 'Season 1', active: true }])
+    callback([{ id: '1', seasonNumber: 1, name: 'Season 1', kind: 'season', active: true, editableUntil: null, tournamentSecondsRemaining: null }])
     return vi.fn()
   }),
   subscribeJoinRequests: vi.fn(() => vi.fn()),
   ensureConfig: vi.fn().mockResolvedValue(undefined),
   ensureSeasons: vi.fn().mockResolvedValue(undefined),
   setActiveSeason: vi.fn(),
+  setCurrentCompetition: vi.fn(),
+  reopenTournament: vi.fn(),
+  deleteTournament: vi.fn(),
   startNewSeason: vi.fn(),
   startNewTournament: vi.fn(),
   createPlayer: vi.fn(),
