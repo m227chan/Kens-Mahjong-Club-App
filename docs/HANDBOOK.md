@@ -101,6 +101,7 @@ components/
   network/                         Co-occurrence graph, edge math, and net-points helpers
   Leaderboard.tsx                  Desktop and mobile standings
   SessionManager.tsx               Live table/session and result workflow
+  TableShuffleModal.tsx            Preview/confirm reseating of full tables
   FocusedTableView.tsx             Restricted single-table scoring surface
   SessionPointTrackerModal.tsx     Player point-window detail and float control
   UserSettings.tsx                 Account preferences and deletion workflow
@@ -117,6 +118,7 @@ lib/
   stats-engine.ts                  Pairwise ELO and rank calculations
   players.ts                       Emoji, display colors, rank-title distribution
   session-layout.ts                New/legacy session layout normalization
+  table-shuffle/                   Pure seating shuffle modes for live sessions
   timestamp.ts                     Backend-neutral Timestamp compatibility object
   types.ts                         Shared domain interfaces
   server/                          Privileged club, game, API-safety, and table services
@@ -163,7 +165,7 @@ The publicly readable metric glossary explains Points, win/loss measures, Skill 
 
 `app/layout.tsx` configures metadata, the favicon, theme/sound/help controls, `AuthProvider`, and `SoundProvider`. Global CSS supplies the system-safe font stack, so rendering does not depend on downloading a web font. The brand link always points to `/`, making it the personal-dashboard shortcut for signed-in users. The header is sticky and uses semantic theme tokens.
 
-The header help control opens `AppGuide`. Its complete reference follows the signed-in workflow from personal dashboard through clubs, rosters, seasons, sessions, scoring, session point tracking (including float), standings, analytics, logs, player network, and manager tools. It preserves the operational session reference, including table setup, participating players, the sideline, result entry, self-draw/discard rules, session reset controls, and the full fan-to-base-points map.
+The header help control opens `AppGuide`. Its complete reference follows the signed-in workflow from personal dashboard through clubs, rosters, seasons, sessions, scoring, session point tracking (including float), standings, analytics, logs, player network, and manager tools. It preserves the operational session reference, including table setup, participating players, the sideline, table shuffle modes, result entry, self-draw/discard rules, session reset controls, and the full fan-to-base-points map.
 
 “Take a Tour” runs on the real signed-in interface. `AppGuide` remains mounted in the root layout while navigation and modal state change, locates visible elements through stable `data-tour` targets, scrolls them into view, and draws a fixed spotlight boundary plus Ming’s coachmark over the actual dashboard, club workspace, and real roster, session-tracker, analytics, game-log, network, and settings modals. Click-driven stops advance only after the highlighted real control is used; explanatory stops use Next. Desktop and mobile variants can share a target name, and the tour selects the visible instance. The tour only performs safe navigation and open/close interactions, never submits forms or invokes game, roster, season, membership, or settings mutations. Exiting at any time clears the spotlight and returns to `/`.
 
@@ -379,6 +381,7 @@ Shared client-facing types live in `lib/types.ts`:
 - New sessions begin with every participant on the sideline and empty numbered tables. The sideline is collapsed by default so waiting players remain available without occupying the primary scoring area; starting a drag from a table opens it automatically.
 - Mobile decrement/increment controls make table count editing reliable without text-selection quirks and disable at the 1- and 99-table boundaries.
 - Move players between sideline and tables, fill open seats, clear tables, swap players, and edit the session. Occupied tables expose a clear-table control on hover, and every occupied seat exposes a remove-player control on hover, including incomplete tables; touch layouts keep these controls visible because hover is unavailable. The add-player dialog shows the table's selected players first and lets the user remove a selection without closing the dialog.
+- **Shuffle tables** (session menu) reseats only complete tables of 4; partial tables and the sideline are left alone. Modes: Full Random (default), Shark Tank vs Redemption (session-window net points), Nemesis (tightest historical point differentials), Never Met (fewest shared games), Skill Balance (snake-draft by Skill rating), and Standings Balance (snake-draft by season points). The UI requires a preview before confirm; in the After column you can tap two players to swap seats before applying. Apply writes the layout through the same collaborative `updateSession` path as drag/swap.
 - A compact table locator shows every table's occupancy, identifies the signed-in player's table, and jumps directly to a selected table. Its numbered strip supports vertical page scrolling plus dedicated horizontal drag, trackpad, and mouse-wheel navigation without activating the outer Session/Leaderboard carousel. Search by player or table appears for large sessions, and sessions with five or more tables initially collapse every table except the signed-in player's table.
 - Table cards show capacity and readiness; four players marks a table ready.
 - Record self-draw wins, discard wins, or draws.

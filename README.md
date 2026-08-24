@@ -27,6 +27,7 @@ Mahjong Messiah keeps a club's live session and long-term history in one shared 
 ### Built for a real Mahjong night
 
 - **Fast live sessions.** Pick attendees, arrange up to 99 tables, swap or sideline players, and record self-draws, discard wins, or draws. Seat changes appear immediately while the database catches up.
+- **Table shuffle.** From the session menu, preview and confirm a reseat of every full table of 4 (partial tables and the sideline stay put). Modes include Full Random, Shark Tank vs Redemption, Nemesis, Never Met, Skill Balance, and Standings Balance. In the preview After column, tap two players to swap before confirming.
 - **Offline-safe scoring.** New games are stored on the device before syncing. If a connection drops or times out, the app keeps the result, clearly marks it as pending, and retries when connectivity returns.
 - **Focused table mode.** Open a clean, phone-friendly scorekeeping view for one table, or print permanent signed QR codes so players can check in at the physical table.
 - **Guest table try-out.** From the login page, enter a club code and pick an active table to score without signing in—seat players, record wins or draws, and clear the table. Guests stay locked to that table and cannot create tables, expand the session, or use club management tools.
@@ -58,8 +59,9 @@ The signed-out page includes a lightweight field of real Hong Kong-style Mahjong
 1. Sign in with Google and open or join a club.
 2. Choose the season, attending players, and number of tables.
 3. Seat players from the sideline or let them scan a table QR code.
-4. Record each win or draw from the session manager or focused table view.
-5. Review the updated standings, analytics, logs, and player network.
+4. Optionally shuffle full tables before the next round (preview, then confirm).
+5. Record each win or draw from the session manager or focused table view.
+6. Review the updated standings, analytics, logs, and player network.
 
 ## Architecture
 
