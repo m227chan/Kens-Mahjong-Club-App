@@ -1844,6 +1844,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           currentSeason={selectedSeasonNumber ?? activeSeasonNumber}
           userId={user.uid}
           isManager={isManager}
+          scoringRules={scoringRules}
           onClose={() => setGameLogsOpen(false)}
         />
       ) : null}

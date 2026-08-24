@@ -400,7 +400,7 @@ Shared client-facing types live in `lib/types.ts`:
 
 ### Scoring and game recording
 
-Each club stores its minimum fan, maximum fan cap, and fan-to-base-point mapping in `app_configs`. New clubs default to the original 3–13+ mapping. Managers edit these house rules from the House Scoring detail in Club Settings; live session scoring, focused-table scoring, server validation, and the in-app guide all consume the same club-specific values. Existing stored scores are not rewritten. For normal results:
+Each club stores its minimum fan, maximum fan cap, and fan-to-base-point mapping in `app_configs`. New clubs default to the original 3–13+ mapping. Managers edit these house rules from the House Scoring detail in Club Settings; live session scoring, focused-table scoring, game-log outcome editing, server validation, and the in-app guide all consume the same club-specific values. Existing stored scores are not rewritten. For normal results:
 
 - **Self draw:** the winner receives three times the base value; each other player loses one base value.
 - **Discard win:** the winner receives twice the base value; the discarder loses twice the base value; uninvolved players receive zero.
@@ -420,6 +420,7 @@ Every stored game must contain two to four distinct players, finite numeric scor
 - Rows/cards expose hover, focus, title, and “Review” cues when editable.
 - Selecting a game opens a viewport-centered record editor.
 - Members can change date/time, season, scores, and notes on games they created during the first 24 hours. Managers can edit or delete any record; deletion and CSV import remain manager-only.
+- The record editor defaults to manual score inputs. For four-player games, **Full Override from Outcome** switches to winner / win type (self-draw, discard, or draw) / discarder / fan selection and auto-calculates scores from the club’s house rules; **Edit scores manually** returns to the number inputs with the preview filled in.
 - Update/delete closes the editor after success, invalidates history cache, refreshes the page, and rebuilds dependent statistics.
 - CSV export includes metadata and a player score column for each included player.
 - CSV import supports quoted fields, multiple date formats, score normalization, new player creation, randomized emoji assignment, and player columns even when those players have no scored rows.
