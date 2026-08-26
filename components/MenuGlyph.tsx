@@ -17,6 +17,7 @@ export type MenuGlyphName =
   | 'qr'
   | 'auto-join'
   | 'clear-tables'
+  | 'shuffle'
   | 'reset'
 
 export default function MenuGlyph({ name }: { name: MenuGlyphName }) {
@@ -37,6 +38,7 @@ export default function MenuGlyph({ name }: { name: MenuGlyphName }) {
     qr: <><path d="M3 3h7v7H3zm11 0h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zm4 4h3v3h-3zm0-4h3m-7 7h3" /></>,
     'auto-join': <><path d="M4 12h7m-3-3 3 3-3 3" /><path d="M13 5h7v14h-7" /></>,
     'clear-tables': <><path d="M4 6h16M6 10h12M8 14h8M10 18h4" /></>,
+    shuffle: <><path d="M16 3h5v5M3 16l18-13M8 21H3v-5M21 8l-5 5" /></>,
     reset: <><path d="M4 11a8 8 0 1 0 2-5.3L3 9" /><path d="M3 4v5h5" /></>,
   }
 

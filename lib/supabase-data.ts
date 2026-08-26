@@ -774,37 +774,42 @@ export async function getClubGameCount(clubId: string) {
   if (error) throw error
   return count ?? 0
 }
+export async function loadPlayerStats(
+  clubId: string,
+  seasonNumber?: number,
+): Promise<Array<PlayerStatsDoc & { id: string }>> {
+  const table = seasonNumber ? 'season_player_stats' : 'player_stats'
+  let query = client().from(table).select('*').eq('club_id', clubId)
+  if (seasonNumber) query = query.eq('season_number', seasonNumber)
+  const { data, error } = await query
+  if (error) throw error
+  let stats = (data ?? []).map(mapStats)
+  const ranks = computeGlobalRanks(stats)
+  const skillRanks = new Map(
+    [...stats]
+      .sort((a, b) => b.skillRating - a.skillRating)
+      .map((stat, index) => [stat.playerId, index + 1]),
+  )
+  stats = stats.map((stat) => ({
+    ...stat,
+    eloRank: ranks.eloRanks[stat.playerId] ?? 0,
+    pointsRank: ranks.pointsRanks[stat.playerId] ?? 0,
+    skillRank: skillRanks.get(stat.playerId) ?? 0,
+  }))
+  return stats.sort((a, b) => a.skillRank - b.skillRank)
+}
+
 export function subscribePlayerStats(
   clubId: string,
   callback: (stats: Array<PlayerStatsDoc & { id: string }>) => void,
   seasonNumber?: number,
 ) {
   const table = seasonNumber ? 'season_player_stats' : 'player_stats'
-  const load = async () => {
-    let query = client().from(table).select('*').eq('club_id', clubId)
-    if (seasonNumber) query = query.eq('season_number', seasonNumber)
-    const { data, error } = await query
-    if (error) throw error
-    let stats = (data ?? []).map(mapStats)
-    const ranks = computeGlobalRanks(stats)
-    const skillRanks = new Map(
-      [...stats]
-        .sort((a, b) => b.skillRating - a.skillRating)
-        .map((stat, index) => [stat.playerId, index + 1]),
-    )
-    stats = stats.map((stat) => ({
-      ...stat,
-      eloRank: ranks.eloRanks[stat.playerId] ?? 0,
-      pointsRank: ranks.pointsRanks[stat.playerId] ?? 0,
-      skillRank: skillRanks.get(stat.playerId) ?? 0,
-    }))
-    return stats.sort((a, b) => a.skillRank - b.skillRank)
-  }
   return realtime(
     `stats:${clubId}:${seasonNumber ?? 'all'}`,
     table,
     `club_id=eq.${clubId}`,
-    load,
+    () => loadPlayerStats(clubId, seasonNumber),
     callback,
     undefined,
     () => invalidateClubHistoryCache(clubId),

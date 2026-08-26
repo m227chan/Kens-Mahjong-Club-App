@@ -6,6 +6,7 @@ import Link from 'next/link'
 import MenuGlyph from '@/components/MenuGlyph'
 import ViewHeader from '@/components/ViewHeader'
 import ScoreCelebration, { type ScoreCelebrationResult } from '@/components/ScoreCelebration'
+import TableShuffleModal from '@/components/TableShuffleModal'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSound } from '@/contexts/SoundContext'
 import { useGameSync } from '@/contexts/GameSyncContext'
@@ -116,6 +117,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
   const [sidelineCollapsed, setSidelineCollapsed] = useState(true)
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
   const [headerMenuMobile, setHeaderMenuMobile] = useState(false)
+  const [shuffleOpen, setShuffleOpen] = useState(false)
   const [headerMenuAnchor, setHeaderMenuAnchor] = useState<{
     top: number | 'auto'
     bottom: number | 'auto'
@@ -814,6 +816,31 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
     )
     play('tile')
     showToast('All tables cleared.')
+  }
+
+  const openTableShuffle = () => {
+    if (!user) {
+      showToast('Sign in to shuffle tables.')
+      return
+    }
+    if (!sessionRef.current.active || !sessionRef.current.id) {
+      showToast('The active session is not ready yet.')
+      return
+    }
+    setShuffleOpen(true)
+  }
+
+  const confirmTableShuffle = (nextTables: Record<string, string[]>) => {
+    const current = sessionRef.current
+    if (!current.active || !current.id) {
+      showToast('The active session is not ready yet.')
+      setShuffleOpen(false)
+      return
+    }
+    persistSession({ ...current, tables: nextTables })
+    setShuffleOpen(false)
+    play('tile')
+    showToast('Tables shuffled.')
   }
 
   const clearSingleTable = (tableId: string) => {
@@ -2304,6 +2331,21 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
                       type="button"
                       role={headerMenuMobile ? undefined : 'menuitem'}
                       tabIndex={headerMenuMobile ? 0 : -1}
+                      aria-label="Shuffle tables"
+                      aria-describedby="session-shuffle-description"
+                      onClick={() => { closeHeaderMenu(true); openTableShuffle() }}
+                      className="app-menu-row"
+                    >
+                      <MenuGlyph name="shuffle" />
+                      <span className="app-menu-row-copy">
+                        <strong>Shuffle tables</strong>
+                        <small id="session-shuffle-description">Preview and reseat full tables of 4</small>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      role={headerMenuMobile ? undefined : 'menuitem'}
+                      tabIndex={headerMenuMobile ? 0 : -1}
                       aria-label="Clear All Tables"
                       aria-describedby="session-clear-all-description"
                       onClick={() => { clearAllTables(); closeHeaderMenu(true) }}
@@ -2677,6 +2719,17 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           </div>
         </div>
       </div>, document.body) : null}
+
+      {shuffleOpen ? (
+        <TableShuffleModal
+          clubId={clubId}
+          seasonNumber={seasonNumber}
+          tables={session.tables}
+          players={players}
+          onClose={() => setShuffleOpen(false)}
+          onConfirm={confirmTableShuffle}
+        />
+      ) : null}
     </div>
   )
 }
