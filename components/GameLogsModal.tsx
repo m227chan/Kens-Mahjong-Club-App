@@ -15,6 +15,27 @@ import {
 import type { GameDoc, PlayerDoc, SeasonDoc, SessionDoc } from '@/lib/types'
 import { randomUnusedPlayerEmoji } from '@/lib/players'
 import { DEFAULT_GAME_LOG_AUDIENCE, DEFAULT_GAME_LOG_LAYOUT, filterGamesByAudience, type GameLogAudience, type GameLogLayout } from '@/lib/game-log-view'
+import {
+  basePointsForFan,
+  fanLabel,
+  fanValues,
+  type ScoringRules,
+} from '@/lib/scoring-rules'
+import { calculateTableScores } from '@/lib/table-scoring'
+
+type GameWinType = GameDoc['winType']
+type EditMode = 'manual' | 'outcome'
+
+function seedWinnerId(game: GameDoc) {
+  if (game.winnerPlayerId) return game.winnerPlayerId
+  if (game.winType === 'draw' || game.entries.length === 0) return null
+  return game.entries.reduce((best, entry) => (entry.score > best.score ? entry : best)).playerId
+}
+
+function scoresFromPreview(playerIds: string[], preview: Record<string, number> | null) {
+  if (!preview) return null
+  return Object.fromEntries(playerIds.map((playerId) => [playerId, String(preview[playerId] ?? 0)]))
+}
 
 function csvEscape(value: string | number | null | undefined) {
   const text = value === null || value === undefined ? '' : String(value)
@@ -112,6 +133,7 @@ export default function GameLogsModal({
   currentSeason,
   userId,
   isManager,
+  scoringRules,
   onClose
 }: {
   clubId: string
@@ -119,6 +141,7 @@ export default function GameLogsModal({
   currentSeason: number
   userId: string
   isManager: boolean
+  scoringRules: ScoringRules
   onClose: () => void
 }) {
   const [players, setPlayers] = useState<PlayerDoc[]>([])
@@ -139,10 +162,15 @@ export default function GameLogsModal({
   const [importMessage, setImportMessage] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
   const [selectedGame, setSelectedGame] = useState<GameDoc | null>(null)
+  const [editMode, setEditMode] = useState<EditMode>('manual')
   const [draftScores, setDraftScores] = useState<Record<string, string>>({})
   const [draftDate, setDraftDate] = useState('')
   const [draftSeason, setDraftSeason] = useState(currentSeason)
   const [draftNotes, setDraftNotes] = useState('')
+  const [draftWinType, setDraftWinType] = useState<GameWinType>('self_draw')
+  const [draftWinnerId, setDraftWinnerId] = useState<string | null>(null)
+  const [draftLoserId, setDraftLoserId] = useState<string | null>(null)
+  const [draftFan, setDraftFan] = useState<number | null>(null)
   const [savingGame, setSavingGame] = useState(false)
   const [loadingGames, setLoadingGames] = useState(true)
   const [loadingOlderGames, setLoadingOlderGames] = useState(false)
@@ -168,6 +196,28 @@ export default function GameLogsModal({
   }, [currentSeason])
 
   const playerById = useMemo(() => new Map(players.map((player) => [player.id, player])), [players])
+
+  const selectedPlayerIds = useMemo(
+    () => selectedGame?.entries.map((entry) => entry.playerId) ?? [],
+    [selectedGame],
+  )
+  const canUseOutcomeEditor = selectedPlayerIds.length === 4
+
+  const outcomePreview = useMemo(() => {
+    if (!selectedGame || editMode !== 'outcome') return null
+    if (draftWinType === 'draw') {
+      return Object.fromEntries(selectedPlayerIds.map((playerId) => [playerId, 0]))
+    }
+    if (!draftWinnerId || draftFan == null) return null
+    return calculateTableScores({
+      players: selectedPlayerIds,
+      winner: draftWinnerId,
+      winType: draftWinType === 'discard' ? 'discard' : 'self',
+      loser: draftLoserId,
+      fan: draftFan,
+      rules: scoringRules,
+    })
+  }, [selectedGame, editMode, draftWinType, draftWinnerId, draftLoserId, draftFan, selectedPlayerIds, scoringRules])
 
   const filterSummary = useMemo(() => {
     const seasonLabel = seasonFilter === 'all'
@@ -290,32 +340,108 @@ export default function GameLogsModal({
     const date = game.datetime.toDate()
     const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
     setSelectedGame(game)
+    setEditMode('manual')
     setDraftScores(Object.fromEntries(game.entries.map((entry) => [entry.playerId, String(entry.score)])))
     setDraftDate(local)
     setDraftSeason(game.seasonNumber ?? 1)
     setDraftNotes(game.notes ?? '')
+    setDraftWinType(game.winType)
+    setDraftWinnerId(seedWinnerId(game))
+    setDraftLoserId(game.loserPlayerId)
+    setDraftFan(game.fan)
     setImportMessage(null)
+  }
+
+  const enterOutcomeMode = () => {
+    if (!selectedGame || selectedGame.entries.length !== 4) return
+    setEditMode('outcome')
+    setImportMessage(null)
+  }
+
+  const enterManualMode = () => {
+    const filled = scoresFromPreview(selectedPlayerIds, outcomePreview)
+    if (filled) setDraftScores(filled)
+    setEditMode('manual')
+    setImportMessage(null)
+  }
+
+  const setOutcomeWinType = (next: GameWinType) => {
+    setDraftWinType(next)
+    if (next === 'draw') {
+      setDraftWinnerId(null)
+      setDraftLoserId(null)
+      setDraftFan(null)
+      return
+    }
+    if (next === 'self_draw') setDraftLoserId(null)
+  }
+
+  const setOutcomeWinner = (playerId: string) => {
+    setDraftWinnerId(playerId)
+    setDraftLoserId((current) => (current === playerId ? null : current))
+    if (draftWinType === 'draw') setDraftWinType('self_draw')
   }
 
   const mutateGame = async (action: 'update' | 'delete') => {
     if (!selectedGame || (action === 'delete' ? !isManager : !canEditGame(selectedGame))) return
     if (action === 'delete' && !window.confirm(`Permanently delete the game from ${formatDate(selectedGame)}? All club statistics and Skill history will be rebuilt.`)) return
-    const entries = selectedGame.entries.map((entry) => ({ playerId: entry.playerId, score: Number(draftScores[entry.playerId]) }))
+
+    let entries = selectedGame.entries.map((entry) => ({ playerId: entry.playerId, score: Number(draftScores[entry.playerId]) }))
+    let winType = draftWinType
+    let loserPlayerId = draftWinType === 'discard' ? draftLoserId : null
+    let fan = draftWinType === 'draw' ? null : draftFan
+
+    if (action === 'update' && editMode === 'outcome') {
+      if (!outcomePreview) {
+        setImportMessage(draftWinType === 'draw' ? 'Unable to preview draw scores.' : 'Select winner, win type, and fan to calculate scores.')
+        return
+      }
+      entries = selectedGame.entries.map((entry) => ({ playerId: entry.playerId, score: outcomePreview[entry.playerId] ?? 0 }))
+      if (winType === 'draw') {
+        loserPlayerId = null
+        fan = null
+      } else {
+        loserPlayerId = winType === 'discard' ? draftLoserId : null
+        fan = draftFan
+      }
+    }
+
     if (action === 'update' && (entries.some((entry) => !Number.isFinite(entry.score)) || entries.reduce((sum, entry) => sum + entry.score, 0) !== 0)) {
-      setImportMessage('Enter four valid scores that add up to zero.')
+      setImportMessage('Enter valid scores that add up to zero.')
       return
     }
     setSavingGame(true)
     setImportMessage(null)
     try {
       await mutateGameRecord({ clubId, gameId: selectedGame.id, action, ...(action === 'update' ? {
-        game: { datetime: new Date(draftDate).toISOString(), seasonNumber: draftSeason, entries, notes: draftNotes, winType: selectedGame.winType, loserPlayerId: selectedGame.loserPlayerId, fan: selectedGame.fan }
+        game: {
+          datetime: new Date(draftDate).toISOString(),
+          seasonNumber: draftSeason,
+          entries,
+          notes: draftNotes,
+          winType,
+          loserPlayerId,
+          fan,
+        }
       } : {}) })
       invalidateClubHistoryCache(clubId)
       if (action === 'delete') {
         setGames((current) => current.filter((game) => game.id !== selectedGame.id))
       } else {
-        const updated: GameDoc = { ...selectedGame, datetime: Timestamp.fromDate(new Date(draftDate)), seasonNumber: draftSeason, entries, notes: draftNotes.trim() || null }
+        const resolvedWinner = winType === 'draw'
+          ? null
+          : entries.reduce((best, entry) => (entry.score > best.score ? entry : best)).playerId
+        const updated: GameDoc = {
+          ...selectedGame,
+          datetime: Timestamp.fromDate(new Date(draftDate)),
+          seasonNumber: draftSeason,
+          entries,
+          notes: draftNotes.trim() || null,
+          winType,
+          winnerPlayerId: resolvedWinner,
+          loserPlayerId: winType === 'discard' ? loserPlayerId : null,
+          fan: winType === 'draw' ? null : fan,
+        }
         setGames((current) => current.map((game) => game.id === updated.id ? updated : game).sort((a, b) => b.datetime.toMillis() - a.datetime.toMillis()))
       }
       setSelectedGame(null)
@@ -642,23 +768,184 @@ export default function GameLogsModal({
               <label className="text-sm font-bold text-slate-700">Date and time<input type="datetime-local" value={draftDate} onChange={(event) => setDraftDate(event.target.value)} className="mt-2 min-h-11 w-full rounded border border-slate-300 bg-white px-3 text-slate-900" /></label>
               <label className="text-sm font-bold text-slate-700">Season<select value={draftSeason} onChange={(event) => setDraftSeason(Number(event.target.value))} className="mt-2 min-h-11 w-full rounded border border-slate-300 bg-white px-3 text-slate-900">{seasons.map((season) => <option key={season.id} value={season.seasonNumber}>{season.name}</option>)}</select></label>
             </div>
-            <div className="mt-5">
-              <p className="text-sm font-bold text-slate-700">Player scores <span className="font-normal text-slate-500">(must total zero)</span></p>
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                {selectedGame.entries.map((entry) => (
-                  <label key={entry.playerId} className="flex items-center justify-between gap-3 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
-                    <span className="truncate">{playerById.get(entry.playerId)?.icon} {playerById.get(entry.playerId)?.displayName ?? entry.playerId}</span>
-                    <input type="number" value={draftScores[entry.playerId] ?? ''} onChange={(event) => setDraftScores((current) => ({ ...current, [entry.playerId]: event.target.value }))} className="w-24 rounded border border-slate-300 bg-white px-2 py-1.5 text-right font-mono font-bold text-slate-900" />
-                  </label>
-                ))}
-              </div>
+
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              {editMode === 'manual' ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={enterOutcomeMode}
+                    disabled={savingGame || !canUseOutcomeEditor}
+                    className="min-h-11 rounded border border-[rgb(var(--bamboo)/.45)] px-4 py-2 text-sm font-bold text-[rgb(var(--bamboo))] hover:bg-[rgb(var(--bamboo)/.08)] disabled:opacity-50"
+                  >
+                    Full Override from Outcome
+                  </button>
+                  {!canUseOutcomeEditor ? (
+                    <p className="text-xs font-semibold text-slate-500">Outcome scoring needs exactly four players.</p>
+                  ) : null}
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={enterManualMode}
+                  disabled={savingGame}
+                  className="min-h-11 rounded border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Edit scores manually
+                </button>
+              )}
             </div>
+
+            {editMode === 'manual' ? (
+              <div className="mt-5">
+                <p className="text-sm font-bold text-slate-700">Player scores <span className="font-normal text-slate-500">(must total zero)</span></p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  {selectedGame.entries.map((entry) => (
+                    <label key={entry.playerId} className="flex items-center justify-between gap-3 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
+                      <span className="truncate">{playerById.get(entry.playerId)?.icon} {playerById.get(entry.playerId)?.displayName ?? entry.playerId}</span>
+                      <input type="number" value={draftScores[entry.playerId] ?? ''} onChange={(event) => setDraftScores((current) => ({ ...current, [entry.playerId]: event.target.value }))} className="w-24 rounded border border-slate-300 bg-white px-2 py-1.5 text-right font-mono font-bold text-slate-900" />
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="mt-5 space-y-4">
+                <div>
+                  <p className="text-sm font-bold text-slate-700">Who won?</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {selectedGame.entries.map((entry) => {
+                      const selected = draftWinnerId === entry.playerId
+                      return (
+                        <button
+                          key={entry.playerId}
+                          type="button"
+                          aria-pressed={selected}
+                          disabled={savingGame || draftWinType === 'draw'}
+                          onClick={() => setOutcomeWinner(entry.playerId)}
+                          className={`min-h-11 rounded border px-3 py-2 text-sm font-bold transition-colors disabled:opacity-50 ${selected ? 'border-[rgb(var(--bamboo))] bg-[rgb(var(--bamboo)/.12)] text-[rgb(var(--bamboo))]' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
+                        >
+                          {playerById.get(entry.playerId)?.icon} {playerById.get(entry.playerId)?.displayName ?? entry.playerId}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-sm font-bold text-slate-700">Win type</p>
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    {([
+                      ['self_draw', 'Self-draw'],
+                      ['discard', 'Discard'],
+                      ['draw', 'Draw'],
+                    ] as const).map(([value, label]) => {
+                      const selected = draftWinType === value
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          aria-pressed={selected}
+                          disabled={savingGame}
+                          onClick={() => setOutcomeWinType(value)}
+                          className={`min-h-11 rounded border px-2 py-2 text-sm font-bold disabled:opacity-50 ${selected ? 'border-[rgb(var(--bamboo))] bg-[rgb(var(--bamboo)/.12)] text-[rgb(var(--bamboo))]' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
+                        >
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {draftWinType === 'discard' ? (
+                  <div>
+                    <p className="text-sm font-bold text-slate-700">Who discarded?</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {selectedGame.entries.filter((entry) => entry.playerId !== draftWinnerId).map((entry) => {
+                        const selected = draftLoserId === entry.playerId
+                        return (
+                          <button
+                            key={entry.playerId}
+                            type="button"
+                            aria-pressed={selected}
+                            disabled={savingGame}
+                            onClick={() => setDraftLoserId(entry.playerId)}
+                            className={`min-h-11 rounded border px-3 py-2 text-sm font-bold disabled:opacity-50 ${selected ? 'border-rose-400 bg-rose-50 text-rose-700' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
+                          >
+                            {playerById.get(entry.playerId)?.icon} {playerById.get(entry.playerId)?.displayName ?? entry.playerId}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+
+                {draftWinType !== 'draw' ? (
+                  <div>
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <p className="text-sm font-bold text-slate-700">Fan ({scoringRules.minFan}–{scoringRules.maxFan}+)</p>
+                      {draftFan != null && basePointsForFan(draftFan, scoringRules) != null ? (
+                        <p className="text-xs font-bold text-[rgb(var(--bamboo))]">{basePointsForFan(draftFan, scoringRules)} pts base</p>
+                      ) : null}
+                    </div>
+                    <div className="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-6">
+                      {fanValues(scoringRules).map((fanValue) => {
+                        const selected = draftFan === fanValue
+                        return (
+                          <button
+                            key={fanValue}
+                            type="button"
+                            aria-pressed={selected}
+                            disabled={savingGame || !draftWinnerId}
+                            onClick={() => setDraftFan(fanValue)}
+                            className={`min-h-11 rounded border px-2 py-2 text-sm font-bold disabled:opacity-50 ${selected ? 'border-[rgb(var(--bamboo))] bg-[rgb(var(--bamboo)/.12)] text-[rgb(var(--bamboo))]' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
+                          >
+                            {fanLabel(fanValue, scoringRules)}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div>
+                  <p className="text-sm font-bold text-slate-700">Score preview</p>
+                  {outcomePreview ? (
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      {selectedGame.entries.map((entry) => {
+                        const score = outcomePreview[entry.playerId] ?? 0
+                        const tone = score > 0 ? 'text-emerald-700' : score < 0 ? 'text-rose-700' : 'text-slate-600'
+                        return (
+                          <div key={entry.playerId} className="flex items-center justify-between gap-3 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
+                            <span className="truncate">{playerById.get(entry.playerId)?.icon} {playerById.get(entry.playerId)?.displayName ?? entry.playerId}</span>
+                            <span className={`font-mono font-bold ${tone}`}>{score > 0 ? `+${score}` : score}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm font-semibold text-slate-500">
+                      {draftWinType === 'discard' && draftWinnerId && !draftLoserId
+                        ? 'Select who discarded to preview scores.'
+                        : 'Select winner, win type, and fan to preview scores.'}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
             <label className="mt-5 block text-sm font-bold text-slate-700">Notes<textarea value={draftNotes} onChange={(event) => setDraftNotes(event.target.value)} rows={3} className="mt-2 w-full resize-y rounded border border-slate-300 bg-white p-3 text-slate-900" /></label>
             <p className="mt-3 text-xs leading-5 text-slate-500">Saving or deleting rebuilds points, Skill ratings, rankings, win rates, titles, and analytics from the complete game history.</p>
             {importMessage ? <p role="status" className="mt-3 rounded border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{importMessage}</p> : null}
             <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
               {isManager ? <button type="button" onClick={() => mutateGame('delete')} disabled={savingGame} className="min-h-11 rounded border border-rose-300 px-4 py-2 text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50">Delete game</button> : <span />}
-              <button type="button" onClick={() => mutateGame('update')} disabled={savingGame || !draftDate} className="min-h-11 rounded bg-[rgb(var(--bamboo))] px-5 py-2 text-sm font-bold text-white disabled:opacity-50">{savingGame ? 'Rebuilding statistics…' : 'Save changes'}</button>
+              <button
+                type="button"
+                onClick={() => mutateGame('update')}
+                disabled={savingGame || !draftDate || (editMode === 'outcome' && !outcomePreview)}
+                className="min-h-11 rounded bg-[rgb(var(--bamboo))] px-5 py-2 text-sm font-bold text-white disabled:opacity-50"
+              >
+                {savingGame ? 'Rebuilding statistics…' : 'Save changes'}
+              </button>
             </div>
           </div>
         </div>
