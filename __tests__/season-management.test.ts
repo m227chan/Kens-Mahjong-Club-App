@@ -195,6 +195,26 @@ describe('season and tournament lifecycle', () => {
       .rejects.toThrow('regular season')
   })
 
+  it('changes the background active season without interrupting the current tournament', async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ '?column?': 1 }] })
+      .mockResolvedValueOnce({ rows: [fullSchema] })
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ active_season_number: 1, current_competition_number: 3, current_competition_type: 'tournament' }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+
+    await setClubActiveSeason({ query } as unknown as ClientBase, 'CLUB1', 2)
+
+    const statements = query.mock.calls.map(([sql]) => String(sql))
+    expect(statements.some((sql) => sql.includes('update sessions'))).toBe(false)
+    expect(statements.some((sql) => sql.includes('set current_competition_number=$1'))).toBe(false)
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('set active_season_number=$1'),
+      [2, 'CLUB1'],
+    )
+  })
+
   it('lets a manager reset an individual tournament to a new saved duration', async () => {
     const query = vi.fn()
       .mockResolvedValueOnce({ rows: [fullSchema] })

@@ -10,15 +10,19 @@ type ClubToolSidebarProps = {
   analyticsOpen: boolean
   gameLogsOpen: boolean
   networkOpen: boolean
+  requestsOpen?: boolean
   settingsOpen: boolean
   onRoster: () => void
   onAnalytics: () => void
   onGameLogs: () => void
   onNetwork: () => void
+  onRequests?: () => void
   onSettings: () => void
+  showJoinRequests?: boolean
+  pendingRequestCount?: number
 }
 
-type ToolIconName = 'users' | 'chart' | 'list' | 'network' | 'settings'
+type ToolIconName = 'users' | 'chart' | 'list' | 'network' | 'requests' | 'settings'
 
 function ToolIcon({ name }: { name: ToolIconName }) {
   const common = {
@@ -35,6 +39,7 @@ function ToolIcon({ name }: { name: ToolIconName }) {
   if (name === 'chart') return <svg {...common}><path d="M3 3v18h18" /><path d="m7 16 4-5 3 2 5-7" /></svg>
   if (name === 'list') return <svg {...common}><path d="M8 6h13M8 12h13M8 18h13" /><path d="M3 6h.01M3 12h.01M3 18h.01" /></svg>
   if (name === 'network') return <svg {...common}><circle cx="12" cy="5" r="2" /><circle cx="5" cy="19" r="2" /><circle cx="19" cy="19" r="2" /><path d="m10.7 6.7-4.4 10.6M13.3 6.7l4.4 10.6M7 19h10" /></svg>
+  if (name === 'requests') return <svg {...common}><circle cx="9" cy="8" r="3" /><path d="M3 20c.5-4 2.5-6 6-6 1.5 0 2.8.35 3.8 1.05M16 12l2 2 4-5" /></svg>
   return <svg {...common}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></svg>
 }
 
@@ -56,12 +61,16 @@ export default function ClubToolSidebar({
   analyticsOpen,
   gameLogsOpen,
   networkOpen,
+  requestsOpen = false,
   settingsOpen,
   onRoster,
   onAnalytics,
   onGameLogs,
   onNetwork,
+  onRequests = () => undefined,
   onSettings,
+  showJoinRequests = false,
+  pendingRequestCount = 0,
 }: ClubToolSidebarProps) {
   const toggleRef = useRef<HTMLButtonElement>(null)
   const previouslyExpanded = useRef(expanded)
@@ -114,6 +123,7 @@ export default function ClubToolSidebar({
     {
       label: 'Manage',
       tools: [
+        ...(showJoinRequests ? [{ label: 'Join requests', detail: pendingRequestCount === 1 ? '1 pending request' : `${pendingRequestCount} pending requests`, icon: 'requests' as const, tour: 'requests-open', open: requestsOpen, onClick: onRequests, dialog: 'club-requests-dialog', badge: pendingRequestCount }] : []),
         { label: 'Club settings', detail: 'Seasons, rules, and access', icon: 'settings' as const, tour: 'settings-open', open: settingsOpen, onClick: onSettings, dialog: 'club-settings-dialog' },
       ],
     },
@@ -170,7 +180,7 @@ export default function ClubToolSidebar({
                   >
                     <span className="club-tool-sidebar-icon"><ToolIcon name={tool.icon} /></span>
                     <span className="club-tool-sidebar-copy">
-                      <span className="club-tool-label">{tool.label}</span>
+                      <span className="club-tool-label">{tool.label}{'badge' in tool && typeof tool.badge === 'number' && tool.badge > 0 ? <span className="club-tool-request-badge" aria-label={`${tool.badge} pending`}>{tool.badge > 99 ? '99+' : tool.badge}</span> : null}</span>
                       <span className="club-tool-detail">{tool.detail}</span>
                     </span>
                     <span className="club-tool-sidebar-active-mark" aria-hidden="true" />

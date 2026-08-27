@@ -11,6 +11,7 @@ export interface ClubDoc {
   currentCompetitionNumber?: number
   active: boolean
   universal?: boolean
+  joinApprovalRequired: boolean
 }
 
 export interface ClubMembershipDoc {

@@ -360,8 +360,9 @@ export default function HomePage() {
       const result = await requestToJoinClub({ clubId: joinClubId, user, appUrl: window.location.origin })
       const cleanClubId = joinClubId.trim().toUpperCase()
       setJoinClubId('')
-      if (result === 'already-member') router.push(`/club/${encodeURIComponent(cleanClubId)}`)
-      else setMessage('Your request was sent to the club manager.')
+      if (result === 'already-member' || result === 'joined') {
+        router.push(`/club/${encodeURIComponent(cleanClubId)}`)
+      } else setMessage('Your request was sent to the club manager.')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'We could not send that request. Please try again.')
     } finally { setBusyAction(null) }

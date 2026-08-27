@@ -109,6 +109,7 @@ function mapClub(row: Row): ClubDoc {
     currentCompetitionNumber: Number(row.current_competition_number ?? row.active_season_number),
     active: Boolean(row.active),
     universal: Boolean(row.universal),
+    joinApprovalRequired: row.join_approval_required !== false,
   }
 }
 function mapMember(row: Row): ClubMembershipDoc {
@@ -397,7 +398,7 @@ export const requestToJoinClub = (input: {
   user: UserLike
   appUrl?: string
 }) =>
-  serverAction<'requested' | 'already-member'>('requestToJoinClub', {
+  serverAction<'requested' | 'joined' | 'already-member'>('requestToJoinClub', {
     clubId: input.clubId,
     user: input.user,
     appUrl: input.appUrl,
@@ -442,6 +443,10 @@ export const resolveJoinRequest = (input: {
   managerUid: string
   clubName: string
 }) => serverAction<void>('resolveJoinRequest', input as unknown as Row)
+export const updateClubJoinApproval = (
+  clubId: string,
+  joinApprovalRequired: boolean,
+) => serverAction<void>('updateClubJoinApproval', { clubId, joinApprovalRequired })
 export const leaveClub = (input: { clubId: string; uid: string }) =>
   serverAction<void>('leaveClub', input)
 export const createPlayer = (

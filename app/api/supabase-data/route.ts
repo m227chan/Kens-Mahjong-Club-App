@@ -251,10 +251,13 @@ export async function POST(request: NextRequest) {
         const id = String(body.clubId ?? '')
             .trim()
             .toUpperCase()
-        if (
-          !(await db.query('select 1 from clubs where id=$1 and active', [id]))
-            .rowCount
-        )
+        const club = (
+          await db.query(
+            'select join_approval_required from clubs where id=$1 and active for update',
+            [id],
+          )
+        ).rows[0]
+        if (!club)
           throw new Error('No club found with that ID.')
         if (
           (
@@ -265,18 +268,63 @@ export async function POST(request: NextRequest) {
           ).rowCount
         )
           return 'already-member'
+        const identity = [
+          id,
+          caller.uid,
+          caller.email ?? null,
+          caller.name ?? null,
+          caller.picture ?? null,
+        ]
+        if (!club.join_approval_required) {
+          await db.query(
+            `insert into club_members(club_id,firebase_uid,email,display_name,photo_url,role,active)
+             values($1,$2,$3,$4,$5,'member',true)
+             on conflict(club_id,firebase_uid) do update
+             set email=excluded.email,display_name=excluded.display_name,photo_url=excluded.photo_url,active=true`,
+            identity,
+          )
+          await db.query(
+            `insert into join_requests(club_id,firebase_uid,email,display_name,photo_url,status,resolved_at,resolved_by)
+             values($1,$2,$3,$4,$5,'approved',now(),'automatic')
+             on conflict(club_id,firebase_uid) do update
+             set email=excluded.email,display_name=excluded.display_name,photo_url=excluded.photo_url,
+                 status='approved',resolved_at=now(),resolved_by='automatic'`,
+            identity,
+          )
+          return 'joined'
+        }
         await db.query(
           `insert into join_requests(club_id,firebase_uid,email,display_name,photo_url,status) values($1,$2,$3,$4,$5,'pending')
           on conflict(club_id,firebase_uid) do update set email=excluded.email,display_name=excluded.display_name,photo_url=excluded.photo_url,status='pending',created_at=now(),resolved_at=null,resolved_by=null`,
-          [
-            id,
-            caller.uid,
-            caller.email ?? null,
-            caller.name ?? null,
-            caller.picture ?? null,
-          ],
+          identity,
         )
         return 'requested'
+      }
+      if (action === 'updateClubJoinApproval') {
+        const id = String(body.clubId ?? '').trim().toUpperCase()
+        await requireManager(id)
+        if (typeof body.joinApprovalRequired !== 'boolean')
+          throw new Error('Choose whether manager approval is required.')
+        await db.query(
+          'update clubs set join_approval_required=$1 where id=$2 and active',
+          [body.joinApprovalRequired, id],
+        )
+        if (!body.joinApprovalRequired)
+          await db.query(
+            `with approved as (
+               update join_requests
+               set status='approved',resolved_at=now(),resolved_by=$2
+               where club_id=$1 and status='pending'
+               returning firebase_uid,email,display_name,photo_url
+             )
+             insert into club_members(club_id,firebase_uid,email,display_name,photo_url,role,active)
+             select $1,firebase_uid,email,display_name,photo_url,'member',true from approved
+             on conflict(club_id,firebase_uid) do update
+             set email=excluded.email,display_name=excluded.display_name,
+                 photo_url=excluded.photo_url,active=true`,
+            [id, caller.uid],
+          )
+        return null
       }
       if (action === 'resolveJoinRequest') {
         await requireManager(body.clubId)

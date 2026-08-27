@@ -1443,8 +1443,18 @@ html.dark .club-tool-sidebar-panel { box-shadow: inset 0 1px 0 rgb(238 231 207 /
 .club-tool-sidebar-icon svg { width: 21px; height: 21px; }
 .club-tool-sidebar-copy { display: grid; min-width: 0; gap: .12rem; }
 .club-tool-label { color: rgb(var(--ink)); font-size: .82rem; font-weight: 850; line-height: 1.2; overflow-wrap: anywhere; white-space: normal; }
+.club-tool-label { display: flex; align-items: center; justify-content: space-between; gap: .45rem; }
 .club-tool-detail { color: rgb(var(--muted)); font-size: .64rem; font-weight: 650; line-height: 1.35; overflow-wrap: anywhere; white-space: normal; }
 .club-tool-sidebar:not(.is-expanded) .club-tool-sidebar-copy,.club-tool-sidebar:not(.is-expanded) .club-tool-sidebar-active-mark { display: none; }
+.club-tool-request-badge { display: inline-flex; min-width: 1.2rem; height: 1.2rem; align-items: center; justify-content: center; border-radius: 999px; background: rgb(var(--cinnabar)); color: white; font-size: .62rem; font-weight: 900; line-height: 1; }
+.club-tool-sidebar:not(.is-expanded) .club-tool-request-badge { position: absolute; top: .15rem; right: .15rem; min-width: 1rem; height: 1rem; font-size: .54rem; }
+.join-approval-switch { display: inline-flex; min-width: 7rem; min-height: 2.75rem; flex: 0 0 auto; align-items: center; justify-content: center; gap: .55rem; border: 1px solid rgb(var(--line)); border-radius: 999px; padding: .35rem .75rem .35rem .4rem; background: rgb(var(--surface-1)); color: rgb(var(--muted)); transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease; }
+.join-approval-switch > span { position: relative; width: 2.3rem; height: 1.35rem; flex: 0 0 auto; border-radius: 999px; background: rgb(var(--muted) / .28); }
+.join-approval-switch > span::after { position: absolute; top: .175rem; left: .175rem; width: 1rem; height: 1rem; border-radius: 999px; background: white; box-shadow: 0 1px 4px rgb(var(--shadow) / .25); content: ''; transition: transform 160ms ease; }
+.join-approval-switch.is-on { border-color: rgb(var(--bamboo) / .45); background: rgb(var(--bamboo) / .1); color: rgb(var(--bamboo)); }
+.join-approval-switch.is-on > span { background: rgb(var(--bamboo)); }
+.join-approval-switch.is-on > span::after { transform: translateX(.95rem); }
+.join-approval-switch:focus-visible { outline: 2px solid rgb(var(--cinnabar)); outline-offset: 2px; }
 .club-tool-sidebar:not(.is-expanded) .club-tool-sidebar-action::after { position: absolute; left: calc(100% + .7rem); top: 50%; z-index: 5; pointer-events: none; border: 1px solid rgb(var(--line)); border-radius: 7px; padding: .42rem .58rem; background: rgb(var(--surface-1)); box-shadow: 4px 5px 0 rgb(var(--shadow) / .12); color: rgb(var(--ink)); content: attr(data-tooltip); font-size: .72rem; font-weight: 800; opacity: 0; transform: translateY(-50%) translateX(-3px); transition: opacity 120ms ease, transform 120ms ease; white-space: nowrap; }
 .club-tool-sidebar:not(.is-expanded) .club-tool-sidebar-action:hover::after,
 .club-tool-sidebar:not(.is-expanded) .club-tool-sidebar-action:focus-visible::after { opacity: 1; transform: translateY(-50%) translateX(0); }
@@ -2091,6 +2101,31 @@ html.dark .club-workspace-header {
 }
 .club-competition-choice > button { margin-top: auto; }
 .club-competition-choice-tournament > button { margin-top: .75rem; }
+.club-competition-manager { min-width: 0; padding-top: .35rem; }
+.club-competition-status { margin: .75rem 0 0; border-left: 3px solid rgb(var(--bamboo)); border-radius: 0 8px 8px 0; background: rgb(var(--bamboo) / .08); padding: .65rem .75rem; color: rgb(var(--ink)); font-size: .75rem; font-weight: 800; line-height: 1.45; }
+.club-competition-manager-heading { display: grid; gap: .2rem; }
+.club-competition-manager-heading h5 { margin: 0; color: rgb(var(--ink)); font-size: .9rem; font-weight: 900; }
+.club-competition-manager-heading p { margin: 0; color: rgb(var(--muted)); font-size: .74rem; line-height: 1.5; }
+.club-competition-list { margin-top: .75rem; overflow: hidden; border: 1px solid rgb(var(--line)); border-radius: 12px; background: rgb(var(--surface-1)); }
+.club-competition-row { display: grid; min-width: 0; gap: .8rem; padding: 1rem; }
+.club-competition-row + .club-competition-row { border-top: 1px solid rgb(var(--line)); }
+.club-competition-row-header { min-width: 0; }
+.club-tournament-controls { display: grid; min-width: 0; gap: .65rem; padding-top: .15rem; }
+.club-tournament-clock-control { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: .6rem; }
+.club-tournament-duration-field { display: grid; min-width: 0; gap: .32rem; color: rgb(var(--muted)); font-size: .7rem; font-weight: 800; }
+.club-tournament-duration-field small { font-weight: 600; }
+.club-tournament-duration-field input { width: 100%; min-height: 44px; border: 1px solid rgb(var(--line)); border-radius: 8px; background: rgb(var(--surface-2) / .58); padding: .5rem .7rem; color: rgb(var(--ink)); font-size: .82rem; font-weight: 800; outline: none; }
+.club-tournament-duration-field input:focus { border-color: rgb(var(--bamboo) / .65); box-shadow: 0 0 0 2px rgb(var(--bamboo) / .12); }
+.club-tournament-actions { display: grid; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+.club-competition-action { min-height: 44px; border: 1px solid rgb(var(--line)); border-radius: 8px; padding: .5rem .8rem; background: transparent; color: rgb(var(--ink)); font-size: .72rem; font-weight: 850; line-height: 1.25; transition: border-color 150ms ease, background-color 150ms ease; }
+.club-competition-action:hover:not(:disabled) { background: rgb(var(--surface-2)); }
+.club-competition-action:focus-visible { outline: 2px solid rgb(var(--focus-ring)); outline-offset: 2px; }
+.club-competition-action.is-primary { border-color: rgb(var(--bamboo) / .6); color: rgb(var(--bamboo)); }
+.club-competition-action.is-clock { border-color: rgb(var(--gold) / .72); }
+.club-competition-action.is-danger { border-color: rgb(var(--cinnabar) / .55); color: rgb(var(--cinnabar)); }
+.club-competition-action.is-delete.is-wide { grid-column: 1 / -1; }
+.club-competition-action:disabled { cursor: not-allowed; opacity: .42; }
+.club-competition-row > .club-competition-action { justify-self: end; }
 .club-settings-danger-heading { margin-top: .5rem; }
 
 @media (max-width: 767px) {
@@ -2109,6 +2144,11 @@ html.dark .club-workspace-header {
   .club-settings-group-heading > p:last-child { margin-top: .25rem; font-size: .7rem; text-align: left; }
   .club-settings-card { padding: 1rem !important; }
   .club-competition-choice { padding: .9rem !important; }
+  .club-competition-row { padding: .9rem; }
+  .club-tournament-clock-control { grid-template-columns: minmax(0, 1fr); }
+  .club-tournament-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .club-competition-action,
+  .club-competition-row > .club-competition-action { width: 100%; justify-self: stretch; }
   .club-settings-body > .border-rose-200 button,
   .club-settings-body > .border-amber-200 button { width: 100%; min-height: 44px; }
 }

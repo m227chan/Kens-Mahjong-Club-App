@@ -18,6 +18,7 @@ export const subscribeClubMembers = backend.subscribeClubMembers
 export const requestToJoinClub = backend.requestToJoinClub
 export const subscribeJoinRequests = backend.subscribeJoinRequests
 export const resolveJoinRequest = backend.resolveJoinRequest
+export const updateClubJoinApproval = backend.updateClubJoinApproval
 export const leaveClub = backend.leaveClub
 export const createPlayer = backend.createPlayer
 export const removePlayer = backend.removePlayer

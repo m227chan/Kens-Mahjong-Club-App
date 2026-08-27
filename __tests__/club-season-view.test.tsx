@@ -508,7 +508,7 @@ describe('club season navigation', () => {
     render(<ClubWorkspace clubId="CLUB1" membership={managerMembership} />)
     fireEvent.click(screen.getByRole('button', { name: 'Open settings' }))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Make Current Tournament' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Make Summer Open current tournament' }))
 
     await waitFor(() => expect(dataMocks.setCurrentCompetition).toHaveBeenCalledWith('CLUB1', 3))
     expect((screen.getByLabelText('Season') as HTMLSelectElement).value).toBe('3')
@@ -523,23 +523,25 @@ describe('club season navigation', () => {
     render(<ClubWorkspace clubId="CLUB1" membership={managerMembership} />)
     fireEvent.click(screen.getByRole('button', { name: 'Open settings' }))
 
-    const controls = document.querySelector('#season-controls-content > div')!
-    expect(controls.className).toContain('flex-col')
-    fireEvent.click(screen.getByRole('button', { name: 'Set as Active Season' }))
+    const competitionList = document.querySelector('.club-competition-list')!
+    expect(competitionList.querySelectorAll('.club-competition-row')).toHaveLength(3)
+    expect(competitionList.querySelectorAll('article.rounded-lg')).toHaveLength(0)
+    expect(competitionList.querySelector('.club-tournament-clock-control')?.className).not.toContain('border')
+    fireEvent.click(screen.getByRole('button', { name: 'Set Season 1 as active season' }))
     await waitFor(() => expect(dataMocks.setActiveSeason).toHaveBeenCalledWith('CLUB1', 1))
 
     const durationInput = screen.getByLabelText('Summer Open clock duration in hours')
     fireEvent.change(durationInput, { target: { value: '36' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save Clock Duration' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save clock duration for Summer Open' }))
     await waitFor(() => expect(dataMocks.updateTournamentDuration).toHaveBeenCalledWith('CLUB1', 3, 36))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Restart 36-Hour Clock' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Restart clock for Summer Open' }))
     await waitFor(() => expect(dataMocks.reopenTournament).toHaveBeenCalledWith('CLUB1', 3))
 
-    fireEvent.click(screen.getByRole('button', { name: 'End Tournament…' }))
+    fireEvent.click(screen.getByRole('button', { name: 'End Summer Open' }))
     await waitFor(() => expect(dataMocks.endTournament).toHaveBeenCalledWith('CLUB1', 3))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete Tournament' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Summer Open' }))
     expect(screen.queryByLabelText('Summer Open clock duration in hours')).toBeNull()
     await waitFor(() => expect(dataMocks.deleteTournament).toHaveBeenCalledWith('CLUB1', 3))
     confirm.mockRestore()

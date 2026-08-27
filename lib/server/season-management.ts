@@ -200,11 +200,21 @@ export async function setClubActiveSeason(
   )
   if (!target.rowCount) throw new Error('That regular season does not exist in this club.')
 
+  const capabilities = await competitionSchemaCapabilities(db)
   const current = await db.query(
-    'select active_season_number from clubs where id=$1 for update',
+    capabilities.pausable
+      ? `select c.active_season_number,c.current_competition_number,
+           coalesce(s.competition_type,'season') current_competition_type
+         from clubs c
+         left join seasons s on s.club_id=c.id and s.season_number=c.current_competition_number
+         where c.id=$1 for update of c`
+      : "select active_season_number,active_season_number current_competition_number,'season'::text current_competition_type from clubs where id=$1 for update",
     [clubId],
   )
-  if (Number(current.rows[0]?.active_season_number) !== seasonNumber)
+  if (!current.rowCount) throw new Error('Club not found.')
+  const changingSeason = Number(current.rows[0].active_season_number) !== seasonNumber
+  const tournamentRemainsCurrent = current.rows[0].current_competition_type === 'tournament'
+  if (changingSeason && !tournamentRemainsCurrent)
     await db.query(
       'update sessions set is_active=false,closed_at=coalesce(closed_at,now()) where club_id=$1 and is_active',
       [clubId],
@@ -218,8 +228,7 @@ export async function setClubActiveSeason(
     seasonNumber,
     clubId,
   ])
-  const capabilities = await competitionSchemaCapabilities(db)
-  if (capabilities.pausable)
+  if (capabilities.pausable && !tournamentRemainsCurrent)
     await setClubCurrentCompetition(db, clubId, seasonNumber)
 }
 
