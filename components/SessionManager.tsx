@@ -7,6 +7,7 @@ import MenuGlyph from '@/components/MenuGlyph'
 import ViewHeader from '@/components/ViewHeader'
 import ScoreCelebration, { type ScoreCelebrationResult } from '@/components/ScoreCelebration'
 import TableShuffleModal from '@/components/TableShuffleModal'
+import ScoreCalculatorModal from '@/components/ScoreCalculatorModal'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSound } from '@/contexts/SoundContext'
 import { useGameSync } from '@/contexts/GameSyncContext'
@@ -108,6 +109,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
   const [swapPickerPlayer, setSwapPickerPlayer] = useState<string | null>(null)
   const [swapPickerSearch, setSwapPickerSearch] = useState('')
   const [winState, setWinState] = useState<WinState>(initialWinState)
+  const [scoreCalculatorTableId, setScoreCalculatorTableId] = useState<string | null>(null)
   const [savingGameTable, setSavingGameTable] = useState<string | null>(null)
   const [setupError, setSetupError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
@@ -1154,6 +1156,13 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
                   {winState.fan ? <span style={{ color: 'var(--purple)', fontWeight: 700 }}>{basePointsForFan(winState.fan, scoringRules)} pts base</span> : null}
                 </div>
                 <div className="fan-chips">{fanChips}</div>
+                <button
+                  type="button"
+                  className="btn-calculate-fan"
+                  onClick={() => setScoreCalculatorTableId(tableId)}
+                >
+                  Calculate fan
+                </button>
               </div>
             ) : null}
 
@@ -1782,6 +1791,18 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           color: #1e293b;
         }
         .fan-chip.selected { border-color: var(--purple); background: #ebf4ff; color: var(--purple-dark); }
+        .btn-calculate-fan {
+          width: 100%;
+          margin-top: 6px;
+          min-height: 36px;
+          border: 1.5px solid #cbd5e1;
+          border-radius: 8px;
+          background: white;
+          font-size: 11px;
+          font-weight: 800;
+          color: #1e293b;
+          cursor: pointer;
+        }
 
         .score-preview {
           background: linear-gradient(135deg, #667eea, #764ba2);
@@ -2628,6 +2649,17 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
 
       {toast ? <div className="toast active" role="status" aria-live="polite">{toast}</div> : null}
       <ScoreCelebration result={flash} player={playerInfo} />
+      {scoreCalculatorTableId ? (
+        <ScoreCalculatorModal
+          clubId={clubId}
+          scoringRules={scoringRules}
+          onClose={() => setScoreCalculatorTableId(null)}
+          onApplyFan={(value) => {
+            if (scoreCalculatorTableId) setFan(scoreCalculatorTableId, value)
+            setScoreCalculatorTableId(null)
+          }}
+        />
+      ) : null}
       {pickerTableId && typeof document !== 'undefined' ? createPortal(<div id="pickerOverlay" role="dialog" aria-modal="true" aria-labelledby="add-player-title" style={{ display: 'flex', position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.68)', zIndex: 20010, padding: 16, alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ background: 'rgb(var(--surface))', color: 'rgb(var(--ink))', borderRadius: 14, overflow: 'hidden', width: '100%', maxWidth: 340, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
           <div style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

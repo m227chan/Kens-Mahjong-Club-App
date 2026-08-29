@@ -6,7 +6,7 @@ Status: implemented. This file is the current operational reference, not a futur
 
 Each printed code identifies one physical club table. A signed-in member who scans it is resolved to their linked roster player and seated transactionally. If the user is not yet a member, the club's manager-controlled QR enrollment setting either enrolls them as a regular member or creates a pending join request. An unlinked member can link an available player or create a self-linked player before continuing.
 
-The focused route at `/check-in/[publicId]` supports mobile scoring for that table. The normal Session Manager uses the same transactional mutation service, so simultaneous phones cannot overwrite the complete session layout.
+The focused route at `/check-in/[publicId]` supports mobile scoring for that table, including the **Calculate fan** shortcut that opens the club score calculator and can apply the total back into the win panel. The normal Session Manager uses the same transactional mutation service, so simultaneous phones cannot overwrite the complete session layout.
 
 Managers can print the active session's table codes from `/club/[clubId]/session/qr-print`. Codes use SVG error correction level Q, a four-module quiet zone, and require no paid QR provider or stored image assets.
 

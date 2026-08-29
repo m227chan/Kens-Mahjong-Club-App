@@ -129,7 +129,10 @@ export default function WikiPage() {
   const discardExampleFan = exampleFan(7)
   const discardExamplePoints = pointValueForFan(discardExampleFan) ?? 0
 
-  const sectionIds = useMemo(() => WIKI_NAV_SECTIONS.map((section) => section.id), [])
+  const sectionIds = useMemo(
+    () => WIKI_NAV_SECTIONS.filter((section) => !('href' in section && section.href)).map((section) => section.id),
+    [],
+  )
 
   const handleTocClick = (id: string) => (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault()
@@ -314,16 +317,27 @@ export default function WikiPage() {
         </div>
         <nav className="wiki-toc-list" aria-label="Wiki table of contents">
           {WIKI_NAV_SECTIONS.map((section, index) => (
-            <a
-              key={section.id}
-              href={`#${section.id}`}
-              onClick={handleTocClick(section.id)}
-              aria-current={activeSection === section.id ? 'location' : undefined}
-              className={`wiki-toc-link ${activeSection === section.id ? 'active' : ''}`}
-            >
-              <span className="wiki-toc-number">{String(index + 1).padStart(2, '0')}</span>
-              <span>{section.label}</span>
-            </a>
+            'href' in section && section.href ? (
+              <Link
+                key={section.id}
+                href={selectedClubId ? `${section.href}?club=${encodeURIComponent(selectedClubId)}` : section.href}
+                className="wiki-toc-link"
+              >
+                <span className="wiki-toc-number">{String(index + 1).padStart(2, '0')}</span>
+                <span>{section.label}</span>
+              </Link>
+            ) : (
+              <a
+                key={section.id}
+                href={`#${section.id}`}
+                onClick={handleTocClick(section.id)}
+                aria-current={activeSection === section.id ? 'location' : undefined}
+                className={`wiki-toc-link ${activeSection === section.id ? 'active' : ''}`}
+              >
+                <span className="wiki-toc-number">{String(index + 1).padStart(2, '0')}</span>
+                <span>{section.label}</span>
+              </a>
+            )
           ))}
         </nav>
       </aside>
@@ -506,6 +520,12 @@ export default function WikiPage() {
               <div>
                 <h4>Calculate fan</h4>
                 <p>Add up the fan for every qualifying pattern and bonus, respecting handbook exclusions.</p>
+                <Link
+                  href={selectedClubId ? `/wiki/score?club=${encodeURIComponent(selectedClubId)}` : '/wiki/score'}
+                  className="wiki-score-calculator-link"
+                >
+                  Open Score Calculator
+                </Link>
               </div>
             </div>
             <div className="wiki-step-card">

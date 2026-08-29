@@ -30,6 +30,7 @@ Mahjong Messiah keeps a club's live session and long-term history in one shared 
 - **Table shuffle.** From the session menu, preview and confirm a reseat of every full table of 4 (partial tables and the sideline stay put). Modes include Full Random, Shark Tank vs Redemption, Nemesis, Never Met, Skill Balance, and Standings Balance. In the preview After column, tap two players to swap before confirming.
 - **Offline-safe scoring.** New games are stored on the device before syncing. If a connection drops or times out, the app keeps the result, clearly marks it as pending, and retries when connectivity returns.
 - **Focused table mode.** Open a clean, phone-friendly scorekeeping view for one table, or print permanent signed QR codes so players can check in at the physical table.
+- **Score Calculator.** Build melds, set roll position and flowers, stack handbook patterns into fan totals, and use **Find winning paths** to see what still meets your club minimum. Open it from the club sidebar, wiki, or the **Calculate fan** shortcut while recording a win.
 - **Guest table try-out.** From the login page, enter a club code and pick an active table to score without signing in—seat players, record wins or draws, and clear the table. Guests stay locked to that table and cannot create tables, expand the session, or use club management tools.
 - **Session point tracker.** Members can watch net point change over the last 24 hours, 48 hours, 7 days, or a custom From/To date range, open a game-by-game breakdown, and Float a compact chip on that club’s pages. Tap the chip to switch windows; dismiss it anytime.
 - **Club-specific house rules.** Managers can set the minimum fan, maximum fan cap, and every fan-to-base-point value without changing another club.
@@ -38,7 +39,7 @@ Mahjong Messiah keeps a club's live session and long-term history in one shared 
 ### Useful after the tiles are packed away
 
 - Season and all-time standings with points, wins, win rate, and experience-aware Skill ratings
-- Score and Skill analytics, detailed game logs, and a co-play/network view
+- Score and Skill analytics, detailed game logs, co-play/network view, and an interactive fan calculator tied to the handbook
 - CSV import and export for historical data and external analysis
 - Member-managed linked player names and emoji, plus 24-hour correction access for games a member created
 - Manager tools for selecting one active season and one unfinished tournament at a time, configurable tournament clocks (24 hours by default), early tournament endings, rosters, memberships, permissions, scoring rules, titles, and safe deletion

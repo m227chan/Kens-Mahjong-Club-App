@@ -9,6 +9,7 @@ import { MahjongTileId } from '@/components/MahjongTile'
 const EXPECTED_HANDBOOK_VALUES: Record<string, string> = {
   'No Flowers': '1 fan',
   'Seat Flower': '1 fan',
+  'Double Flower': '2 fan',
   'Set of Flowers': '2 fan',
   '7 Flowers': '3 fan',
   '8 Flowers': '8 fan',

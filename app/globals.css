@@ -3025,6 +3025,7 @@ html.dark .brand-descriptor { color: rgb(255 249 226); }
 .wiki-example { display: grid; gap: .2rem; margin-top: .85rem; padding: .7rem .8rem; border-radius: 9px; background: rgb(var(--action-muted)); color: rgb(var(--ink)); font-size: .78rem; line-height: 1.45; }
 .wiki-example strong { color: rgb(var(--cinnabar)); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; }
 .wiki-scoring-footnote { display: block; margin-top: 1rem; border-color: rgb(var(--line)); border-left-color: rgb(var(--bamboo)); background: rgb(var(--surface-2)); }
+.wiki-score-calculator-link { display: inline-flex; margin-top: .55rem; color: rgb(var(--bamboo)); font-size: .82rem; font-weight: 800; text-decoration: underline; text-underline-offset: .15em; }
 
 @media (min-width: 1025px) {
   .wiki-page-shell.sidebar-closed .wiki-toc-side-tab { position: fixed; top: 7rem; left: 1rem; z-index: 45; width: auto; height: 2.75rem; border-radius: 999px; padding: .55rem .85rem; }
@@ -3059,6 +3060,264 @@ html.dark .brand-descriptor { color: rgb(255 249 226); }
   .wiki-tile-chart-group { padding: 1rem; border-radius: 14px; }
   .wiki-hand-card { padding: 1rem; border-radius: 14px; }
   .wiki-hand-tile-row { gap: .45rem; }
+}
+
+/* Hand scoring calculator */
+.hand-scoring-calculator { display: grid; gap: 1rem; }
+.hand-scoring-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.hand-scoring-kicker { margin: 0; color: rgb(var(--cinnabar)); font-size: .68rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.hand-scoring-title { margin: .25rem 0 0; font-size: clamp(1.35rem, 2.5vw, 1.75rem); font-weight: 900; color: rgb(var(--ink)); }
+.hand-scoring-club-select { display: grid; gap: .35rem; min-width: 12rem; }
+.hand-scoring-club-select select { min-height: 2.5rem; border: 1px solid rgb(var(--line)); border-radius: 10px; padding: .45rem .65rem; background: rgb(var(--surface)); color: rgb(var(--ink)); }
+.hand-scoring-mode-tabs { display: flex; flex-wrap: wrap; gap: .5rem; }
+.hand-scoring-tab { min-height: 2.5rem; border: 1px solid rgb(var(--line)); border-radius: 999px; padding: .45rem .9rem; background: rgb(var(--surface)); color: rgb(var(--ink)); font-size: .82rem; font-weight: 800; }
+.hand-scoring-tab.is-active { border-color: rgb(var(--bamboo)); background: rgb(var(--bamboo)); color: #fff; }
+.hand-scoring-traditional-toggle { margin-top: -.25rem; }
+.hand-scoring-layout { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+.hand-scoring-inputs, .hand-scoring-results { display: grid; gap: 1rem; }
+.hand-scoring-field { display: grid; gap: .55rem; padding: 1rem; border: 1px solid rgb(var(--line)); border-radius: 14px; background: rgb(var(--surface)); }
+.hand-scoring-label { color: rgb(var(--muted)); font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.hand-scoring-hint { margin: 0; color: rgb(var(--muted)); font-size: .78rem; line-height: 1.45; }
+.hand-scoring-subheading { margin: 0 0 .35rem; font-size: .82rem; font-weight: 900; color: rgb(var(--ink)); }
+.hand-scoring-winds { display: grid; gap: .85rem; }
+.hand-scoring-chip-row { display: flex; flex-wrap: wrap; gap: .4rem; }
+.hand-scoring-chip { min-height: 2.25rem; border: 1px solid rgb(var(--line)); border-radius: 999px; padding: .35rem .75rem; background: rgb(var(--surface-2)); font-size: .78rem; font-weight: 800; color: rgb(var(--ink)); }
+.hand-scoring-chip.is-active { border-color: rgb(var(--gold)); background: rgb(var(--gold) / .16); color: rgb(var(--ink)); }
+.hand-scoring-tile-grid { display: flex; flex-wrap: wrap; gap: .35rem; }
+.hand-scoring-tile-btn { display: grid; place-items: center; border: 1px solid rgb(var(--line)); border-radius: 10px; padding: .2rem; background: rgb(var(--surface-2)); }
+.hand-scoring-tile-btn.is-selected { border-color: rgb(var(--bamboo)); box-shadow: 0 0 0 2px rgb(var(--bamboo) / .18); }
+.hand-scoring-tile-btn.is-seat-flower { border-color: rgb(var(--gold)); background: rgb(var(--gold) / .12); position: relative; }
+.hand-scoring-seat-flower-mark { position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); font-size: .55rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: rgb(var(--cinnabar)); }
+.hand-scoring-seat-flower-note { margin: 0; font-size: .8rem; color: rgb(var(--ink)); }
+.hand-scoring-seat-flower-note strong { color: rgb(var(--bamboo)); }
+.hand-scoring-seat-chip { min-width: 7.5rem; }
+.hand-scoring-tile-group { display: grid; gap: .35rem; margin-top: .65rem; }
+.hand-scoring-tile-group-label { font-size: .72rem; font-weight: 800; color: rgb(var(--muted)); text-transform: uppercase; letter-spacing: .08em; }
+.hand-scoring-bonus-list { display: grid; gap: .55rem; }
+.hand-scoring-bonus-field.is-mobile-collapsible { gap: 0; padding: 0; overflow: hidden; }
+.hand-scoring-bonus-toggle { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: .75rem; padding: 1rem; border: 0; background: transparent; color: rgb(var(--ink)); text-align: left; cursor: pointer; }
+.hand-scoring-bonus-toggle-copy { display: grid; gap: .25rem; min-width: 0; }
+.hand-scoring-bonus-field.is-mobile-collapsible .hand-scoring-bonus-list { padding: 0 1rem 1rem; }
+.hand-scoring-bonus-item { display: grid; grid-template-columns: auto 1fr; gap: .65rem; align-items: start; font-size: .82rem; line-height: 1.4; }
+.hand-scoring-bonus-copy { display: grid; gap: .15rem; }
+.hand-scoring-bonus-copy small { color: rgb(var(--muted)); }
+.hand-scoring-inline-check { display: inline-flex; align-items: center; gap: .45rem; font-size: .82rem; font-weight: 700; color: rgb(var(--ink)); }
+.hand-scoring-meld-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; }
+.hand-scoring-mode-toggle { display: flex; gap: .35rem; }
+.hand-scoring-draft { display: grid; gap: .55rem; padding: .75rem; border-radius: 10px; background: rgb(var(--surface-2)); }
+.hand-scoring-draft-label { font-size: .76rem; color: rgb(var(--muted)); }
+.hand-scoring-draft-tiles, .hand-scoring-meld-tiles { display: flex; flex-wrap: wrap; gap: .35rem; }
+.hand-scoring-draft-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.hand-scoring-primary-btn, .hand-scoring-secondary-btn { min-height: 2.5rem; border-radius: 10px; padding: .45rem .85rem; font-size: .82rem; font-weight: 800; }
+.hand-scoring-primary-btn { border: 0; background: rgb(var(--bamboo)); color: #fff; }
+.hand-scoring-primary-btn:disabled { opacity: .45; cursor: not-allowed; }
+.hand-scoring-open-btn { min-height: 2.5rem; border: 1px solid rgb(var(--gold) / .45); border-radius: 10px; padding: .45rem .85rem; background: rgb(var(--gold) / .12); color: rgb(var(--ink)); font-size: .82rem; font-weight: 800; }
+.hand-scoring-open-btn:disabled { opacity: .45; cursor: not-allowed; }
+.hand-scoring-secondary-btn { border: 1px solid rgb(var(--line)); background: rgb(var(--surface)); color: rgb(var(--ink)); }
+.hand-scoring-meld-list { display: grid; gap: .55rem; margin-top: .75rem; }
+.hand-scoring-meld-item { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem; padding: .55rem; border: 1px solid rgb(var(--line)); border-radius: 10px; background: rgb(var(--surface-2)); }
+.hand-scoring-meld-meta { font-size: .72rem; font-weight: 800; color: rgb(var(--muted)); text-transform: uppercase; letter-spacing: .08em; }
+.hand-scoring-meld-visibility-toggle {
+  min-height: 2rem;
+  border: 1px solid rgb(var(--line));
+  border-radius: 999px;
+  padding: .25rem .65rem;
+  background: rgb(var(--surface));
+  color: rgb(var(--muted));
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.hand-scoring-meld-visibility-toggle.is-concealed {
+  border-color: rgb(var(--bamboo) / .35);
+  background: rgb(var(--bamboo) / .1);
+  color: rgb(var(--bamboo));
+}
+.hand-scoring-meld-visibility-toggle.is-open {
+  border-color: rgb(var(--gold) / .45);
+  background: rgb(var(--gold) / .12);
+  color: rgb(var(--ink));
+}
+.hand-scoring-remove-btn { margin-left: auto; width: 2rem; height: 2rem; border: 0; border-radius: 999px; background: rgb(var(--cinnabar) / .12); color: rgb(var(--cinnabar)); font-size: 1.1rem; font-weight: 900; }
+.hand-scoring-breakdown { display: grid; gap: .75rem; padding: 1rem; border: 1px solid rgb(var(--line)); border-radius: 14px; background: rgb(var(--surface-2)); }
+.hand-scoring-breakdown-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: .75rem; }
+.hand-scoring-breakdown-status { display: flex; flex-direction: column; align-items: flex-end; gap: .25rem; }
+.hand-scoring-hand-validity { margin: 0; font-size: .68rem; font-weight: 700; color: rgb(var(--cinnabar)); text-align: right; }
+.hand-scoring-total-block { min-width: min(100%, 12rem); }
+.hand-scoring-total-explanation { display: grid; gap: .55rem; padding: .75rem; border: 1px solid rgb(var(--line)); border-radius: 12px; background: rgb(var(--surface)); }
+.hand-scoring-mini-hand { display: grid; gap: .45rem; padding-bottom: .55rem; border-bottom: 1px solid rgb(var(--line)); }
+.hand-scoring-mini-hand-groups { display: flex; flex-wrap: wrap; gap: .4rem; }
+.hand-scoring-mini-hand-group {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: .15rem;
+  padding: .2rem .25rem;
+  border: 1px solid rgb(var(--line));
+  border-radius: 8px;
+  background: rgb(var(--surface-2));
+}
+.hand-scoring-mini-hand-group.is-open { outline: 1px solid rgb(var(--gold) / .4); }
+.hand-scoring-mini-hand-group.is-concealed { outline: 1px solid rgb(var(--bamboo) / .35); }
+.hand-scoring-mini-hand-group.is-pair { outline: 1px dashed rgb(var(--line)); }
+.hand-scoring-mini-hand-group.is-flat { flex-wrap: wrap; max-width: 100%; }
+.hand-scoring-flat-hand { display: grid; gap: .55rem; padding: .75rem; border: 1px solid rgb(var(--line)); border-radius: 12px; background: rgb(var(--surface)); }
+.hand-scoring-flat-hand-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; }
+.hand-scoring-flat-hand-tiles { display: flex; flex-wrap: wrap; gap: .35rem; }
+.hand-scoring-flat-hand-tile-btn { display: inline-flex; padding: .15rem; border: 1px solid rgb(var(--line)); border-radius: 8px; background: rgb(var(--surface-2)); cursor: pointer; }
+.hand-scoring-flat-hand-tile-btn:hover { border-color: rgb(var(--cinnabar) / .45); }
+.hand-scoring-flat-hand .hand-scoring-tile-btn { position: relative; }
+.hand-scoring-flat-hand .hand-scoring-tile-btn.is-selected { border-color: rgb(var(--gold)); box-shadow: 0 0 0 2px rgb(var(--gold) / .18); }
+.hand-scoring-tile-count { position: absolute; right: .1rem; bottom: .1rem; min-width: 1rem; height: 1rem; border-radius: 999px; background: rgb(var(--gold)); color: rgb(var(--ink)); font-size: .62rem; font-weight: 900; line-height: 1rem; text-align: center; }
+.hand-scoring-total-explanation-rows { display: grid; gap: .35rem; margin: 0; }
+.hand-scoring-total-explanation-row { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; font-size: .78rem; }
+.hand-scoring-total-explanation-row dt { margin: 0; font-weight: 700; color: rgb(var(--ink)); }
+.hand-scoring-total-explanation-row dd { margin: 0; font-weight: 800; color: rgb(var(--bamboo)); text-align: right; }
+.hand-scoring-total-explanation-row.is-emphasis { padding-top: .35rem; border-top: 1px solid rgb(var(--line)); }
+.hand-scoring-total-explanation-row.is-emphasis dt,
+.hand-scoring-total-explanation-row.is-emphasis dd { font-size: .82rem; }
+.hand-scoring-total-explanation-note { margin: 0; color: rgb(var(--muted)); font-size: .72rem; line-height: 1.45; }
+.hand-scoring-total { margin: .15rem 0 0; font-size: 2rem; font-weight: 900; color: rgb(var(--ink)); }
+.hand-scoring-limit-label { display: inline-block; margin-left: .45rem; color: rgb(var(--muted)); font-size: .72rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; vertical-align: middle; }
+.hand-scoring-hint .hand-scoring-limit-label { margin-left: .25rem; font-size: .68rem; }
+.hand-scoring-badge { display: inline-flex; align-items: center; min-height: 2rem; border-radius: 999px; padding: .35rem .75rem; font-size: .72rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.hand-scoring-badge.is-pass { background: rgb(var(--bamboo) / .14); color: rgb(var(--bamboo)); }
+.hand-scoring-badge.is-fail { background: rgb(var(--cinnabar) / .12); color: rgb(var(--cinnabar)); }
+.hand-scoring-base-points { margin: 0; font-size: .95rem; font-weight: 900; color: rgb(var(--bamboo)); }
+.hand-scoring-base-points.is-muted { color: rgb(var(--muted)); }
+.hand-scoring-pattern-list, .hand-scoring-suggestion-list, .hand-scoring-breakdown-pattern-list { display: grid; gap: .45rem; margin: 0; padding: 0; list-style: none; }
+.hand-scoring-breakdown-patterns { display: grid; gap: .45rem; }
+.hand-scoring-breakdown-patterns.is-mobile-collapsible {
+  gap: 0;
+  border: 1px solid rgb(var(--line));
+  border-radius: 12px;
+  background: rgb(var(--surface));
+  overflow: hidden;
+}
+.hand-scoring-breakdown-patterns-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .7rem .8rem;
+  border: 0;
+  background: transparent;
+  color: rgb(var(--ink));
+  text-align: left;
+  cursor: pointer;
+}
+.hand-scoring-breakdown-patterns-toggle-copy { display: grid; gap: .15rem; }
+.hand-scoring-breakdown-patterns-panel { padding: 0 .8rem .8rem; }
+.hand-scoring-breakdown-patterns-hint { margin: 0; }
+.hand-scoring-breakdown-pattern {
+  position: relative;
+  display: grid;
+  gap: .55rem;
+  padding: .55rem .65rem;
+  border-radius: 9px;
+  background: rgb(var(--surface));
+  font-size: .82rem;
+  list-style: none;
+}
+.hand-scoring-breakdown-pattern.has-example { cursor: help; }
+.hand-scoring-breakdown-pattern-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .75rem;
+  width: 100%;
+}
+.hand-scoring-breakdown-pattern-title { font-weight: 700; color: rgb(var(--ink)); }
+.hand-scoring-breakdown-pattern-actions {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: .35rem;
+}
+.hand-scoring-breakdown-example-panel { padding-top: .15rem; border-top: 1px solid rgb(var(--line)); }
+.hand-scoring-breakdown-popover {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + .35rem);
+  z-index: 30;
+  width: min(22rem, calc(100vw - 2rem));
+  padding: .75rem;
+  border: 1px solid rgb(var(--line));
+  border-radius: 12px;
+  background: rgb(var(--surface));
+  box-shadow: 0 14px 36px rgb(var(--shadow) / .18);
+  pointer-events: none;
+}
+.hand-scoring-pattern-list li { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .55rem .65rem; border-radius: 9px; background: rgb(var(--surface)); font-size: .82rem; }
+.hand-scoring-suggestion-list { position: relative; }
+.hand-scoring-suggestion-item { position: relative; display: grid; gap: .55rem; padding: .55rem .65rem; border-radius: 9px; background: rgb(var(--surface)); font-size: .82rem; list-style: none; }
+.hand-scoring-suggestion-item.has-example { cursor: help; }
+.hand-scoring-suggestion-row { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; width: 100%; }
+.hand-scoring-suggestion-title { font-weight: 700; color: rgb(var(--ink)); }
+.hand-scoring-suggestion-actions { display: flex; flex-shrink: 0; flex-direction: column; align-items: flex-end; gap: .35rem; }
+.hand-scoring-example-toggle { border: 0; background: transparent; color: rgb(var(--bamboo)); font-size: .72rem; font-weight: 800; text-decoration: underline; text-underline-offset: .12em; cursor: pointer; }
+.hand-scoring-suggestion-example-panel { padding-top: .15rem; border-top: 1px solid rgb(var(--line)); }
+.hand-scoring-suggestion-popover {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + .35rem);
+  z-index: 30;
+  width: min(22rem, calc(100vw - 2rem));
+  padding: .75rem;
+  border: 1px solid rgb(var(--line));
+  border-radius: 12px;
+  background: rgb(var(--surface));
+  box-shadow: 0 14px 36px rgb(var(--shadow) / .18);
+  pointer-events: none;
+}
+.hand-scoring-popover-kicker { margin: 0 0 .45rem; color: rgb(var(--muted)); font-size: .66rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.hand-scoring-pattern-example { display: grid; gap: .55rem; }
+.hand-scoring-pattern-example-description { margin: 0; color: rgb(var(--ink)); font-size: .78rem; line-height: 1.45; }
+.hand-scoring-pattern-example-note { margin: 0; color: rgb(var(--muted)); font-size: .72rem; line-height: 1.4; }
+.hand-scoring-pattern-example-groups { display: flex; flex-wrap: wrap; gap: .45rem; }
+.hand-scoring-pattern-example-group, .hand-scoring-pattern-example-row { display: flex; flex-wrap: wrap; gap: .2rem; padding: .25rem; border: 1px solid rgb(var(--line)); border-radius: 8px; background: rgb(var(--surface-2)); }
+@media (hover: hover) and (pointer: fine) {
+  .hand-scoring-suggestion-item.has-example:hover .hand-scoring-suggestion-popover,
+  .hand-scoring-suggestion-item.has-example:focus-within .hand-scoring-suggestion-popover {
+    display: block;
+  }
+  .hand-scoring-suggestion-item.has-example:hover,
+  .hand-scoring-suggestion-item.has-example:focus-within {
+    background: rgb(var(--surface-2));
+    outline: 1px solid rgb(var(--gold) / .35);
+  }
+  .hand-scoring-breakdown-pattern.has-example:hover .hand-scoring-breakdown-popover,
+  .hand-scoring-breakdown-pattern.has-example:focus-within .hand-scoring-breakdown-popover {
+    display: block;
+  }
+  .hand-scoring-breakdown-pattern.has-example:hover,
+  .hand-scoring-breakdown-pattern.has-example:focus-within {
+    background: rgb(var(--surface-2));
+    outline: 1px solid rgb(var(--gold) / .35);
+  }
+}
+.hand-scoring-suggestions { display: grid; gap: .65rem; padding: 1rem; border: 1px solid rgb(var(--line)); border-radius: 14px; background: rgb(var(--surface)); }
+.hand-scoring-suggestion-section { border: 1px solid rgb(var(--line)); border-radius: 12px; background: rgb(var(--surface-2)); overflow: visible; }
+.hand-scoring-suggestion-section-toggle { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: .75rem; padding: .7rem .8rem; border: 0; background: transparent; color: rgb(var(--ink)); text-align: left; cursor: pointer; }
+.hand-scoring-suggestion-section-title { font-size: .82rem; font-weight: 900; }
+.hand-scoring-suggestion-section-meta { display: inline-flex; align-items: center; gap: .45rem; }
+.hand-scoring-suggestion-count { min-width: 1.35rem; padding: .1rem .4rem; border-radius: 999px; background: rgb(var(--surface)); color: rgb(var(--muted)); font-size: .72rem; font-weight: 800; text-align: center; }
+.hand-scoring-suggestion-chevron { color: rgb(var(--muted)); font-size: .85rem; }
+.hand-scoring-suggestion-section-panel { padding: 0 .8rem .8rem; overflow: visible; }
+.hand-scoring-suggestion-toggle { display: inline-flex; align-items: center; gap: .55rem; cursor: pointer; }
+.hand-scoring-suggestion-list-manual .hand-scoring-suggestion-item { align-items: stretch; }
+.hand-scoring-apply-btn { width: 100%; }
+.hand-scoring-modal-toolbar { display: flex; justify-content: flex-end; padding: .65rem .85rem 0; }
+.hand-scoring-close-btn { width: 2.25rem; height: 2.25rem; border: 1px solid rgb(var(--line)); border-radius: 999px; background: rgb(var(--surface)); font-size: 1.2rem; font-weight: 900; }
+.hand-scoring-modal-body { flex: 1; min-height: 0; }
+
+@media (min-width: 960px) {
+  .hand-scoring-layout { grid-template-columns: minmax(0, 1.15fr) minmax(18rem, .85fr); align-items: start; }
 }
 
 /* A shared, unhurried loading rhythm: ease into the turn, accelerate, then

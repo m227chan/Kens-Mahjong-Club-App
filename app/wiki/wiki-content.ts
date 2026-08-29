@@ -46,6 +46,7 @@ export const WIKI_NAV_SECTIONS = [
   { id: 'mahjong-basics', label: 'Mahjong basics' },
   { id: 'complete-tile-reference', label: 'Tile reference' },
   { id: 'scoring-guide', label: 'How scoring works' },
+  { id: 'score-calculator', label: 'Score Calculator', href: '/wiki/score' },
   { id: 'bonus-flowers', label: 'Flowers' },
   { id: 'winning-methods', label: 'Winning methods' },
   { id: 'suit-based-hands', label: 'Suit-based hands' },
@@ -76,6 +77,14 @@ export const WIKI_HAND_SECTIONS: WikiHandSection[] = [
         type: 'bonus',
         tiles: ['f2', 'f6'],
         note: 'South seat example: Summer (2) or Orchid (6)',
+      },
+      {
+        title: 'Double Flower',
+        value: '2 fan',
+        description: 'Have both seat flowers: the season and bloom matching your seat number.',
+        type: 'bonus',
+        tiles: ['f1', 'f5'],
+        note: 'East seat example: Spring (1) and Plum (5)',
       },
       {
         title: 'Set of Flowers',

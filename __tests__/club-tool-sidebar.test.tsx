@@ -23,12 +23,14 @@ function sidebarProps() {
     analyticsOpen: true,
     gameLogsOpen: false,
     networkOpen: false,
+    scoreCalculatorOpen: false,
     settingsOpen: false,
     requestsOpen: false,
     onRoster: vi.fn(),
     onAnalytics: vi.fn(),
     onGameLogs: vi.fn(),
     onNetwork: vi.fn(),
+    onScoreCalculator: vi.fn(),
     onSettings: vi.fn(),
     onRequests: vi.fn(),
     showJoinRequests: true,
@@ -58,6 +60,7 @@ describe('club tool sidebar', () => {
     expect(screen.getByText('Scores, Skill, and records')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Join requests' })).toBeTruthy()
     expect(screen.getByLabelText('2 pending')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Score Calculator' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Analytics' }).getAttribute('aria-expanded')).toBe('true')
 
     fireEvent.click(screen.getByRole('button', { name: 'Analytics' }))
