@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import HandScoringCalculator from '@/components/hand-scoring/HandScoringCalculator'
 import type { ScoringRules } from '@/lib/scoring-rules'
 
@@ -16,8 +18,16 @@ export default function ScoreCalculatorModal({
   onClose,
   onApplyFan,
 }: ScoreCalculatorModalProps) {
-  return (
-    <div className="responsive-modal fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) return null
+
+  return createPortal(
+    <div className="responsive-modal fixed inset-0 flex items-center justify-center bg-slate-950/70 px-4 py-6">
       <div
         id="score-calculator-dialog"
         role="dialog"
@@ -45,6 +55,7 @@ export default function ScoreCalculatorModal({
           />
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
