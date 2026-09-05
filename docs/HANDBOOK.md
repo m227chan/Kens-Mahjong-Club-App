@@ -85,7 +85,8 @@ app/
   check-in/[publicId]/             Mobile QR onboarding and check-in
   club/[clubId]/                   Authenticated club workspace route
   login/                           Signed-out welcome and Google sign-in route
-  wiki/                            Authenticated, read-only Mahjong scoring reference
+  wiki/                            Authenticated Mahjong reference and score calculator
+  wiki/score/                      Standalone score calculator route
   globals.css                      Theme tokens, responsive rules, component styling
   icon.svg                         Browser icon
   layout.tsx                       Global header, providers, controls, metadata
@@ -98,6 +99,8 @@ components/
   DashboardContent.tsx             Detailed chart analytics and player selection
   GameLogsModal.tsx                Paginated logs, CSV, game editing/deletion
   NetworkGraphModal.tsx            Player co-play network modal (graph and table)
+  ScoreCalculatorModal.tsx         Club score calculator shell
+  hand-scoring/                    Fan calculator UI (melds, flowers, paths)
   network/                         Co-occurrence graph, edge math, and net-points helpers
   Leaderboard.tsx                  Desktop and mobile standings
   SessionManager.tsx               Live table/session and result workflow
@@ -115,6 +118,7 @@ lib/
   postgres-admin.ts                Server-only Postgres connection and transactions
   supabase*.ts                     Browser Supabase client and data adapter
   scoring.ts                       Fan-to-score rules and round validation
+  hand-scoring/                    Pattern catalog, detection, fan summation, and suggestions
   stats-engine.ts                  Pairwise ELO and rank calculations
   players.ts                       Emoji, display colors, rank-title distribution
   session-layout.ts                New/legacy session layout normalization
@@ -153,9 +157,13 @@ The club route normalizes the club ID, requires authentication, subscribes to th
 
 ### `/wiki`
 
-The authenticated wiki is a read-only Hong Kong Mahjong reference. Users can select one of their clubs to preview that club's scoring rules; otherwise the default reference mapping is shown. It combines the canonical tile artwork with the scoring table, payment examples, and the hand patterns represented by the printed scoring guide. The reference intentionally explains that it is not a complete play guide, that the classic 0–13+ table is a general reference, and that each club may customize its minimum fan, cap, and fan-to-point map in Club settings. The page does not write club data or duplicate the scoring engine.
+The authenticated wiki is a read-only Hong Kong Mahjong reference. Users can select one of their clubs to preview that club's scoring rules; otherwise the default reference mapping is shown. It combines the canonical tile artwork with the scoring table, payment examples, and the hand patterns represented by the printed scoring guide. The reference intentionally explains that it is not a complete play guide, that the classic 0–13+ table is a general reference, and that each club may customize its minimum fan, cap, and fan-to-point map in Club settings. The contents drawer links to the interactive Score Calculator, and the “How scoring works” section includes a direct CTA to it. The page does not write club data.
 
 The contents drawer uses the same semantic surfaces and touch-target rules as the rest of the app. It is visible on desktop, collapses into a labelled floating control on smaller screens, closes with an explicit button or backdrop tap, and tracks the section currently in view. Long hand examples wrap inside the content column instead of forcing the page to overflow horizontally.
+
+### `/wiki/score`
+
+The standalone score calculator uses the same authenticated shell as the wiki. An optional `?club=` query parameter pre-selects a club so fan totals, minimum checks, and base-point previews use that club's live house rules. The calculator does not persist hand state or write game records.
 
 ### `/metrics`
 
@@ -165,9 +173,9 @@ The publicly readable metric glossary explains Points, win/loss measures, Skill 
 
 `app/layout.tsx` configures metadata, the favicon, theme/sound/help controls, `AuthProvider`, and `SoundProvider`. Global CSS supplies the system-safe font stack, so rendering does not depend on downloading a web font. The brand link always points to `/`, making it the personal-dashboard shortcut for signed-in users. The header is sticky and uses semantic theme tokens.
 
-The header help control opens `AppGuide`. Its complete reference follows the signed-in workflow from personal dashboard through clubs, rosters, seasons, sessions, scoring, session point tracking (including float), standings, analytics, logs, player network, and manager tools. It preserves the operational session reference, including table setup, participating players, the sideline, table shuffle modes, result entry, self-draw/discard rules, session reset controls, and the full fan-to-base-points map.
+The header help control opens `AppGuide`. Its complete reference follows the signed-in workflow from personal dashboard through clubs, rosters, seasons, sessions, scoring, the score calculator, session point tracking (including float), standings, analytics, logs, player network, and manager tools. It preserves the operational session reference, including table setup, participating players, the sideline, table shuffle modes, result entry, self-draw/discard rules, session reset controls, the fan calculator workflow, and the full fan-to-base-points map.
 
-“Take a Tour” runs on the real signed-in interface. `AppGuide` remains mounted in the root layout while navigation and modal state change, locates visible elements through stable `data-tour` targets, scrolls them into view, and draws a fixed spotlight boundary plus Ming’s coachmark over the actual dashboard, club workspace, and real roster, session-tracker, analytics, game-log, network, and settings modals. Click-driven stops advance only after the highlighted real control is used; explanatory stops use Next. Desktop and mobile variants can share a target name, and the tour selects the visible instance. The tour only performs safe navigation and open/close interactions, never submits forms or invokes game, roster, season, membership, or settings mutations. Exiting at any time clears the spotlight and returns to `/`.
+“Take a Tour” runs on the real signed-in interface. `AppGuide` remains mounted in the root layout while navigation and modal state change, locates visible elements through stable `data-tour` targets, scrolls them into view, and draws a fixed spotlight boundary plus Ming’s coachmark over the actual dashboard, club workspace, and real roster, session-tracker, analytics, game-log, network, score-calculator, and settings modals. Click-driven stops advance only after the highlighted real control is used; explanatory stops use Next. Desktop and mobile variants can share a target name, and the tour selects the visible instance. The tour only performs safe navigation and open/close interactions, never submits forms or invokes game, roster, season, membership, or settings mutations. Exiting at any time clears the spotlight and returns to `/`.
 
 `AppGuide` is part of the product contract, not optional marketing copy. Any major user-facing feature addition or substantial workflow change must update both surfaces in the same pull request: the concise `?` help guide must explain the feature in the correct usage order, and the interactive tour must demonstrate it with a highlighted, no-write interaction. The tour must remain representative on desktop and mobile.
 
@@ -336,8 +344,28 @@ Shared client-facing types live in `lib/types.ts`:
 - Read-only reference for the tile set used by the app, including suits, winds, dragons, and flowers.
 - Fan-to-base-point table from 0 through 13+ with the default self-draw and all-paid discard examples.
 - Hand reference grouped into flowers, winning methods, suit-based, honor, triplet, sequence/special, and optional non-traditional patterns.
-- Values and descriptions are kept aligned with the printed Hong Kong scoring guide; the page explicitly calls out optional hands and club-specific house-rule overrides.
+- Values and descriptions are kept aligned with the printed Hong Kong scoring guide; the page explicitly calls out optional hands and club-specific house-rule overrides. Flower bonuses include seat flower, double flower (both seat season and bloom), and set-of-flowers examples.
 - Desktop keeps a sticky contents rail. Mobile uses a contained drawer with a backdrop, an explicit close action, and a section-aware active state.
+- Links to `/wiki/score` for the interactive calculator.
+
+### Score Calculator
+
+The score calculator helps players total fan from handbook patterns and explore reachable winning paths against a club's minimum fan. It is available from:
+
+- **Club tools:** Score Calculator in the Explore rail, directly beneath Player network.
+- **Wiki:** `/wiki/score` and the handbook navigation / scoring-guide CTA; honors `?club=` when opened from a club context.
+- **Live scoring:** **Calculate fan** in the Session Manager win panel and Focused Table View result sheet; **Apply fan** writes the computed total back into the fan picker when it meets the club minimum.
+
+Inputs include roll position (seat 1–4 / seat wind), round wind, drawn flowers with seat-flower highlighting, open and concealed melds, an optional pair, manual bonus scenarios, and a non-traditional hands toggle (on by default). Outputs include an itemized pattern breakdown, total fan, minimum pass/fail badge, base-point preview, and optional table payout preview.
+
+Two modes share the same inputs:
+
+- **Calculate score** — for a completed or declared hand; sums detected and selected patterns with handbook exclusion rules (for example, Small Three Dragons suppresses individual dragon triplets; limit hands cap at the club max fan).
+- **Find winning paths** — for a hand still in progress; groups suggestions into collapsible sections for paths that meet minimum now, still-compatible paths with a fan gap, and toggleable manual bonuses. Desktop hover (or keyboard focus) shows wiki example hands; mobile expands an **Example** control per path.
+
+The fan engine lives in `lib/hand-scoring/` and derives its pattern catalog from `app/wiki/wiki-content.ts`. It detects structural patterns from melds and flowers, applies exclusions, and filters suggestions by compatibility with the current tile state. It does not simulate the remaining wall or prove that a win is drawable.
+
+Recording a saved game still uses manual fan entry or the calculator shortcut; the server continues to validate fan against `app_configs` on write.
 
 ### Clubs and membership
 
@@ -386,6 +414,7 @@ Shared client-facing types live in `lib/types.ts`:
 - Table cards show capacity and readiness; four players marks a table ready.
 - Record self-draw wins, discard wins, or draws.
 - Winner, discarder, and fan selections have visible selected states.
+- **Calculate fan** opens the score calculator with the active club's house rules; **Apply fan** returns the computed total to the win panel when it meets the club minimum.
 - Calculated scores are previewed and must sum to zero before saving.
 - Saved wins trigger a cheerful, viewport-centered announcement with winner identity and score changes.
 - Session dialogs are rendered through a document-body portal, centered in the viewport regardless of page scroll, and use a full-viewport opaque fade. General help lives in the global header so the session card stays focused on live play.
@@ -403,7 +432,7 @@ Shared client-facing types live in `lib/types.ts`:
 
 ### Scoring and game recording
 
-Each club stores its minimum fan, maximum fan cap, and fan-to-base-point mapping in `app_configs`. New clubs default to the original 3–13+ mapping. Managers edit these house rules from the House Scoring detail in Club Settings; live session scoring, focused-table scoring, game-log outcome editing, server validation, and the in-app guide all consume the same club-specific values. Existing stored scores are not rewritten. For normal results:
+Each club stores its minimum fan, maximum fan cap, and fan-to-base-point mapping in `app_configs`. New clubs default to the original 3–13+ mapping. Managers edit these house rules from the House Scoring detail in Club Settings; live session scoring, focused-table scoring, the score calculator, game-log outcome editing, server validation, and the in-app guide all consume the same club-specific values. Existing stored scores are not rewritten. For normal results:
 
 - **Self draw:** the winner receives three times the base value; each other player loses one base value.
 - **Discard win:** the winner receives twice the base value; the discarder loses twice the base value; uninvolved players receive zero.
@@ -746,7 +775,7 @@ The code is designed for a Node-capable Next.js host. Before deployment:
 
 ## 19. Testing and quality gates
 
-Current deterministic suites cover authentication context, dashboard and club navigation, roster permissions and emoji selection, seasons and tournaments, session normalization and optimistic table actions, focused scoring, offline game synchronization, scoring and statistics engines, standings and analytics queries, title and scoring-rule editors, the wiki, help tour, network and game-log views, guest table tokens, and API safety. Database integration suites are opt-in and skip when their isolated test database configuration is absent.
+Current deterministic suites cover authentication context, dashboard and club navigation, roster permissions and emoji selection, seasons and tournaments, session normalization and optimistic table actions, focused scoring, offline game synchronization, scoring and hand-scoring engines, standings and analytics queries, title and scoring-rule editors, the wiki, help tour, network and game-log views, guest table tokens, and API safety. Database integration suites are opt-in and skip when their isolated test database configuration is absent.
 
 Before handing off a code change, run checks in proportion to the risk:
 

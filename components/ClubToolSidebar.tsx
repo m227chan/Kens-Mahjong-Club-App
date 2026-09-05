@@ -11,18 +11,20 @@ type ClubToolSidebarProps = {
   gameLogsOpen: boolean
   networkOpen: boolean
   requestsOpen?: boolean
+  scoreCalculatorOpen: boolean
   settingsOpen: boolean
   onRoster: () => void
   onAnalytics: () => void
   onGameLogs: () => void
   onNetwork: () => void
   onRequests?: () => void
+  onScoreCalculator: () => void
   onSettings: () => void
   showJoinRequests?: boolean
   pendingRequestCount?: number
 }
 
-type ToolIconName = 'users' | 'chart' | 'list' | 'network' | 'requests' | 'settings'
+type ToolIconName = 'users' | 'chart' | 'list' | 'network' | 'requests' | 'calculator' | 'settings'
 
 function ToolIcon({ name }: { name: ToolIconName }) {
   const common = {
@@ -40,6 +42,7 @@ function ToolIcon({ name }: { name: ToolIconName }) {
   if (name === 'list') return <svg {...common}><path d="M8 6h13M8 12h13M8 18h13" /><path d="M3 6h.01M3 12h.01M3 18h.01" /></svg>
   if (name === 'network') return <svg {...common}><circle cx="12" cy="5" r="2" /><circle cx="5" cy="19" r="2" /><circle cx="19" cy="19" r="2" /><path d="m10.7 6.7-4.4 10.6M13.3 6.7l4.4 10.6M7 19h10" /></svg>
   if (name === 'requests') return <svg {...common}><circle cx="9" cy="8" r="3" /><path d="M3 20c.5-4 2.5-6 6-6 1.5 0 2.8.35 3.8 1.05M16 12l2 2 4-5" /></svg>
+  if (name === 'calculator') return <svg {...common}><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M8 7h8M8 11h2M12 11h2M16 11h2M8 15h2M12 15h2M16 15h2" /></svg>
   return <svg {...common}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></svg>
 }
 
@@ -62,12 +65,14 @@ export default function ClubToolSidebar({
   gameLogsOpen,
   networkOpen,
   requestsOpen = false,
+  scoreCalculatorOpen,
   settingsOpen,
   onRoster,
   onAnalytics,
   onGameLogs,
   onNetwork,
   onRequests = () => undefined,
+  onScoreCalculator,
   onSettings,
   showJoinRequests = false,
   pendingRequestCount = 0,
@@ -118,6 +123,7 @@ export default function ClubToolSidebar({
         { label: 'Analytics', detail: 'Scores, Skill, and records', icon: 'chart' as const, tour: 'analytics-open', open: analyticsOpen, onClick: onAnalytics, dialog: 'club-analytics-dialog' },
         { label: 'Game logs', detail: 'Review recorded games', icon: 'list' as const, tour: 'logs-open', open: gameLogsOpen, onClick: onGameLogs, dialog: 'game-logs-dialog' },
         { label: 'Player network', detail: 'See shared-table history', icon: 'network' as const, tour: 'network-open', open: networkOpen, onClick: onNetwork, dialog: 'network-graph-dialog' },
+        { label: 'Score Calculator', detail: 'Calculate fan and find winning paths', icon: 'calculator' as const, tour: 'score-calculator-open', open: scoreCalculatorOpen, onClick: onScoreCalculator, dialog: 'score-calculator-dialog' },
       ],
     },
     {

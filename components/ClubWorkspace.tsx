@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom'
 import useEmblaCarousel from 'embla-carousel-react'
 import GameLogsModal from '@/components/GameLogsModal'
 import NetworkGraphModal from '@/components/NetworkGraphModal'
+import ScoreCalculatorModal from '@/components/ScoreCalculatorModal'
 import { LeaderboardPanel } from '@/components/Leaderboard'
 import SessionManager from '@/components/SessionManager'
 import ScoringRulesSettings from '@/components/ScoringRulesSettings'
@@ -169,6 +170,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [gameLogsOpen, setGameLogsOpen] = useState(false)
   const [networkOpen, setNetworkOpen] = useState(false)
   const [requestsOpen, setRequestsOpen] = useState(false)
+  const [scoreCalculatorOpen, setScoreCalculatorOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [clubSettingsSection, setClubSettingsSection] = useState<ClubSettingsSection>('competition')
   const [clubSettingsDetailOpen, setClubSettingsDetailOpen] = useState(false)
@@ -486,7 +488,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const filteredRosterPlayers = normalizedRosterSearch
     ? players.filter((player) => player.displayName.toLocaleLowerCase().includes(normalizedRosterSearch))
     : players
-  const clubModalOpen = summaryDefinition !== null || rosterOpen || analyticsOpen || gameLogsOpen || networkOpen || requestsOpen || settingsOpen || deleteConfirmOpen
+  const clubModalOpen = summaryDefinition !== null || rosterOpen || analyticsOpen || gameLogsOpen || networkOpen || requestsOpen || scoreCalculatorOpen || settingsOpen || deleteConfirmOpen
 
   useEffect(() => {
     if (optimisticCompetitionNumber === serverCompetitionNumber) setOptimisticCompetitionNumber(null)
@@ -1222,6 +1224,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           gameLogsOpen={gameLogsOpen}
           networkOpen={networkOpen}
           requestsOpen={requestsOpen}
+          scoreCalculatorOpen={scoreCalculatorOpen}
           settingsOpen={settingsOpen}
           onRoster={() => openRoster()}
           onAnalytics={() => { setAnalyticsPlayerId(null); setAnalyticsOpen(true) }}
@@ -1230,6 +1233,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           onRequests={() => setRequestsOpen(true)}
           showJoinRequests={isManager && !club?.universal}
           pendingRequestCount={joinRequests.length}
+          onScoreCalculator={() => setScoreCalculatorOpen(true)}
           onSettings={() => {
             clubSettingsReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
             setClubSettingsSection('competition')
@@ -1877,6 +1881,14 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
           seasons={seasons}
           currentSeason={selectedSeasonNumber ?? activeSeasonNumber}
           onClose={() => setNetworkOpen(false)}
+        />
+      ) : null}
+
+      {scoreCalculatorOpen ? (
+        <ScoreCalculatorModal
+          clubId={clubId}
+          scoringRules={scoringRules}
+          onClose={() => setScoreCalculatorOpen(false)}
         />
       ) : null}
     </main>

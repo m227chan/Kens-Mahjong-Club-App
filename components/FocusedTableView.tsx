@@ -10,6 +10,7 @@ import { useGameSync } from "@/contexts/GameSyncContext";
 import ScoreCelebration, {
   type ScoreCelebrationResult,
 } from "@/components/ScoreCelebration";
+import ScoreCalculatorModal from "@/components/ScoreCalculatorModal";
 import {
   requestToJoinClub,
   subscribeActiveSession,
@@ -80,6 +81,7 @@ export default function FocusedTableView({
     DEFAULT_SCORING_RULES,
   );
   const [fan, setFan] = useState(DEFAULT_SCORING_RULES.minFan);
+  const [scoreCalculatorOpen, setScoreCalculatorOpen] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [upgradeBusy, setUpgradeBusy] = useState(false);
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
@@ -918,6 +920,13 @@ export default function FocusedTableView({
                 </button>
               ))}
             </div>
+            <button
+              type="button"
+              className="mt-2 min-h-11 w-full rounded-lg border border-[rgb(var(--line))] text-sm font-black text-[rgb(var(--ink))]"
+              onClick={() => setScoreCalculatorOpen(true)}
+            >
+              Calculate fan
+            </button>
             <p className="mt-2 text-right text-xs font-bold text-[rgb(var(--muted))]">
               {basePointsForFan(fan, scoringRules)} base points
             </p>
@@ -1051,6 +1060,18 @@ export default function FocusedTableView({
             </button>
           </section>
         </div>
+      ) : null}
+
+      {scoreCalculatorOpen ? (
+        <ScoreCalculatorModal
+          clubId={clubId}
+          scoringRules={scoringRules}
+          onClose={() => setScoreCalculatorOpen(false)}
+          onApplyFan={(value) => {
+            setFan(value);
+            setScoreCalculatorOpen(false);
+          }}
+        />
       ) : null}
     </main>
   );
