@@ -21,6 +21,7 @@ const dataMocks = vi.hoisted(() => ({
   subscribeScoringRules: vi.fn(() => vi.fn()),
   subscribeTitleRules: vi.fn(() => vi.fn()),
   subscribeActivitySettings: vi.fn(() => vi.fn()),
+  subscribeWindRotationSettings: vi.fn(() => vi.fn()),
   subscribeSeasons: vi.fn((_clubId: string, callback: (seasons: unknown[]) => void) => {
     callback([{ id: '1', seasonNumber: 1, name: 'Season 1', kind: 'season', active: true, editableUntil: null, tournamentSecondsRemaining: null }])
     return vi.fn()
@@ -61,6 +62,7 @@ vi.mock('@/components/NetworkGraphModal', () => ({ default: () => null }))
 vi.mock('@/components/ScoringRulesSettings', () => ({ default: () => null }))
 vi.mock('@/components/TitleRulesSettings', () => ({ default: () => null }))
 vi.mock('@/components/ActivitySettings', () => ({ default: () => null }))
+vi.mock('@/components/WindRotationSettings', () => ({ default: () => null }))
 vi.mock('embla-carousel-react', () => ({ default: () => [vi.fn(), undefined] }))
 vi.mock('@/components/ClubToolSidebar', () => ({
   default: ({ onRoster }: { onRoster: () => void }) => <button type="button" onClick={onRoster}>Open roster</button>,
