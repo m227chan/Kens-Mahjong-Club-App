@@ -1,4 +1,5 @@
 import type { Timestamp } from '@/lib/timestamp'
+import type { TableWindState } from '@/lib/table-winds'
 
 export interface ClubDoc {
   id: string
@@ -149,6 +150,8 @@ export interface SessionDoc {
   participants: string[]
   tables: Record<string, string[]>
   sideline: string[]
+  /** Per-table wind / dealer / hand state keyed by table id ("1", "2", …). */
+  tableWinds?: Record<string, TableWindState>
   closedAt?: Timestamp | null
 }
 

@@ -36,6 +36,14 @@ import {
   optimisticallySeatPlayer,
 } from '@/lib/optimistic-session'
 import { MAX_SESSION_TABLES, MIN_SESSION_TABLES, clampSessionTableCount } from '@/lib/session-layout'
+import {
+  reconcileTableWindsMap,
+  type TableWindsMap,
+} from '@/lib/table-winds'
+import {
+  DEFAULT_WIND_ROTATION_SETTINGS,
+  type WindRotationSettings,
+} from '@/lib/wind-rotation-settings'
 
 type WinType = 'self' | 'discard' | 'draw'
 
@@ -46,6 +54,7 @@ type SessionState = {
   participants: string[]
   tables: Record<string, string[]>
   sideline: string[]
+  tableWinds?: TableWindsMap
 }
 
 type WinState = {
@@ -79,8 +88,15 @@ const fromTableSession = (next: TableSession): SessionState => ({
   participants: next.participants,
   tables: next.tables,
   sideline: next.sideline,
+  tableWinds: next.tableWinds ?? {},
 })
 
+function withReconciledWinds(next: SessionState): SessionState {
+  return {
+    ...next,
+    tableWinds: reconcileTableWindsMap(next.tableWinds, next.tables),
+  }
+}
 function AddPlayerActionIcon() {
   return (
     <svg className="session-action-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -91,7 +107,7 @@ function AddPlayerActionIcon() {
   )
 }
 
-export default function SessionManager({ clubId, seasonNumber, players: suppliedPlayers, isManager = false, scoringRules = DEFAULT_SCORING_RULES, onAddPlayer }: { clubId: string; seasonNumber: number; players?: PlayerDoc[]; isManager?: boolean; scoringRules?: ScoringRules; onAddPlayer?: () => void }) {
+export default function SessionManager({ clubId, seasonNumber, players: suppliedPlayers, isManager = false, scoringRules = DEFAULT_SCORING_RULES, windRotationSettings = DEFAULT_WIND_ROTATION_SETTINGS, onAddPlayer }: { clubId: string; seasonNumber: number; players?: PlayerDoc[]; isManager?: boolean; scoringRules?: ScoringRules; windRotationSettings?: WindRotationSettings; onAddPlayer?: () => void }) {
   const { user, loading, isAdmin } = useAuth()
   const { play } = useSound()
   const { saveGame } = useGameSync()
@@ -252,7 +268,8 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
             tableCount: nextSession.tableCount,
             participants: nextSession.participants,
             tables: nextSession.tables,
-            sideline: nextSession.sideline
+            sideline: nextSession.sideline,
+            tableWinds: nextSession.tableWinds ?? {},
           })
           setSetupParticipants(nextSession.participants)
           setSetupTableCount(nextSession.tableCount)
@@ -490,16 +507,18 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
       showSession(nextSession)
       return
     }
+    const reconciled = withReconciledWinds(nextSession)
     queueLayoutMutation(
-      nextSession,
+      reconciled,
       async () => {
-        await updateSession(clubId, nextSession.id!, {
-          tableCount: nextSession.tableCount,
-          participants: nextSession.participants,
-          tables: nextSession.tables,
-          sideline: nextSession.sideline
+        await updateSession(clubId, reconciled.id!, {
+          tableCount: reconciled.tableCount,
+          participants: reconciled.participants,
+          tables: reconciled.tables,
+          sideline: reconciled.sideline,
+          tableWinds: reconciled.tableWinds ?? {},
         })
-        return nextSession
+        return reconciled
       },
       'Unable to save that table change. It was reverted.',
     )
@@ -634,14 +653,15 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
     const assigned = Object.values(nextTables).flat()
     const sideline = setupParticipants.filter((playerId) => !assigned.includes(playerId))
 
-    const nextSession: SessionState = {
+    const nextSession: SessionState = withReconciledWinds({
       active: true,
       id: session.id,
       tableCount: setupTableCount,
       participants: setupParticipants,
       tables: nextTables,
-      sideline
-    }
+      sideline,
+      tableWinds: session.tableWinds,
+    })
 
     setSavingSession(true)
     try {
@@ -650,7 +670,8 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
           tableCount: setupTableCount,
           participants: setupParticipants,
           tables: nextTables,
-          sideline
+          sideline,
+          tableWinds: nextSession.tableWinds ?? {},
         })
         acceptServerSession(nextSession)
       } else {
@@ -707,6 +728,37 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
     return calculateTableScores({ players: playersOnTable, winner, winType: type, loser, fan: fanCount, rules: scoringRules })
   }
 
+  const advanceWindsAfterGame = async (
+    tableId: string,
+    outcome: 'self_draw' | 'discard' | 'draw',
+    winnerPlayerId: string | null,
+  ) => {
+    const current = sessionRef.current
+    if (!current.tableWinds?.[tableId]) return
+    try {
+      const advanced = await tableAction<{
+        status: string
+        session: TableSession
+      }>({
+        action: 'advanceTableWinds',
+        clubId,
+        tableNumber: Number(tableId),
+        outcome,
+        winnerPlayerId,
+        mode: windRotationSettings.mode,
+      })
+      if (advanced.session) {
+        acceptServerSession({
+          ...current,
+          ...fromTableSession(advanced.session),
+          active: true,
+        })
+      }
+    } catch {
+      /* game already saved; focused view can heal via reconcile */
+    }
+  }
+
   const submitWin = async (tableId: string) => {
     const scores = calcScores()
     if (!scores) { play('error'); return }
@@ -718,6 +770,8 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
 
     const requestValue = { scores, seasonNumber, winType: winState.winType, loser: winState.loser, fan: winState.fan }
     const idempotencyKey = gameRequestKey(tableId, requestValue)
+    const outcome = winState.winType === 'self' ? 'self_draw' as const : 'discard' as const
+    const winnerPlayerId = winState.winner
     setSavingGameTable(tableId)
     try {
       const result = await saveGame(clubId, {
@@ -725,15 +779,16 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         createdBy: user.uid,
         seasonNumber,
         tableId,
-        winType: winState.winType === 'self' ? 'self_draw' : 'discard',
+        winType: outcome,
         loserPlayerId: winState.winType === 'discard' ? winState.loser : null,
         fan: winState.winType === 'draw' ? null : winState.fan,
         notes: null,
         idempotencyKey
       })
       gameRequestRef.current.delete(tableId)
+      await advanceWindsAfterGame(tableId, outcome, winnerPlayerId)
       play('win')
-      setFlash({ scores, winner: winState.winner })
+      setFlash({ scores, winner: winnerPlayerId })
       closeAllWinPanels()
       setWinState(initialWinState)
       showToast(result.status === 'synced'
@@ -775,6 +830,7 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
         idempotencyKey
       })
       gameRequestRef.current.delete(tableId)
+      await advanceWindsAfterGame(tableId, 'draw', null)
       play('draw')
       setFlash({ scores, winner: null })
       showToast(result.status === 'synced'

@@ -6,25 +6,9 @@ import type { Meld } from '@/lib/hand-scoring/types'
 type HandMiniPreviewProps = {
   melds: Meld[]
   pair: MahjongTileId[]
-  flatTiles?: MahjongTileId[]
 }
 
-export default function HandMiniPreview({ melds, pair, flatTiles }: HandMiniPreviewProps) {
-  if (flatTiles?.length) {
-    return (
-      <div className="hand-scoring-mini-hand">
-        <p className="hand-scoring-popover-kicker">Your hand</p>
-        <div className="hand-scoring-mini-hand-groups">
-          <div className="hand-scoring-mini-hand-group is-flat" title="Special flat hand">
-            {flatTiles.map((id, index) => (
-              <StaticMahjongTile key={`${id}-${index}`} id={id} size={32} />
-            ))}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
+export default function HandMiniPreview({ melds, pair }: HandMiniPreviewProps) {
   return (
     <div className="hand-scoring-mini-hand">
       <p className="hand-scoring-popover-kicker">Your hand</p>
@@ -32,8 +16,8 @@ export default function HandMiniPreview({ melds, pair, flatTiles }: HandMiniPrev
         {melds.map((meld, index) => (
           <div
             key={`meld-${index}`}
-            className={`hand-scoring-mini-hand-group${meld.concealed ? ' is-concealed' : ' is-open'}`}
-            title={meld.concealed ? 'Concealed meld' : 'Open meld'}
+            className={`hand-scoring-mini-hand-group${meld.concealed ? ' is-concealed' : ' is-open'}${meld.tiles.length === 2 ? ' is-pair-group' : ''}`}
+            title={meld.tiles.length === 2 ? 'Pair group' : meld.concealed ? 'Concealed meld' : 'Open meld'}
           >
             {meld.tiles.map((id, tileIndex) => (
               <StaticMahjongTile key={`${id}-${tileIndex}`} id={id} size={32} />

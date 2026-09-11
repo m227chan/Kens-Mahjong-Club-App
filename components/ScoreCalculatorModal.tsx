@@ -4,12 +4,15 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import HandScoringCalculator from '@/components/hand-scoring/HandScoringCalculator'
 import type { ScoringRules } from '@/lib/scoring-rules'
+import type { Wind } from '@/lib/hand-scoring/types'
 
 type ScoreCalculatorModalProps = {
   clubId: string
   scoringRules: ScoringRules
   onClose: () => void
   onApplyFan?: (fan: number) => void
+  initialSeatWind?: Wind
+  initialRoundWind?: Wind
 }
 
 export default function ScoreCalculatorModal({
@@ -17,6 +20,8 @@ export default function ScoreCalculatorModal({
   scoringRules,
   onClose,
   onApplyFan,
+  initialSeatWind,
+  initialRoundWind,
 }: ScoreCalculatorModalProps) {
   const [mounted, setMounted] = useState(false)
 
@@ -43,6 +48,8 @@ export default function ScoreCalculatorModal({
           <HandScoringCalculator
             clubId={clubId}
             scoringRules={scoringRules}
+            initialSeatWind={initialSeatWind}
+            initialRoundWind={initialRoundWind}
             onApplyFan={
               onApplyFan
                 ? (fan) => {

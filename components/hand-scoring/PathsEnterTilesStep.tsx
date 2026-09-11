@@ -9,7 +9,7 @@ import {
   honorTileIds,
   type MahjongTileId,
 } from '@/components/MahjongTile'
-import { FLAT_HAND_TILE_COUNT } from '@/lib/hand-scoring/flat-hand-input'
+import { FLAT_HAND_MAX_TILE_COUNT } from '@/lib/hand-scoring/flat-hand-input'
 
 const TILE_GROUPS = [
   { label: 'Characters', ids: characterTileIds },
@@ -18,12 +18,12 @@ const TILE_GROUPS = [
   { label: 'Honors', ids: honorTileIds },
 ]
 
-type FlatHandBuilderProps = {
+type PathsEnterTilesStepProps = {
   tiles: MahjongTileId[]
   onChange: (tiles: MahjongTileId[]) => void
 }
 
-export default function FlatHandBuilder({ tiles, onChange }: FlatHandBuilderProps) {
+export default function PathsEnterTilesStep({ tiles, onChange }: PathsEnterTilesStepProps) {
   const counts = useMemo(() => {
     const map = new Map<MahjongTileId, number>()
     for (const tile of tiles) map.set(tile, (map.get(tile) ?? 0) + 1)
@@ -36,31 +36,26 @@ export default function FlatHandBuilder({ tiles, onChange }: FlatHandBuilderProp
       onChange(tiles.filter((tile) => tile !== id))
       return
     }
-    if (tiles.length >= FLAT_HAND_TILE_COUNT) return
+    if (tiles.length >= FLAT_HAND_MAX_TILE_COUNT) return
     onChange([...tiles, id])
   }
 
-  const removeTileAt = (index: number) => {
-    onChange(tiles.filter((_, tileIndex) => tileIndex !== index))
+  const removeAt = (index: number) => {
+    onChange(tiles.filter((_, i) => i !== index))
   }
 
   return (
-    <>
+    <div className="hand-scoring-field">
       <p className="hand-scoring-hint">
-        Tap up to {FLAT_HAND_TILE_COUNT} tiles for special hands like Thirteen Orphans or Nine Gates. Meld grouping is handled automatically.
+        Add the tiles you have now (any count). You can come back and add draws later. Flowers stay in the picker above.
       </p>
 
       <div className="hand-scoring-flat-hand">
         <div className="hand-scoring-flat-hand-header">
           <span className="hand-scoring-draft-label">
-            {tiles.length === 0 ? 'Select hand tiles' : `${tiles.length} / ${FLAT_HAND_TILE_COUNT} tiles`}
+            {tiles.length === 0 ? 'Select hand tiles' : `${tiles.length} / ${FLAT_HAND_MAX_TILE_COUNT} tiles`}
           </span>
-          <button
-            type="button"
-            className="hand-scoring-secondary-btn"
-            onClick={() => onChange([])}
-            disabled={tiles.length === 0}
-          >
+          <button type="button" className="hand-scoring-secondary-btn" onClick={() => onChange([])} disabled={tiles.length === 0}>
             Clear all
           </button>
         </div>
@@ -72,7 +67,7 @@ export default function FlatHandBuilder({ tiles, onChange }: FlatHandBuilderProp
                 type="button"
                 className="hand-scoring-flat-hand-tile-btn"
                 aria-label={`Remove ${id}`}
-                onClick={() => removeTileAt(index)}
+                onClick={() => removeAt(index)}
               >
                 <StaticMahjongTile id={id} size={40} />
               </button>
@@ -87,7 +82,7 @@ export default function FlatHandBuilder({ tiles, onChange }: FlatHandBuilderProp
           <div className="hand-scoring-tile-grid">
             {group.ids.map((id) => {
               const count = counts.get(id) ?? 0
-              const disabled = tiles.length >= FLAT_HAND_TILE_COUNT && count === 0
+              const disabled = tiles.length >= FLAT_HAND_MAX_TILE_COUNT && count === 0
               return (
                 <button
                   key={id}
@@ -105,6 +100,6 @@ export default function FlatHandBuilder({ tiles, onChange }: FlatHandBuilderProp
           </div>
         </div>
       ))}
-    </>
+    </div>
   )
 }

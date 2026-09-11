@@ -13,6 +13,8 @@ import {
   linkSelfToPlayer,
   mutateTable,
   requestQrEnrollment,
+  setTableWinds,
+  advanceTableWinds,
 } from '@/lib/server/table-checkin'
 
 export const runtime = 'nodejs'
@@ -78,6 +80,66 @@ export async function POST(request: NextRequest) {
           playerId: body.playerId ? String(body.playerId) : undefined,
           replacePlayerId: body.replacePlayerId
             ? String(body.replacePlayerId)
+            : undefined,
+        })
+      }
+      if (action === 'setTableWinds') {
+        if (caller.kind === 'guest') {
+          assertGuestTableScope(caller, clubId, Number(body.tableNumber))
+        }
+        return setTableWinds(db, caller, {
+          clubId,
+          tableNumber: Number(body.tableNumber),
+          starterPlayerId: body.starterPlayerId
+            ? String(body.starterPlayerId)
+            : null,
+          clear: Boolean(body.clear),
+          reconcile: Boolean(body.reconcile),
+          patch:
+            body.patch && typeof body.patch === 'object'
+              ? {
+                  roundWind:
+                    (body.patch as { roundWind?: unknown }).roundWind != null
+                      ? String((body.patch as { roundWind?: unknown }).roundWind)
+                      : undefined,
+                  dealerPlayerId:
+                    (body.patch as { dealerPlayerId?: unknown }).dealerPlayerId !=
+                    null
+                      ? String(
+                          (body.patch as { dealerPlayerId?: unknown })
+                            .dealerPlayerId,
+                        )
+                      : undefined,
+                  handNumber:
+                    (body.patch as { handNumber?: unknown }).handNumber != null
+                      ? Number(
+                          (body.patch as { handNumber?: unknown }).handNumber,
+                        )
+                      : undefined,
+                }
+              : null,
+        })
+      }
+      if (action === 'advanceTableWinds') {
+        if (caller.kind === 'guest') {
+          assertGuestTableScope(caller, clubId, Number(body.tableNumber))
+        }
+        const outcome = String(body.outcome ?? '')
+        if (!['self_draw', 'discard', 'draw'].includes(outcome)) {
+          throw new Error('Choose a valid hand outcome before advancing winds.')
+        }
+        return advanceTableWinds(db, caller, {
+          clubId,
+          tableNumber: Number(body.tableNumber),
+          outcome: outcome as 'self_draw' | 'discard' | 'draw',
+          winnerPlayerId: body.winnerPlayerId
+            ? String(body.winnerPlayerId)
+            : null,
+          mode: body.mode
+            ? (String(body.mode) as
+                | 'non_dealer_and_draw'
+                | 'non_dealer_only'
+                | 'always')
             : undefined,
         })
       }

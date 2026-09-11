@@ -2207,6 +2207,216 @@ html.dark .club-workspace-header {
 }
 .fan-choice-grid { grid-template-columns: repeat(auto-fit, minmax(3.1rem, 1fr)) !important; }
 
+/* Focused wind tracker layout */
+.focused-wind-status {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: .75rem;
+  margin-bottom: 1rem;
+}
+.focused-wind-status-label {
+  display: block;
+  margin-bottom: .35rem;
+  font-size: .7rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: rgb(var(--muted));
+}
+.focused-wind-round-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  min-height: 2.75rem;
+  padding: .4rem .9rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(var(--bamboo));
+  color: #fff;
+  font-size: .78rem;
+  font-weight: 900;
+  letter-spacing: .04em;
+  cursor: pointer;
+}
+.focused-wind-round-pill:disabled {
+  cursor: default;
+  opacity: .7;
+}
+.focused-wind-round-char {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 2.45rem;
+  overflow: hidden;
+  border-radius: .35rem;
+  background: transparent;
+}
+.focused-wind-hand {
+  display: block;
+  margin-top: .35rem;
+  font-size: .75rem;
+  font-weight: 700;
+  color: rgb(var(--muted));
+}
+.focused-wind-dealer-box {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: .45rem .85rem;
+  border: 1px solid rgb(var(--line));
+  border-radius: .9rem;
+  background: rgb(var(--surface));
+  font-size: .85rem;
+  font-weight: 900;
+  letter-spacing: .04em;
+  cursor: pointer;
+  text-align: left;
+}
+.focused-wind-dealer-box:disabled {
+  cursor: default;
+  opacity: .7;
+}
+.focused-wind-compass {
+  position: relative;
+  min-height: 22rem;
+  padding: .25rem 0 1rem;
+  overflow: hidden;
+}
+.focused-wind-stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: auto auto auto;
+  gap: .65rem;
+  min-height: 22rem;
+  transform-origin: center center;
+}
+.focused-wind-seat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: .45rem;
+  min-height: 7.5rem;
+  padding: .85rem;
+  border: 1px solid rgb(var(--line));
+  border-radius: 1.1rem;
+  background: linear-gradient(160deg, rgb(var(--surface)), rgb(var(--surface-2)));
+  text-align: left;
+  box-shadow: 0 8px 20px rgb(var(--shadow) / .08);
+}
+.focused-wind-seat-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: .45rem;
+  width: 100%;
+}
+.focused-wind-seat--top { grid-column: 2; grid-row: 1; }
+.focused-wind-seat--left { grid-column: 1; grid-row: 2; }
+.focused-wind-seat--right { grid-column: 3; grid-row: 2; }
+.focused-wind-seat--bottom { grid-column: 2; grid-row: 3; }
+.focused-wind-seat.is-empty {
+  visibility: hidden;
+  pointer-events: none;
+}
+.focused-wind-seat.is-dealer {
+  border-color: rgb(var(--bamboo));
+  box-shadow: 0 0 0 2px rgb(var(--bamboo) / .25), 0 10px 24px rgb(var(--shadow) / .12);
+}
+.focused-wind-stage.is-rotating {
+  animation: focused-wind-rotate .8s cubic-bezier(.2, .8, .2, 1) both;
+}
+.focused-wind-stage.is-rotating .focused-wind-seat-inner {
+  animation: focused-wind-counter-rotate .8s cubic-bezier(.2, .8, .2, 1) both;
+}
+/* Clockwise 90°: South (right) → East (bottom) as dealer advances. */
+@keyframes focused-wind-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(90deg); }
+}
+@keyframes focused-wind-counter-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-90deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .focused-wind-stage.is-rotating,
+  .focused-wind-stage.is-rotating .focused-wind-seat-inner {
+    animation: none;
+  }
+}
+.focused-wind-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 0;
+}
+.focused-wind-tile .static-mahjong-tile {
+  border-radius: .35rem;
+  box-shadow: 0 2px 8px rgb(var(--shadow) / .18);
+}
+.focused-wind-meta { display: grid; gap: .15rem; width: 100%; }
+.focused-wind-phonetic {
+  font-size: .68rem;
+  font-weight: 700;
+  color: rgb(var(--muted));
+}
+.focused-wind-name {
+  font-size: .78rem;
+  font-weight: 900;
+  letter-spacing: .02em;
+  color: rgb(var(--ink));
+}
+.focused-wind-score {
+  margin-top: .2rem;
+  font-size: 1.55rem;
+  font-weight: 900;
+  line-height: 1;
+  color: rgb(var(--ink));
+}
+.focused-wind-score.is-negative { color: rgb(var(--cinnabar)); }
+.focused-layout-switch {
+  position: relative;
+  display: inline-flex;
+  width: 3.1rem;
+  height: 1.8rem;
+  flex-shrink: 0;
+}
+.focused-layout-switch input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.focused-layout-switch span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: rgb(var(--line));
+  transition: background .2s ease;
+}
+.focused-layout-switch span::after {
+  content: '';
+  position: absolute;
+  top: .2rem;
+  left: .2rem;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  background: #fff;
+  transition: transform .2s ease;
+}
+.focused-layout-switch input:checked + span { background: rgb(var(--bamboo)); }
+.focused-layout-switch input:checked + span::after { transform: translateX(1.25rem); }
+.focused-settings-glyph {
+  font-size: 1.1rem;
+  font-weight: 900;
+  letter-spacing: -.08em;
+}
+
 /* The focused table follows the saved app theme while retaining its felt-table identity. */
 .focused-table {
   color: rgb(var(--ink));
@@ -3084,7 +3294,7 @@ html.dark .brand-descriptor { color: rgb(255 249 226); }
 .hand-scoring-chip { min-height: 2.25rem; border: 1px solid rgb(var(--line)); border-radius: 999px; padding: .35rem .75rem; background: rgb(var(--surface-2)); font-size: .78rem; font-weight: 800; color: rgb(var(--ink)); }
 .hand-scoring-chip.is-active { border-color: rgb(var(--gold)); background: rgb(var(--gold) / .16); color: rgb(var(--ink)); }
 .hand-scoring-tile-grid { display: flex; flex-wrap: wrap; gap: .35rem; }
-.hand-scoring-tile-btn { display: grid; place-items: center; border: 1px solid rgb(var(--line)); border-radius: 10px; padding: .2rem; background: rgb(var(--surface-2)); }
+.hand-scoring-tile-btn { position: relative; display: grid; place-items: center; border: 1px solid rgb(var(--line)); border-radius: 10px; padding: .2rem; background: rgb(var(--surface-2)); }
 .hand-scoring-tile-btn.is-selected { border-color: rgb(var(--bamboo)); box-shadow: 0 0 0 2px rgb(var(--bamboo) / .18); }
 .hand-scoring-tile-btn.is-seat-flower { border-color: rgb(var(--gold)); background: rgb(var(--gold) / .12); position: relative; }
 .hand-scoring-seat-flower-mark { position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); font-size: .55rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: rgb(var(--cinnabar)); }
@@ -3161,6 +3371,7 @@ html.dark .brand-descriptor { color: rgb(255 249 226); }
 .hand-scoring-mini-hand-group.is-open { outline: 1px solid rgb(var(--gold) / .4); }
 .hand-scoring-mini-hand-group.is-concealed { outline: 1px solid rgb(var(--bamboo) / .35); }
 .hand-scoring-mini-hand-group.is-pair { outline: 1px dashed rgb(var(--line)); }
+.hand-scoring-mini-hand-group.is-pair-group { outline: 1px dashed rgb(var(--line)); }
 .hand-scoring-mini-hand-group.is-flat { flex-wrap: wrap; max-width: 100%; }
 .hand-scoring-flat-hand { display: grid; gap: .55rem; padding: .75rem; border: 1px solid rgb(var(--line)); border-radius: 12px; background: rgb(var(--surface)); }
 .hand-scoring-flat-hand-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; }
@@ -3179,7 +3390,7 @@ html.dark .brand-descriptor { color: rgb(255 249 226); }
 .hand-scoring-total-explanation-row.is-emphasis dd { font-size: .82rem; }
 .hand-scoring-total-explanation-note { margin: 0; color: rgb(var(--muted)); font-size: .72rem; line-height: 1.45; }
 .hand-scoring-total { margin: .15rem 0 0; font-size: 2rem; font-weight: 900; color: rgb(var(--ink)); }
-.hand-scoring-limit-label { display: inline-block; margin-left: .45rem; color: rgb(var(--muted)); font-size: .72rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; vertical-align: middle; }
+.hand-scoring-limit-label { display: inline-block; margin-left: .45rem; color: rgb(var(--cinnabar)); font-size: .78rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; vertical-align: middle; }
 .hand-scoring-hint .hand-scoring-limit-label { margin-left: .25rem; font-size: .68rem; }
 .hand-scoring-badge { display: inline-flex; align-items: center; min-height: 2rem; border-radius: 999px; padding: .35rem .75rem; font-size: .72rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 .hand-scoring-badge.is-pass { background: rgb(var(--bamboo) / .14); color: rgb(var(--bamboo)); }
@@ -3258,6 +3469,8 @@ html.dark .brand-descriptor { color: rgb(255 249 226); }
 .hand-scoring-suggestion-item.has-example { cursor: help; }
 .hand-scoring-suggestion-row { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; width: 100%; }
 .hand-scoring-suggestion-title { font-weight: 700; color: rgb(var(--ink)); }
+.hand-scoring-suggestion-copy { display: grid; gap: .2rem; min-width: 0; }
+.hand-scoring-suggestion-meta { flex: none; font-size: .72rem; font-weight: 800; color: rgb(var(--bamboo)); text-align: right; }
 .hand-scoring-suggestion-actions { display: flex; flex-shrink: 0; flex-direction: column; align-items: flex-end; gap: .35rem; }
 .hand-scoring-example-toggle { border: 0; background: transparent; color: rgb(var(--bamboo)); font-size: .72rem; font-weight: 800; text-decoration: underline; text-underline-offset: .12em; cursor: pointer; }
 .hand-scoring-suggestion-example-panel { padding-top: .15rem; border-top: 1px solid rgb(var(--line)); }
@@ -3302,6 +3515,158 @@ html.dark .brand-descriptor { color: rgb(255 249 226); }
   }
 }
 .hand-scoring-suggestions { display: grid; gap: .65rem; padding: 1rem; border: 1px solid rgb(var(--line)); border-radius: 14px; background: rgb(var(--surface)); }
+.hand-scoring-paths-status {
+  display: grid;
+  gap: .35rem;
+  padding: .85rem 1rem;
+  border: 1px solid rgb(var(--line));
+  border-radius: 14px;
+  background: rgb(var(--surface-2));
+}
+.hand-scoring-paths-current-fan {
+  margin: 0;
+  font-size: .95rem;
+  font-weight: 800;
+  color: rgb(var(--ink));
+}
+.hand-scoring-paths-layout {
+  display: grid;
+  gap: 1rem;
+}
+.paths-wizard { display: grid; gap: 1rem; }
+.paths-wizard-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .5rem;
+}
+.paths-wizard-step {
+  display: grid;
+  gap: .25rem;
+  justify-items: start;
+  min-height: 3.25rem;
+  padding: .65rem .75rem;
+  border: 1px solid rgb(var(--line));
+  border-radius: 12px;
+  background: rgb(var(--surface-2));
+  color: rgb(var(--muted));
+  text-align: left;
+  cursor: pointer;
+}
+.paths-wizard-step.is-active {
+  border-color: rgb(var(--bamboo) / .55);
+  background: rgb(var(--bamboo) / .1);
+  color: rgb(var(--ink));
+}
+.paths-wizard-step.is-complete { border-color: rgb(var(--gold) / .4); }
+.paths-wizard-step-num {
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.paths-wizard-step-label { font-size: .82rem; font-weight: 800; }
+.paths-wizard-nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: .5rem;
+}
+.hand-scoring-flat-hand-tile-btn.is-useful {
+  border-color: rgb(var(--bamboo) / .65);
+  box-shadow: 0 0 0 2px rgb(var(--bamboo) / .18);
+}
+.hand-scoring-flat-hand-tile-btn.is-clear-drop {
+  opacity: .42;
+  border-style: dashed;
+  filter: grayscale(.35);
+}
+.paths-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem;
+  align-items: center;
+}
+.paths-legend-useful::before,
+.paths-legend-drop::before {
+  content: "";
+  display: inline-block;
+  width: .65rem;
+  height: .65rem;
+  margin-right: .35rem;
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+.paths-legend-useful::before {
+  background: rgb(var(--bamboo) / .55);
+}
+.paths-legend-drop::before {
+  border: 1px dashed rgb(var(--muted));
+  background: transparent;
+}
+.paths-pattern-btn {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .75rem;
+  border: 1px solid rgb(var(--line));
+  border-radius: 12px;
+  background: rgb(var(--surface-2));
+  text-align: left;
+  cursor: pointer;
+}
+.paths-pattern-btn.is-focused {
+  border-color: rgb(var(--bamboo) / .55);
+  background: rgb(var(--bamboo) / .1);
+}
+.paths-pattern-btn.is-matched { outline: 1px solid rgb(var(--gold) / .35); }
+.paths-pattern-item {
+  padding: .7rem .75rem;
+  border: 1px solid rgb(var(--line));
+  border-radius: 12px;
+  background: rgb(var(--surface));
+}
+.paths-pattern-item.is-focused {
+  border-color: rgb(var(--bamboo) / .55);
+  background: rgb(var(--bamboo) / .1);
+}
+.paths-pattern-item.is-matched { outline: 1px solid rgb(var(--gold) / .35); }
+.paths-pattern-select {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+.hand-scoring-paths-pattern-list { display: grid; gap: .55rem; }
+.hand-scoring-paths-pattern-list .hand-scoring-suggestion-list {
+  display: grid;
+  gap: .55rem;
+  margin: .55rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.hand-scoring-paths-invalid {
+  margin: 0 .8rem .75rem;
+  padding: .65rem .75rem;
+  border: 1px solid rgb(var(--cinnabar) / .35);
+  border-radius: 10px;
+  background: rgb(var(--cinnabar) / .08);
+  color: rgb(var(--ink));
+  font-size: .8rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.hand-scoring-paths-tile-editor {
+  padding: .75rem;
+  border: 1px solid rgb(var(--line));
+  border-radius: 12px;
+  background: rgb(var(--surface));
+}
 .hand-scoring-suggestion-section { border: 1px solid rgb(var(--line)); border-radius: 12px; background: rgb(var(--surface-2)); overflow: visible; }
 .hand-scoring-suggestion-section-toggle { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: .75rem; padding: .7rem .8rem; border: 0; background: transparent; color: rgb(var(--ink)); text-align: left; cursor: pointer; }
 .hand-scoring-suggestion-section-title { font-size: .82rem; font-weight: 900; }

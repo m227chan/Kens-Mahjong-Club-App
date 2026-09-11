@@ -6,7 +6,7 @@ import { detectPatterns } from '@/lib/hand-scoring/detect-patterns'
 import { parseFanValue } from '@/lib/hand-scoring/parse-fan'
 import { SCORING_PATTERNS } from '@/lib/hand-scoring/patterns'
 import { isCompleteHand, COMPLETE_HAND_TILE_COUNT } from '@/lib/hand-scoring/hand-complete'
-import { flatTilesToMeldsAndPair } from '@/lib/hand-scoring/flat-hand-input'
+import { flatTilesToMeldsAndPair, enumerateHandGroupings, preferHandGrouping, transferConcealment } from '@/lib/hand-scoring/flat-hand-input'
 import { isPatternCompatible } from '@/lib/hand-scoring/pattern-compatibility'
 import { suggestPatterns } from '@/lib/hand-scoring/suggest-patterns'
 import type { HandScoringInput, Meld } from '@/lib/hand-scoring/types'
@@ -201,6 +201,46 @@ describe('hand scoring engine', () => {
     expect(isPatternCompatible(withMiddleTile, 'thirteen-orphans')).toBe(false)
   })
 
+  it('uses locked melds and loose tiles for progressive path compatibility', () => {
+    const twoDragonPongs = baseInput({
+      melds: [pong('red', false), pong('green', false)],
+    })
+    expect(isPatternCompatible(twoDragonPongs, 'all-triplets')).toBe(true)
+    expect(isPatternCompatible(twoDragonPongs, 'big-three-dragons')).toBe(true)
+    expect(isPatternCompatible(twoDragonPongs, 'thirteen-orphans')).toBe(false)
+
+    const pongsPlusSecondSuitLoose = baseInput({
+      melds: [pong('c1'), pong('c9')],
+      looseTiles: ['b2'],
+    })
+    expect(isPatternCompatible(pongsPlusSecondSuitLoose, 'pure-flush')).toBe(false)
+    expect(isPatternCompatible(pongsPlusSecondSuitLoose, 'mixed-flush')).toBe(false)
+
+    const pongsPlusHonorLoose = baseInput({
+      melds: [pong('c1'), pong('c9')],
+      looseTiles: ['east'],
+    })
+    expect(isPatternCompatible(pongsPlusHonorLoose, 'pure-flush')).toBe(false)
+    expect(isPatternCompatible(pongsPlusHonorLoose, 'mixed-flush')).toBe(true)
+
+    const orphanLooseOnly = baseInput({
+      melds: [],
+      looseTiles: ['c1', 'c9', 'b1', 'east', 'red'],
+    })
+    expect(isPatternCompatible(orphanLooseOnly, 'thirteen-orphans')).toBe(true)
+
+    const orphanLooseBroken = baseInput({
+      melds: [],
+      looseTiles: ['c1', 'c9', 'b1', 'east', 'red', 'c5'],
+    })
+    expect(isPatternCompatible(orphanLooseBroken, 'thirteen-orphans')).toBe(false)
+
+    const lockedChow = baseInput({
+      melds: [chow('c2', 'c3', 'c4')],
+    })
+    expect(isPatternCompatible(lockedChow, 'all-triplets')).toBe(false)
+  })
+
   it('rejects big four winds when committed melds cannot reach four wind pongs', () => {
     const withOpenCharacterPong = baseInput({
       melds: [pong('c2', false)],
@@ -301,9 +341,28 @@ describe('hand scoring engine', () => {
       main: '8+',
       limitLabel: 'Limit (10)',
     })
+    expect(describeTotalFan(result, rules).rows.at(-1)?.value).toBe('7 + 3 = 10 → 8+ Limit (10)')
   })
 
-  it('converts special-flat tiles into engine input for Thirteen Orphans', () => {
+  it('shows uncapped stacked fan in brackets when over the club max', () => {
+    const input = baseInput({
+      melds: [pong('red'), pong('green'), pong('c1'), pong('east')],
+      pair: ['white', 'white'],
+    })
+    const result = calculateFan(input, DEFAULT_SCORING_RULES)
+    expect(result.patterns.map((p) => p.id)).toEqual(
+      expect.arrayContaining(['small-three-dragons', 'mixed-flush', 'mixed-terminals', 'all-triplets']),
+    )
+    expect(result.rawFan).toBeGreaterThan(DEFAULT_SCORING_RULES.maxFan)
+    expect(result.isCapped).toBe(true)
+    expect(result.totalFan).toBe(DEFAULT_SCORING_RULES.maxFan)
+    expect(totalFanDisplay(result, DEFAULT_SCORING_RULES)).toEqual({
+      main: '13+',
+      limitLabel: `Limit (${result.rawFan})`,
+    })
+  })
+
+  it('converts tile-bag input into engine input for Thirteen Orphans', () => {
     const flatTiles = [
       'c1', 'c9', 'b1', 'b9', 'o1', 'o9',
       'east', 'south', 'west', 'north', 'red', 'green', 'white', 'c1',
@@ -315,7 +374,7 @@ describe('hand scoring engine', () => {
     expect(isCompleteHand(input)).toBe(true)
   })
 
-  it('converts special-flat tiles into engine input for Nine Gates', () => {
+  it('converts tile-bag input into engine input for Nine Gates', () => {
     const flatTiles = [
       'c1', 'c1', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'c9', 'c9', 'c1',
     ] as const
@@ -326,7 +385,7 @@ describe('hand scoring engine', () => {
     expect(isCompleteHand(input)).toBe(true)
   })
 
-  it('converts special-flat tiles into engine input for Pure Straight', () => {
+  it('converts tile-bag input into engine input for Pure Straight', () => {
     const flatTiles = [
       'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'b1', 'b2', 'b3', 'o1', 'o1',
     ] as const
@@ -335,5 +394,67 @@ describe('hand scoring engine', () => {
     const result = calculateFan(input, DEFAULT_SCORING_RULES)
     expect(result.patterns.map((p) => p.id)).toContain('pure-straight')
     expect(isCompleteHand(input)).toBe(true)
+  })
+
+  it('returns no groupings for an incomplete tile bag', () => {
+    expect(enumerateHandGroupings(['c1', 'c2', 'c3', 'c4', 'c5'])).toEqual([])
+  })
+
+  it('enumerates alternate groupings for ambiguous tiles and prefers higher fan', () => {
+    const flatTiles = [
+      'c1', 'c1', 'c1', 'c2', 'c2', 'c2', 'c3', 'c3', 'c3',
+      'b5', 'b5', 'b5',
+      'east', 'east',
+    ] as const
+    const groupings = enumerateHandGroupings([...flatTiles])
+    expect(groupings.length).toBeGreaterThan(1)
+
+    const chowGrouping = groupings.find((grouping) =>
+      grouping.melds.filter((meld) => meld.tiles[0] !== meld.tiles[1]).length >= 3,
+    )
+    const pongGrouping = groupings.find((grouping) =>
+      grouping.melds.every((meld) => meld.tiles[0] === meld.tiles[1]),
+    )
+    expect(chowGrouping).toBeTruthy()
+    expect(pongGrouping).toBeTruthy()
+
+    const preferred = groupings[preferHandGrouping(groupings, { includeNonTraditional: true })]
+    const preferredIds = calculateFan(
+      baseInput({ melds: preferred.melds, pair: preferred.pair, includeNonTraditional: true }),
+      DEFAULT_SCORING_RULES,
+    ).patterns.map((p) => p.id)
+    expect(preferredIds).toContain('all-triplets')
+  })
+
+  it('transfers concealment flags across swapped groupings when melds match', () => {
+    const from = [
+      { tiles: ['c1', 'c2', 'c3'] as const, concealed: false },
+      { tiles: ['c4', 'c5', 'c6'] as const, concealed: true },
+    ]
+    const to = [
+      { tiles: ['c4', 'c5', 'c6'] as const, concealed: true },
+      { tiles: ['c1', 'c2', 'c3'] as const, concealed: true },
+      { tiles: ['b1', 'b1', 'b1'] as const, concealed: true },
+    ]
+    const transferred = transferConcealment(
+      from.map((meld) => ({ tiles: [...meld.tiles], concealed: meld.concealed })),
+      to.map((meld) => ({ tiles: [...meld.tiles], concealed: meld.concealed })),
+    )
+    expect(transferred[0].concealed).toBe(true)
+    expect(transferred[1].concealed).toBe(false)
+    expect(transferred[2].concealed).toBe(true)
+  })
+
+  it('detects concealed hand only when grouped melds stay concealed', () => {
+    const flatTiles = [
+      'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'b1', 'b2', 'b3', 'o1', 'o1',
+    ] as const
+    const { melds, pair } = flatTilesToMeldsAndPair([...flatTiles])
+    const concealed = calculateFan(baseInput({ melds, pair }), DEFAULT_SCORING_RULES)
+    expect(concealed.patterns.map((p) => p.id)).toContain('concealed-hand')
+
+    const opened = melds.map((meld, index) => (index === 0 ? { ...meld, concealed: false } : meld))
+    const openResult = calculateFan(baseInput({ melds: opened, pair }), DEFAULT_SCORING_RULES)
+    expect(openResult.patterns.map((p) => p.id)).not.toContain('concealed-hand')
   })
 })

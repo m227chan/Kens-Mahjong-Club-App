@@ -123,7 +123,7 @@ export default function ClubToolSidebar({
         { label: 'Analytics', detail: 'Scores, Skill, and records', icon: 'chart' as const, tour: 'analytics-open', open: analyticsOpen, onClick: onAnalytics, dialog: 'club-analytics-dialog' },
         { label: 'Game logs', detail: 'Review recorded games', icon: 'list' as const, tour: 'logs-open', open: gameLogsOpen, onClick: onGameLogs, dialog: 'game-logs-dialog' },
         { label: 'Player network', detail: 'See shared-table history', icon: 'network' as const, tour: 'network-open', open: networkOpen, onClick: onNetwork, dialog: 'network-graph-dialog' },
-        { label: 'Score Calculator', detail: 'Calculate fan and find winning paths', icon: 'calculator' as const, tour: 'score-calculator-open', open: scoreCalculatorOpen, onClick: onScoreCalculator, dialog: 'score-calculator-dialog' },
+        { label: 'Score Calculator', detail: 'Calculate fan and shape hands with Hand helper', icon: 'calculator' as const, tour: 'score-calculator-open', open: scoreCalculatorOpen, onClick: onScoreCalculator, dialog: 'score-calculator-dialog' },
       ],
     },
     {

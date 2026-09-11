@@ -5,6 +5,20 @@ import type { PoolClient } from 'pg'
 import { clampSessionTableCount, normalizeSessionLayout } from '@/lib/session-layout'
 import { verifyTableQr } from '@/lib/qr-signing'
 import { scoringRulesFromRow } from '@/lib/scoring-rules'
+import { windRotationSettingsFromRow } from '@/lib/wind-rotation-settings'
+import {
+  applyTableWindPatch,
+  clearTableWind,
+  continueWindsAfterRosterChange,
+  initTableWinds,
+  isTableWindState,
+  nextWindState,
+  parseTableWindsMap,
+  type TableWindState,
+  type WindOutcome,
+  WINDS,
+} from '@/lib/table-winds'
+import type { WindRotationMode } from '@/lib/wind-rotation-settings'
 import { addPlayerToActiveSession } from '@/lib/server/roster-session'
 import { assertClubCompetitionEditable } from '@/lib/server/season-management'
 import type { AuthCaller } from '@/lib/server/auth-caller'
@@ -40,6 +54,7 @@ function sessionPayload(row: SessionRow | undefined) {
     participants,
     tables: normalized.tables,
     sideline: normalized.sideline,
+    tableWinds: parseTableWindsMap(row.table_winds),
     revision: Number(row.revision ?? 0),
   }
 }
@@ -268,6 +283,16 @@ async function loadScoringRules(db: PoolClient, clubId: string) {
   return scoringRulesFromRow(config)
 }
 
+async function loadWindRotation(db: PoolClient, clubId: string) {
+  const config = (
+    await db.query(
+      'select wind_rotation_mode from app_configs where club_id=$1',
+      [clubId],
+    )
+  ).rows[0]
+  return windRotationSettingsFromRow(config)
+}
+
 export async function getTableContext(
   db: PoolClient,
   caller: AuthCaller | Caller,
@@ -310,6 +335,7 @@ export async function getTableContext(
       players,
       linkedPlayer: null,
       scoringRules: await loadScoringRules(db, normalizedClub),
+      windRotation: await loadWindRotation(db, normalizedClub),
       guest: true as const,
     }
   }
@@ -342,6 +368,7 @@ export async function getTableContext(
     linkedPlayer:
       players.find((player) => player.authUid === memberUid) ?? null,
     scoringRules: await loadScoringRules(db, normalizedClub),
+    windRotation: await loadWindRotation(db, normalizedClub),
     guest: false as const,
   }
 }
@@ -669,12 +696,193 @@ export async function mutateTable(
     await markOccupied(db, String(row.id), targetTable, wasEmpty)
   }
 
+  let tableWinds = parseTableWindsMap(row.table_winds)
+  if (input.action === 'clearAll') {
+    tableWinds = {}
+  } else if (input.action === 'clear') {
+    tableWinds = clearTableWind(tableWinds, String(targetTable))
+  } else {
+    const key = String(targetTable)
+    const continued = continueWindsAfterRosterChange(
+      tableWinds[key],
+      tables[key] ?? [],
+    )
+    if (continued) tableWinds = { ...tableWinds, [key]: continued }
+    else tableWinds = clearTableWind(tableWinds, key)
+  }
+
   const updated = (
     await db.query(
-      `update sessions set table_count=$1,participants=$2,tables=$3,sideline=$4,revision=revision+1
-    where id=$5 returning *`,
-      [nextCount, participants, JSON.stringify(tables), sideline, row.id],
+      `update sessions set table_count=$1,participants=$2,tables=$3,sideline=$4,table_winds=$5,revision=revision+1
+    where id=$6 returning *`,
+      [
+        nextCount,
+        participants,
+        JSON.stringify(tables),
+        sideline,
+        JSON.stringify(tableWinds),
+        row.id,
+      ],
     )
   ).rows[0]
   return { status: 'ok' as const, session: sessionPayload(updated) }
+}
+
+async function lockActiveSession(
+  db: PoolClient,
+  caller: AuthCaller | Caller,
+  clubIdRaw: string,
+  tableNumber: number,
+) {
+  const clubId = clubIdRaw.trim().toUpperCase()
+  const targetTable = Math.min(99, Math.max(1, Math.floor(tableNumber || 1)))
+  const authCaller = caller as AuthCaller
+  const isGuest = 'kind' in authCaller && authCaller.kind === 'guest'
+  if (isGuest) assertGuestTableScope(authCaller, clubId, targetTable)
+  else await requireMember(db, clubId, authCaller.kind === 'member' ? authCaller.uid : (caller as Caller).uid)
+
+  await db.query('select pg_advisory_xact_lock(hashtext($1))', [
+    `session:${clubId}`,
+  ])
+  const row = (
+    await db.query(
+      'select * from sessions where club_id=$1 and is_active for update',
+      [clubId],
+    )
+  ).rows[0]
+  if (!row) throw new Error('Start or join a session before changing this table.')
+  await assertClubCompetitionEditable(db, clubId, Number(row.season_number))
+  if (isGuest && targetTable > clampSessionTableCount(Number(row.table_count))) {
+    throw new Error(
+      'That table is no longer available. Ask a club member to add it to the session.',
+    )
+  }
+  return { clubId, targetTable, row, isGuest }
+}
+
+export async function setTableWinds(
+  db: PoolClient,
+  caller: AuthCaller | Caller,
+  input: {
+    clubId: string
+    tableNumber: number
+    starterPlayerId?: string | null
+    clear?: boolean
+    reconcile?: boolean
+    patch?: {
+      roundWind?: string
+      dealerPlayerId?: string
+      handNumber?: number
+    } | null
+  },
+) {
+  const { clubId, targetTable, row } = await lockActiveSession(
+    db,
+    caller,
+    input.clubId,
+    input.tableNumber,
+  )
+  const key = String(targetTable)
+  const seats = ((row.tables as Record<string, string[]>) ?? {})[key] ?? []
+  let tableWinds = parseTableWindsMap(row.table_winds)
+
+  if (input.clear) {
+    tableWinds = clearTableWind(tableWinds, key)
+  } else if (input.reconcile) {
+    const continued = continueWindsAfterRosterChange(tableWinds[key], seats)
+    if (continued) tableWinds = { ...tableWinds, [key]: continued }
+    else tableWinds = clearTableWind(tableWinds, key)
+  } else if (input.patch) {
+    const current = tableWinds[key]
+    if (!current || !isTableWindState(current)) {
+      throw new Error('Choose who starts as East before adjusting table winds.')
+    }
+    const roundWind =
+      input.patch.roundWind != null
+        ? String(input.patch.roundWind)
+        : undefined
+    if (roundWind != null && !WINDS.includes(roundWind as (typeof WINDS)[number])) {
+      throw new Error('Choose a valid table wind.')
+    }
+    const patched = applyTableWindPatch(
+      current,
+      {
+        roundWind: roundWind as (typeof WINDS)[number] | undefined,
+        dealerPlayerId: input.patch.dealerPlayerId
+          ? String(input.patch.dealerPlayerId)
+          : undefined,
+        handNumber:
+          input.patch.handNumber != null
+            ? Number(input.patch.handNumber)
+            : undefined,
+      },
+      seats,
+    )
+    tableWinds = { ...tableWinds, [key]: patched }
+  } else if (input.starterPlayerId) {
+    const state = initTableWinds(String(input.starterPlayerId), seats)
+    tableWinds = { ...tableWinds, [key]: state }
+  } else {
+    tableWinds = clearTableWind(tableWinds, key)
+  }
+
+  const updated = (
+    await db.query(
+      `update sessions set table_winds=$1,revision=revision+1 where id=$2 returning *`,
+      [JSON.stringify(tableWinds), row.id],
+    )
+  ).rows[0]
+  return { status: 'ok' as const, session: sessionPayload(updated) }
+}
+
+export async function advanceTableWinds(
+  db: PoolClient,
+  caller: AuthCaller | Caller,
+  input: {
+    clubId: string
+    tableNumber: number
+    outcome: WindOutcome
+    winnerPlayerId?: string | null
+    mode?: WindRotationMode
+  },
+) {
+  const { clubId, targetTable, row } = await lockActiveSession(
+    db,
+    caller,
+    input.clubId,
+    input.tableNumber,
+  )
+  const key = String(targetTable)
+  const seats = ((row.tables as Record<string, string[]>) ?? {})[key] ?? []
+  let tableWinds = parseTableWindsMap(row.table_winds)
+  const current = tableWinds[key]
+  if (!current || !isTableWindState(current)) {
+    return { status: 'ok' as const, session: sessionPayload(row), rotated: false }
+  }
+
+  const mode =
+    input.mode ??
+    (await loadWindRotation(db, clubId)).mode
+
+  const { state, rotated } = nextWindState({
+    mode,
+    outcome: input.outcome,
+    winnerPlayerId: input.winnerPlayerId ?? null,
+    state: current,
+    liveSeatOrder: seats,
+  })
+  tableWinds = { ...tableWinds, [key]: state }
+
+  const updated = (
+    await db.query(
+      `update sessions set table_winds=$1,revision=revision+1 where id=$2 returning *`,
+      [JSON.stringify(tableWinds), row.id],
+    )
+  ).rows[0]
+  return {
+    status: 'ok' as const,
+    session: sessionPayload(updated),
+    rotated,
+    windState: state as TableWindState,
+  }
 }

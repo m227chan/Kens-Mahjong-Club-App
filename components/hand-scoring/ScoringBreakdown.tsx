@@ -17,10 +17,10 @@ type ScoringBreakdownProps = {
   rules: ScoringRules
   melds: HandScoringInput['melds']
   pair: MahjongTileId[]
-  flatTiles?: MahjongTileId[]
+  hasHandTiles?: boolean
 }
 
-export default function ScoringBreakdown({ result, rules, melds, pair, flatTiles }: ScoringBreakdownProps) {
+export default function ScoringBreakdown({ result, rules, melds, pair, hasHandTiles = false }: ScoringBreakdownProps) {
   const [isMobile, setIsMobile] = useState(false)
   const [patternsOpen, setPatternsOpen] = useState(false)
   const basePoints = basePointsForFan(result.totalFan, rules)
@@ -31,7 +31,7 @@ export default function ScoringBreakdown({ result, rules, melds, pair, flatTiles
     () => isCompleteHand({ melds, pair: pair.length ? pair : undefined }),
     [melds, pair],
   )
-  const hasHandTiles = flatTiles?.length ? flatTiles.length > 0 : melds.length > 0 || pair.length > 0
+  const tilesPresent = hasHandTiles || melds.length > 0 || pair.length > 0
   const handIsValid = showHandPreview
 
   useEffect(() => {
@@ -62,7 +62,7 @@ export default function ScoringBreakdown({ result, rules, melds, pair, flatTiles
           <span className={`hand-scoring-badge${result.meetsMinFan ? ' is-pass' : ' is-fail'}`}>
             {result.meetsMinFan ? `Meets ${rules.minFan}+ minimum` : `Below ${rules.minFan} fan minimum`}
           </span>
-          {hasHandTiles && !handIsValid ? (
+          {tilesPresent && !handIsValid ? (
             <p className="hand-scoring-hand-validity">Not valid hand</p>
           ) : null}
         </div>
@@ -70,7 +70,7 @@ export default function ScoringBreakdown({ result, rules, melds, pair, flatTiles
 
       <TotalFanExplanationPanel explanation={explanation}>
         {showHandPreview ? (
-          <HandMiniPreview melds={melds} pair={pair} flatTiles={flatTiles?.length ? flatTiles : undefined} />
+          <HandMiniPreview melds={melds} pair={pair} />
         ) : null}
       </TotalFanExplanationPanel>
 

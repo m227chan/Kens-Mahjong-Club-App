@@ -467,7 +467,7 @@ export default function WikiPage() {
             </div>
             <div className="wiki-basics-term-card">
               <h4>Seat Wind & Round Wind</h4>
-              <p>The wind assigned to your seat (East=1, South=2, West=3, North=4) and the prevailing wind of the current round.</p>
+              <p>The wind assigned to your seat (East=1, South=2, West=3, North=4) and the prevailing wind of the current round. Focused table wind view can track these live for your club during a session.</p>
             </div>
             <div className="wiki-basics-term-card">
               <h4>Fan & Limit</h4>

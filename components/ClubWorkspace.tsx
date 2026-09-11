@@ -12,6 +12,7 @@ import ScoreCalculatorModal from '@/components/ScoreCalculatorModal'
 import { LeaderboardPanel } from '@/components/Leaderboard'
 import SessionManager from '@/components/SessionManager'
 import ScoringRulesSettings from '@/components/ScoringRulesSettings'
+import WindRotationSettings from '@/components/WindRotationSettings'
 import TitleRulesSettings from '@/components/TitleRulesSettings'
 import ActivitySettings from '@/components/ActivitySettings'
 import ClubToolSidebar from '@/components/ClubToolSidebar'
@@ -48,6 +49,7 @@ import {
   subscribeScoringRules,
   subscribeTitleRules,
   subscribeActivitySettings,
+  subscribeWindRotationSettings,
   subscribeAllCompetitionStats,
   subscribeSeasons
 } from '@/lib/data'
@@ -56,6 +58,10 @@ import { randomUnusedPlayerEmoji, randomUnusedPlayerEmojiOptions } from '@/lib/p
 import { DEFAULT_SCORING_RULES, type ScoringRules } from '@/lib/scoring-rules'
 import { DEFAULT_TITLE_RULES, type TitleRules } from '@/lib/title-rules'
 import { DEFAULT_ACTIVITY_SETTINGS, type ActivitySettings as ActivitySettingsValue } from '@/lib/activity-settings'
+import {
+  DEFAULT_WIND_ROTATION_SETTINGS,
+  type WindRotationSettings as WindRotationSettingsValue,
+} from '@/lib/wind-rotation-settings'
 import {
   allSessionWindow,
   buildCustomSessionWindow,
@@ -148,6 +154,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   const [scoringRules, setScoringRules] = useState<ScoringRules>(DEFAULT_SCORING_RULES)
   const [titleRules, setTitleRules] = useState<TitleRules>(DEFAULT_TITLE_RULES)
   const [activitySettings, setActivitySettings] = useState<ActivitySettingsValue>(DEFAULT_ACTIVITY_SETTINGS)
+  const [windRotationSettings, setWindRotationSettings] = useState<WindRotationSettingsValue>(DEFAULT_WIND_ROTATION_SETTINGS)
   const [playerName, setPlayerName] = useState('')
   const [playerIcon, setPlayerIcon] = useState(() => randomUnusedPlayerEmoji(new Set()))
   const [iconPickerOpen, setIconPickerOpen] = useState(false)
@@ -708,6 +715,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
   useEffect(() => subscribeScoringRules(clubId, setScoringRules), [clubId])
   useEffect(() => subscribeTitleRules(clubId, setTitleRules), [clubId])
   useEffect(() => subscribeActivitySettings(clubId, setActivitySettings), [clubId])
+  useEffect(() => subscribeWindRotationSettings(clubId, setWindRotationSettings), [clubId])
   useEffect(() => subscribeSeasons(clubId, setSeasons), [clubId])
   useEffect(() => {
     if (!isManager || club?.universal) {
@@ -1184,7 +1192,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
     },
     scoring: {
       title: 'House Scoring',
-      description: 'Choose the fan range and point values used for new games.',
+      description: 'Choose the fan range, point values, and wind rotation rules used for new games.',
     },
     activity: {
       title: 'Active Players',
@@ -1472,6 +1480,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                 ) : null}
                 <div hidden={clubSettingsSection !== 'scoring'}>
                   <ScoringRulesSettings clubId={clubId} rules={scoringRules} isManager={isManager} embedded />
+                  <WindRotationSettings clubId={clubId} settings={windRotationSettings} isManager={isManager} embedded />
                 </div>
                 <div hidden={clubSettingsSection !== 'activity'}>
                   <ActivitySettings clubId={clubId} settings={activitySettings} isManager={isManager} />
@@ -1593,7 +1602,7 @@ export default function ClubWorkspace({ clubId, membership }: { clubId: string; 
                   <button type="button" onClick={() => changeSeason(String(activeSeasonNumber))} className="mt-4 min-h-10 rounded border border-amber-300 bg-white px-3 text-sm font-bold text-amber-900">Return to current</button>
                 </section>
               ) : (
-                <SessionManager clubId={clubId} seasonNumber={selectedCompetition?.seasonNumber ?? activeSeasonNumber} players={players} isManager={isManager} scoringRules={scoringRules} onAddPlayer={() => openRoster(true)} />
+                <SessionManager clubId={clubId} seasonNumber={selectedCompetition?.seasonNumber ?? activeSeasonNumber} players={players} isManager={isManager} scoringRules={scoringRules} windRotationSettings={windRotationSettings} onAddPlayer={() => openRoster(true)} />
               )}
             </aside>
 
