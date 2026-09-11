@@ -15,6 +15,7 @@ const dataMocks = vi.hoisted(() => ({
   subscribeScoringRules: vi.fn(() => vi.fn()),
   subscribeTitleRules: vi.fn(() => vi.fn()),
   subscribeActivitySettings: vi.fn(() => vi.fn()),
+  subscribeWindRotationSettings: vi.fn(() => vi.fn()),
   subscribeSeasons: vi.fn((_clubId: string, callback: (seasons: unknown[]) => void) => {
     callback([
       { id: '1', seasonNumber: 1, name: 'Season 1', kind: 'season', active: false },
@@ -57,6 +58,7 @@ vi.mock('@/components/NetworkGraphModal', () => ({ default: () => null }))
 vi.mock('@/components/ScoringRulesSettings', () => ({ default: ({ embedded }: { embedded?: boolean }) => <output data-testid="scoring-settings-mode">{embedded ? 'embedded' : 'card'}</output> }))
 vi.mock('@/components/TitleRulesSettings', () => ({ default: ({ embedded }: { embedded?: boolean }) => <output data-testid="title-settings-mode">{embedded ? 'embedded' : 'card'}</output> }))
 vi.mock('@/components/ActivitySettings', () => ({ default: () => null }))
+vi.mock('@/components/WindRotationSettings', () => ({ default: () => null }))
 const emblaMock = vi.hoisted(() => {
   type Handler = (api: unknown, event: string) => void
   const handlers = new Map<string, Set<Handler>>()
