@@ -271,14 +271,14 @@ The authoritative schema is the ordered SQL in `supabase/migrations`. The follow
 | `join_requests`          | Pending/approved/declined membership requests and resolution audit fields                                       |
 | `players`                | Club-scoped tracked player, display name, emoji, optional Firebase UID link, and soft-active state              |
 | `seasons`                | Club-scoped numbered seasons/tournaments, the single active regular-season flag, tournament deadline, and paused seconds remaining |
-| `app_configs`            | Club-scoped scoring rules, customizable leaderboard title rules, and ELO tuning                                  |
+| `app_configs`            | Club-scoped scoring rules, wind rotation mode, customizable leaderboard title rules, and ELO tuning              |
 | `games`                  | Game metadata: time, season, table, result type, winner/loser, fan, notes, creator, and historical flag         |
 | `game_entries`           | One score per game/player; cascade-deleted with the game                                                        |
 | `player_stats`           | Rebuilt all-time aggregates and ranks                                                                           |
 | `season_player_stats`    | Rebuilt aggregates and ranks scoped to a season                                                                 |
 | `elo_events`             | Legacy per-game/per-player ELO history retained for compatibility                                               |
 | `skill_events`           | Per-game/per-player experience-aware Skill rating history                                                       |
-| `sessions`               | One active session per club, participants, 1–99 table count, table JSON, sideline, and close time               |
+| `sessions`               | One active session per club, participants, 1–99 table count, table JSON, sideline, per-table winds JSON, and close time |
 | `table_arrangements`     | Legacy seating snapshots retained for schema/data compatibility                                                  |
 | `club_qr_tables`         | Permanent table QR identity, token version, label, and enabled state                                             |
 | `session_table_activity` | Per-table occupancy and activity timestamps used by stale-seat cleanup                                           |
@@ -320,7 +320,7 @@ Shared client-facing types live in `lib/types.ts`:
 - `PlayerDoc` represents a tracked player independently of an authenticated user.
 - `GameDoc` and `GameEntryDoc` capture a result and its zero-sum scores.
 - `PlayerStatsDoc` is the derived all-time or season aggregate.
-- `SessionDoc` describes the active table-management state.
+- `SessionDoc` describes the active table-management state, including optional `tableWinds` per table id.
 - `SeasonDoc` describes a club season.
 
 ### Backend-neutral timestamps
@@ -350,18 +350,16 @@ Shared client-facing types live in `lib/types.ts`:
 
 ### Score Calculator
 
-The score calculator helps players total fan from handbook patterns and explore reachable winning paths against a club's minimum fan. It is available from:
+The score calculator helps players total fan from handbook patterns and shape a mid-hand toward a chosen pattern with Hand helper. It is available from:
 
 - **Club tools:** Score Calculator in the Explore rail, directly beneath Player network.
 - **Wiki:** `/wiki/score` and the handbook navigation / scoring-guide CTA; honors `?club=` when opened from a club context.
 - **Live scoring:** **Calculate fan** in the Session Manager win panel and Focused Table View result sheet; **Apply fan** writes the computed total back into the fan picker when it meets the club minimum.
 
-Inputs include roll position (seat 1–4 / seat wind), round wind, drawn flowers with seat-flower highlighting, open and concealed melds, an optional pair, manual bonus scenarios, and a non-traditional hands toggle (on by default). Outputs include an itemized pattern breakdown, total fan, minimum pass/fail badge, base-point preview, and optional table payout preview.
+Inputs include roll position (seat 1–4 / seat wind), round wind, drawn flowers with seat-flower highlighting, manual bonus scenarios (Calculate score only), and a non-traditional hands toggle (on by default). The two calculator modes use different hand entry UIs:
 
-Two modes share the same inputs:
-
-- **Calculate score** — for a completed or declared hand; sums detected and selected patterns with handbook exclusion rules (for example, Small Three Dragons suppresses individual dragon triplets; limit hands cap at the club max fan).
-- **Find winning paths** — for a hand still in progress; groups suggestions into collapsible sections for paths that meet minimum now, still-compatible paths with a fan gap, and toggleable manual bonuses. Desktop hover (or keyboard focus) shows wiki example hands; mobile expands an **Example** control per path.
+- **Calculate score** — enter the complete tile bag (14 normally, up to 18 with kongs). The engine auto-groups into melds when the hand is valid, prefers the highest-fan parse, and lets the player swap groupings or mark melds open/concealed. Outputs an itemized pattern breakdown, total fan (with uncapped stack in brackets when over the club max), minimum pass/fail badge, and base-point preview. Timing bonuses such as Blessings are selected here.
+- **Hand helper** — a three-step wizard to correct a mid-hand toward a pattern you choose: (1) enter the tiles you have now (any count), (2) organize and lock claimed open melds, (3) pick a target pattern and see useful vs clear-drop highlighting on loose tiles (options that can still meet the club minimum). Flowers count toward projected fan; Blessings are deferred to Calculate score.
 
 The fan engine lives in `lib/hand-scoring/` and derives its pattern catalog from `app/wiki/wiki-content.ts`. It detects structural patterns from melds and flowers, applies exclusions, and filters suggestions by compatibility with the current tile state. It does not simulate the remaining wall or prove that a win is drawable.
 
@@ -420,19 +418,26 @@ Recording a saved game still uses manual fan entry or the calculator shortcut; t
 - Session dialogs are rendered through a document-body portal, centered in the viewport regardless of page scroll, and use a full-viewport opaque fade. General help lives in the global header so the session card stays focused on live play.
 - Session state is persisted collaboratively through Supabase and restored on another device.
 - Legacy malformed table keys are normalized safely; participants are recovered to the sideline rather than lost.
+- Expand a table into **focused table mode** (`/club/[clubId]/table/[tableNumber]`) for phone-friendly scoring. The default **Wind** layout tracks round wind, dealer (East), hand number, and seat winds on the session (`sessions.table_winds`) so every device at the table stays in sync. Choose who starts as East when a full table has no wind state yet. A settings control switches back to the **Basic** seat grid (preference is local to the device). After a seat change, winds continue by default; players can restart to East and pick a new starter. Outcomes that rotate winds play a short shuffle animation; running table scores stay bound to each player.
 
 ### QR table check-in
 
 - Managers print permanent, signed QR codes for physical tables without a paid QR service.
 - Scans preserve the destination through Google sign-in and resolve membership and player linkage server-side.
 - Repeat scans exchange the signed code and seat the linked player in one request.
-- QR seating and the normal Session Manager share one row-locked PostgreSQL mutation service, preventing concurrent phones from overwriting the session layout.
+- QR seating and the normal Session Manager share one row-locked PostgreSQL mutation service, preventing concurrent phones from overwriting the session layout. The same service exposes `setTableWinds` / `advanceTableWinds` and returns wind state on focused-table context loads.
 - A manager setting controls whether a valid code automatically grants regular membership or creates a pending request.
 - Codes can be rotated without changing the physical table number. See [`QR_TABLE_CHECKIN_SPEC.md`](QR_TABLE_CHECKIN_SPEC.md) for the current operational reference.
 
 ### Scoring and game recording
 
-Each club stores its minimum fan, maximum fan cap, and fan-to-base-point mapping in `app_configs`. New clubs default to the original 3–13+ mapping. Managers edit these house rules from the House Scoring detail in Club Settings; live session scoring, focused-table scoring, the score calculator, game-log outcome editing, server validation, and the in-app guide all consume the same club-specific values. Existing stored scores are not rewritten. For normal results:
+Each club stores its minimum fan, maximum fan cap, fan-to-base-point mapping, and wind rotation mode in `app_configs`. New clubs default to the original 3–13+ mapping and **non-dealer win + draw** wind rotation. Managers edit these house rules from the House Scoring detail in Club Settings; live session scoring, focused-table scoring, the score calculator, game-log outcome editing, server validation, and the in-app guide all consume the same club-specific values. Existing stored scores are not rewritten. Wind rotation modes:
+
+- **Non-dealer win + draw (default):** seat winds move after a non-dealer win or a draw; dealer (roller) wins keep winds.
+- **Non-dealer win only:** rotate only after a non-dealer win; dealer wins and draws keep winds.
+- **Always rotate:** every recorded win or draw advances seat winds.
+
+After a full dealer cycle back to the round starter, the prevailing (table) round wind advances East → South → West → North. Seat winds are derived from the current dealer and live seat order rather than stored separately. For normal results:
 
 - **Self draw:** the winner receives three times the base value; each other player loses one base value.
 - **Discard win:** the winner receives twice the base value; the discarder loses twice the base value; uninvolved players receive zero.
@@ -775,7 +780,7 @@ The code is designed for a Node-capable Next.js host. Before deployment:
 
 ## 19. Testing and quality gates
 
-Current deterministic suites cover authentication context, dashboard and club navigation, roster permissions and emoji selection, seasons and tournaments, session normalization and optimistic table actions, focused scoring, offline game synchronization, scoring and hand-scoring engines, standings and analytics queries, title and scoring-rule editors, the wiki, help tour, network and game-log views, guest table tokens, and API safety. Database integration suites are opt-in and skip when their isolated test database configuration is absent.
+Current deterministic suites cover authentication context, dashboard and club navigation, roster permissions and emoji selection, seasons and tournaments, session normalization and optimistic table actions, focused scoring, table wind rotation helpers, offline game synchronization, scoring and hand-scoring engines, standings and analytics queries, title and scoring-rule editors, the wiki, help tour, network and game-log views, guest table tokens, and API safety. Database integration suites are opt-in and skip when their isolated test database configuration is absent.
 
 Before handing off a code change, run checks in proportion to the risk:
 

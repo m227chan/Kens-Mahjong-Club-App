@@ -16,6 +16,7 @@ import {
 import { validateScoringRules } from '@/lib/scoring-rules'
 import { DEFAULT_TITLE_RULES, validateTitleRules } from '@/lib/title-rules'
 import { validateActivitySettings } from '@/lib/activity-settings'
+import { validateWindRotationSettings } from '@/lib/wind-rotation-settings'
 import { isGuestTableToken } from '@/lib/guest-table-token'
 import {
   loadSessionPointBreakdown,
@@ -559,6 +560,17 @@ export async function POST(request: NextRequest) {
         const updated = await db.query(
           'update app_configs set active_player_months=$1,updated_at=now() where club_id=$2',
           [settings.activePlayerMonths, body.clubId],
+        )
+        if (!updated.rowCount)
+          throw new Error('Club settings are still initializing. Try again.')
+        return null
+      }
+      if (action === 'updateWindRotationSettings') {
+        await requireManager(body.clubId)
+        const settings = validateWindRotationSettings(body.settings)
+        const updated = await db.query(
+          'update app_configs set wind_rotation_mode=$1,updated_at=now() where club_id=$2',
+          [settings.mode, body.clubId],
         )
         if (!updated.rowCount)
           throw new Error('Club settings are still initializing. Try again.')

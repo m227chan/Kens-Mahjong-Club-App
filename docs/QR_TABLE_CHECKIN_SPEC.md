@@ -6,7 +6,7 @@ Status: implemented. This file is the current operational reference, not a futur
 
 Each printed code identifies one physical club table. A signed-in member who scans it is resolved to their linked roster player and seated transactionally. If the user is not yet a member, the club's manager-controlled QR enrollment setting either enrolls them as a regular member or creates a pending join request. An unlinked member can link an available player or create a self-linked player before continuing.
 
-The focused route at `/check-in/[publicId]` supports mobile scoring for that table, including the **Calculate fan** shortcut that opens the club score calculator and can apply the total back into the win panel. The normal Session Manager uses the same transactional mutation service, so simultaneous phones cannot overwrite the complete session layout.
+The focused route at `/check-in/[publicId]` supports mobile scoring for that table, including the **Calculate fan** shortcut that opens the club score calculator and can apply the total back into the win panel. Focused scoring context also returns per-table wind state (`table_winds`) and the club wind-rotation mode so every device can show the same round wind, dealer, and hand number. The normal Session Manager uses the same transactional mutation service, so simultaneous phones cannot overwrite the complete session layout. Wind writes (`setTableWinds`, `advanceTableWinds`) use the same session row lock and revision bump as seating.
 
 Managers can print the active session's table codes from `/club/[clubId]/session/qr-print`. Codes use SVG error correction level Q, a four-module quiet zone, and require no paid QR provider or stored image assets.
 
@@ -24,7 +24,7 @@ Managers can print the active session's table codes from `/club/[clubId]/session
 
 ## Concurrency and latency
 
-`lib/server/table-checkin.ts` is the single write path for check-in, seating, removal, and clearing. Mutations run in PostgreSQL transactions and lock the active session row before updating its layout. The service enforces one table per player and four seats per table.
+`lib/server/table-checkin.ts` is the single write path for check-in, seating, removal, clearing, and table wind set/advance. Mutations run in PostgreSQL transactions and lock the active session row before updating its layout or `table_winds`. The service enforces one table per player and four seats per table.
 
 The hot paths intentionally avoid request and query waterfalls:
 
@@ -44,8 +44,8 @@ The hot paths intentionally avoid request and query waterfalls:
 | Client flow | `app/check-in/[publicId]/page.tsx`, `lib/table-checkin-client.ts` |
 | Focused scoring | `app/club/[clubId]/table/[tableNumber]/page.tsx` |
 | Printing | `app/club/[clubId]/session/qr-print/page.tsx` |
-| Database model | `supabase/migrations/0005_qr_table_checkin.sql`, `supabase/migrations/0006_qr_auto_enrollment.sql` |
-| Tests | `__tests__/focused-table-view.test.tsx`, `__tests__/table-scoring.test.ts`, `__tests__/session-layout.test.ts`, `__tests__/table-checkin.integration.test.ts` |
+| Database model | `supabase/migrations/0005_qr_table_checkin.sql`, `supabase/migrations/0006_qr_auto_enrollment.sql`, `supabase/migrations/0024_table_winds.sql` |
+| Tests | `__tests__/focused-table-view.test.tsx`, `__tests__/table-winds.test.ts`, `__tests__/table-scoring.test.ts`, `__tests__/session-layout.test.ts`, `__tests__/table-checkin.integration.test.ts` |
 
 ## Operating checklist
 

@@ -37,14 +37,22 @@ export function describeTotalFan(
 
   if (result.isLimit) {
     const display = totalFanDisplay(result, rules)
-    rows.push({
-      label: 'Total',
-      value: display.limitLabel ? `${display.main} ${display.limitLabel}` : `${display.main} Limit`,
-      emphasis: true,
-    })
     if (result.isCapped) {
-      notes.push(`Stacked fan is capped at your club maximum of ${fanLabel(rules.maxFan, rules)}+.`)
+      const parts = result.patterns.map((pattern) => fanToNumber(pattern.fan, rules.maxFan))
+      rows.push({
+        label: 'Total',
+        value: `${parts.join(' + ')} = ${result.rawFan} → ${display.main}${display.limitLabel ? ` ${display.limitLabel}` : ''}`,
+        emphasis: true,
+      })
+      notes.push(
+        `Stacked fan (${result.rawFan}) is capped at your club maximum of ${fanLabel(rules.maxFan, rules)}+.`,
+      )
     } else {
+      rows.push({
+        label: 'Total',
+        value: display.limitLabel ? `${display.main} ${display.limitLabel}` : `${display.main} Limit`,
+        emphasis: true,
+      })
       notes.push('Limit hands count at your club maximum fan cap instead of stacking other pattern fan.')
     }
   } else {

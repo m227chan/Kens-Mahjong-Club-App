@@ -38,7 +38,9 @@ type HandState = {
 }
 
 function buildHandState(input: HandScoringInput): HandState {
-  const tiles = allHandTiles(input)
+  const lockedTiles = allHandTiles(input)
+  const looseTiles = input.looseTiles ?? []
+  const tiles = [...lockedTiles, ...looseTiles]
   const counts = new Map<MahjongTileId, number>()
   for (const tile of tiles) counts.set(tile, (counts.get(tile) ?? 0) + 1)
 
@@ -65,7 +67,7 @@ function buildHandState(input: HandScoringInput): HandState {
 }
 
 function withinTileBudget(state: HandState): boolean {
-  return state.tileCount <= 14
+  return state.tileCount <= 18
 }
 
 function withinStandardMeldBudget(state: HandState): boolean {

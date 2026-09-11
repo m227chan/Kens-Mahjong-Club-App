@@ -90,7 +90,7 @@ export default function PatternSuggestions({
 
   return (
     <div className="hand-scoring-suggestions">
-      <p className="hand-scoring-kicker">Find winning paths</p>
+      <p className="hand-scoring-kicker">Hand helper</p>
       <p className="hand-scoring-hint">
         Current locked fan: {display.main}
         {display.limitLabel ? (

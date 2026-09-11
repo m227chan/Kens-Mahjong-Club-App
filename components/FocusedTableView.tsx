@@ -15,8 +15,12 @@ import {
   requestToJoinClub,
   subscribeActiveSession,
   subscribePlayers,
+  subscribePlayerStats,
   subscribeScoringRules,
+  loadAllGames,
 } from "@/lib/data";
+import type { PlayerStatsDoc } from "@/lib/types";
+import { aggregatePlayerGames } from "@/lib/standings-analytics";
 import {
   clearGuestTableSession,
   exitGuestTableToLogin,
@@ -44,6 +48,37 @@ import {
   optimisticallyRemovePlayer,
   optimisticallySeatPlayer,
 } from "@/lib/optimistic-session";
+import FocusedWindLayout, {
+  buildWindSeatCards,
+} from "@/components/FocusedWindLayout";
+import { StaticMahjongTile } from "@/components/MahjongTile";
+import {
+  WINDS,
+  WIND_LABELS,
+  continueWindsAfterRosterChange,
+  nextWindState,
+  seatWindForPlayer,
+  upsertTableWind,
+  type TableWindState,
+} from "@/lib/table-winds";
+import type { Wind } from "@/lib/hand-scoring/types";
+import {
+  DEFAULT_WIND_ROTATION_SETTINGS,
+  type WindRotationSettings,
+} from "@/lib/wind-rotation-settings";
+
+const LAYOUT_STORAGE_KEY = "focused-table-layout";
+type FocusedLayoutMode = "wind" | "basic";
+
+function readLayoutPreference(): FocusedLayoutMode {
+  if (typeof window === "undefined") return "wind";
+  try {
+    const value = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
+    return value === "basic" ? "basic" : "wind";
+  } catch {
+    return "wind";
+  }
+}
 
 type MutationResult =
   | { status: "ok"; session: TableSession }
@@ -80,6 +115,18 @@ export default function FocusedTableView({
   const [scoringRules, setScoringRules] = useState<ScoringRules>(
     DEFAULT_SCORING_RULES,
   );
+  const [windRotation, setWindRotation] = useState<WindRotationSettings>(
+    DEFAULT_WIND_ROTATION_SETTINGS,
+  );
+  const [layoutMode, setLayoutMode] = useState<FocusedLayoutMode>(() =>
+    readLayoutPreference(),
+  );
+  const [tableScores, setTableScores] = useState<Record<string, number>>({});
+  const [scoresTick, setScoresTick] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [windAdjustOpen, setWindAdjustOpen] = useState(false);
+  const [restartPromptOpen, setRestartPromptOpen] = useState(false);
+  const [windAnimating, setWindAnimating] = useState(false);
   const [fan, setFan] = useState(DEFAULT_SCORING_RULES.minFan);
   const [scoreCalculatorOpen, setScoreCalculatorOpen] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
@@ -90,17 +137,71 @@ export default function FocusedTableView({
   const confirmedSessionRef = useRef<TableSession | null>(null);
   const pendingTableMutationsRef = useRef(0);
   const tableMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingWindRef = useRef<TableWindState | null>(null);
+  const pendingCelebrationRef = useRef<ScoreCelebrationResult | null>(null);
+  const pendingPostRotateSessionRef = useRef<TableSession | null>(null);
+  const windAnimatingRef = useRef(false);
+  const windHealKeyRef = useRef("");
   const canAccess = Boolean(user) || isGuest;
 
   const showSession = useCallback((next: TableSession | null) => {
-    sessionRef.current = next;
-    setSession(next);
+    const normalized =
+      next && next.tableWinds == null ? { ...next, tableWinds: {} } : next;
+    sessionRef.current = normalized;
+    setSession(normalized);
   }, []);
 
   const acceptServerSession = useCallback((next: TableSession | null) => {
     confirmedSessionRef.current = next;
     if (pendingTableMutationsRef.current === 0) showSession(next);
   }, [showSession]);
+
+  const layoutModeRef = useRef(layoutMode);
+  layoutModeRef.current = layoutMode;
+
+  const ingestRemoteSession = useCallback(
+    (next: TableSession | null) => {
+      const key = String(tableNumber);
+      const previous = sessionRef.current;
+      const prevWind = previous?.tableWinds?.[key];
+      const nextWind = next?.tableWinds?.[key];
+      const dealerRotated =
+        Boolean(prevWind && nextWind) &&
+        prevWind!.dealerPlayerId !== nextWind!.dealerPlayerId;
+      const windProgressed =
+        Boolean(prevWind && nextWind) &&
+        (prevWind!.dealerPlayerId !== nextWind!.dealerPlayerId ||
+          prevWind!.handNumber !== nextWind!.handNumber ||
+          prevWind!.roundWind !== nextWind!.roundWind);
+
+      if (windAnimatingRef.current) {
+        confirmedSessionRef.current = next;
+        if (next) pendingPostRotateSessionRef.current = next;
+        if (windProgressed || !prevWind) setScoresTick((tick) => tick + 1);
+        return;
+      }
+
+      if (
+        dealerRotated &&
+        layoutModeRef.current === "wind" &&
+        previous &&
+        next
+      ) {
+        confirmedSessionRef.current = next;
+        pendingPostRotateSessionRef.current = next;
+        windAnimatingRef.current = true;
+        setWindAnimating(true);
+        setScoresTick((tick) => tick + 1);
+        return;
+      }
+
+      acceptServerSession(next);
+      if (windProgressed || (!prevWind && nextWind) || (prevWind && !nextWind)) {
+        setScoresTick((tick) => tick + 1);
+      }
+    },
+    [acceptServerSession, tableNumber],
+  );
 
   const loadContext = useCallback(async () => {
     const next = await tableAction<TableContext>({
@@ -109,15 +210,79 @@ export default function FocusedTableView({
       tableNumber,
     });
     setContext(next);
-    acceptServerSession(next.session);
+    ingestRemoteSession(next.session);
     setPlayers(next.players);
     if (next.scoringRules) setScoringRules(next.scoringRules);
-  }, [acceptServerSession, clubId, tableNumber]);
+    if (next.windRotation) {
+      setWindRotation((current) =>
+        current.mode === next.windRotation!.mode ? current : next.windRotation!,
+      );
+    }
+  }, [clubId, ingestRemoteSession, tableNumber]);
 
   useEffect(() => {
     document.body.classList.add("table-focus-mode");
     return () => document.body.classList.remove("table-focus-mode");
   }, []);
+
+  useEffect(() => {
+    if (!session) {
+      setTableScores((current) =>
+        Object.keys(current).length === 0 ? current : {},
+      );
+      return;
+    }
+
+    if (!isGuest && user) {
+      return subscribePlayerStats(
+        clubId,
+        (stats: Array<PlayerStatsDoc & { id: string }>) => {
+          const totals: Record<string, number> = {};
+          for (const stat of stats) {
+            totals[stat.playerId] = stat.totalPoints;
+          }
+          setTableScores(totals);
+        },
+        session.seasonNumber,
+      );
+    }
+
+    let cancelled = false;
+    void loadAllGames(clubId)
+      .then((games) => {
+        if (cancelled) return;
+        const seasonGames = games.filter(
+          (game) => game.seasonNumber === session.seasonNumber,
+        );
+        const aggregate = aggregatePlayerGames(seasonGames);
+        const totals: Record<string, number> = {};
+        for (const [playerId, row] of aggregate) {
+          totals[playerId] = row.totalPoints;
+        }
+        setTableScores(totals);
+      })
+      .catch(() => {
+        /* keep prior totals if reload fails */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    clubId,
+    isGuest,
+    scoresTick,
+    session,
+    session?.id,
+    session?.seasonNumber,
+    user,
+  ]);
+  useEffect(() => {
+    if (!session || (!isGuest && user)) return;
+    const timer = window.setInterval(() => {
+      setScoresTick((tick) => tick + 1);
+    }, 12_000);
+    return () => window.clearInterval(timer);
+  }, [isGuest, session?.id, user]);
   useEffect(() => {
     const guest = guestSessionMatches(clubId, tableNumber);
     if (user && guest && !upgradeBusy) {
@@ -127,7 +292,7 @@ export default function FocusedTableView({
       setIsGuest(guest);
     }
     setGuestReady(true);
-  }, [clubId, tableNumber, upgradeBusy, user]);
+  }, [clubId, tableNumber, upgradeBusy, user?.uid]);
   useEffect(() => {
     if (loading || !guestReady) return;
     if (!user && !isGuest) {
@@ -141,7 +306,9 @@ export default function FocusedTableView({
           : "Unable to load table.",
       ),
     );
-  }, [guestReady, isGuest, loadContext, loading, router, user]);
+    // router.replace is stable enough; omit router object identity from deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid remount loops from unstable router refs
+  }, [guestReady, isGuest, loadContext, loading, user?.uid]);
   useEffect(() => {
     if (!isGuest) return;
     const ensureGuestSession = () => {
@@ -183,7 +350,7 @@ export default function FocusedTableView({
       clubId,
       context.seasonNumber,
       (next) =>
-        acceptServerSession(
+        ingestRemoteSession(
           next
             ? {
                 id: next.id,
@@ -192,6 +359,7 @@ export default function FocusedTableView({
                 participants: next.participants,
                 tables: next.tables,
                 sideline: next.sideline,
+                tableWinds: next.tableWinds ?? {},
                 revision: 0,
               }
             : null,
@@ -211,7 +379,7 @@ export default function FocusedTableView({
       unsubscribeSession();
       unsubscribePlayers();
     };
-  }, [acceptServerSession, clubId, context, isGuest]);
+  }, [clubId, context, ingestRemoteSession, isGuest]);
   useEffect(() => {
     if (!user || isGuest) return;
     return subscribeScoringRules(clubId, setScoringRules);
@@ -245,6 +413,206 @@ export default function FocusedTableView({
       },
     [players],
   );
+  const windState: TableWindState | undefined = session?.tableWinds?.[
+    String(tableNumber)
+  ];
+  const playersById = useMemo(
+    () => new Map(players.map((item) => [item.id, item])),
+    [players],
+  );
+  const windCards = useMemo(() => {
+    if (!windState || occupants.length !== 4) return [];
+    return buildWindSeatCards(occupants, windState, playersById, tableScores);
+  }, [occupants, windState, playersById, tableScores]);
+  const dealerName = windState
+    ? player(
+        occupants.includes(windState.dealerPlayerId)
+          ? windState.dealerPlayerId
+          : (occupants[0] ?? windState.dealerPlayerId),
+      ).displayName
+    : null;
+  const starterOpen =
+    layoutMode === "wind" &&
+    occupants.length === 4 &&
+    !windState &&
+    Boolean(session);
+
+  useEffect(() => {
+    if (
+      !session ||
+      layoutMode !== "wind" ||
+      occupants.length !== 4 ||
+      !windState ||
+      busy ||
+      windAnimating
+    ) {
+      return;
+    }
+    const seatOrderMatches =
+      windState.seatOrder.length === 4 &&
+      windState.seatOrder.every((id, index) => id === occupants[index]);
+    if (
+      seatOrderMatches &&
+      occupants.includes(windState.dealerPlayerId)
+    ) {
+      return;
+    }
+    const healed = continueWindsAfterRosterChange(windState, occupants);
+    if (!healed) return;
+    if (
+      healed.dealerPlayerId === windState.dealerPlayerId &&
+      healed.roundStarterPlayerId === windState.roundStarterPlayerId &&
+      healed.handNumber === windState.handNumber &&
+      healed.roundWind === windState.roundWind &&
+      healed.seatOrder.every((id, index) => id === windState.seatOrder[index])
+    ) {
+      return;
+    }
+    const healKey = `${session.revision}:${occupants.join(",")}:${windState.dealerPlayerId}`;
+    if (windHealKeyRef.current === healKey) return;
+    windHealKeyRef.current = healKey;
+    void tableAction<{ status: string; session: TableSession }>({
+      action: "setTableWinds",
+      clubId,
+      tableNumber,
+      reconcile: true,
+    })
+      .then((result) => acceptServerSession(result.session))
+      .catch(() => {
+        windHealKeyRef.current = "";
+      });
+  }, [
+    acceptServerSession,
+    busy,
+    clubId,
+    layoutMode,
+    occupants,
+    session,
+    tableNumber,
+    windAnimating,
+    windState,
+  ]);
+
+  const setLayoutPreference = (mode: FocusedLayoutMode) => {
+    setLayoutMode(mode);
+    try {
+      window.localStorage.setItem(LAYOUT_STORAGE_KEY, mode);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const persistStarter = async (starterPlayerId: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await tableAction<{ status: string; session: TableSession }>(
+        {
+          action: "setTableWinds",
+          clubId,
+          tableNumber,
+          starterPlayerId,
+        },
+      );
+      acceptServerSession(result.session);
+      setRestartPromptOpen(false);
+      play("confirmation");
+    } catch (nextError) {
+      play("error");
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to set the starting East seat.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const clearWinds = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await tableAction<{ status: string; session: TableSession }>(
+        {
+          action: "setTableWinds",
+          clubId,
+          tableNumber,
+          clear: true,
+        },
+      );
+      acceptServerSession(result.session);
+      setRestartPromptOpen(false);
+      setSettingsOpen(false);
+      setWindAdjustOpen(false);
+    } catch (nextError) {
+      play("error");
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to restart winds.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const patchWinds = async (patch: {
+    roundWind?: Wind;
+    dealerPlayerId?: string;
+    handNumber?: number;
+  }) => {
+    if (!windState) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await tableAction<{ status: string; session: TableSession }>(
+        {
+          action: "setTableWinds",
+          clubId,
+          tableNumber,
+          patch,
+        },
+      );
+      acceptServerSession(result.session);
+      play("confirmation");
+      setToast("Table winds updated.");
+    } catch (nextError) {
+      play("error");
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to update table winds.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const finishWindRotation = useCallback(() => {
+    const nextWind = pendingWindRef.current;
+    const celebration = pendingCelebrationRef.current;
+    const stashed = pendingPostRotateSessionRef.current;
+    pendingWindRef.current = null;
+    pendingCelebrationRef.current = null;
+    pendingPostRotateSessionRef.current = null;
+    windAnimatingRef.current = false;
+    setWindAnimating(false);
+    if (stashed) {
+      showSession(stashed);
+    } else if (nextWind && sessionRef.current) {
+      showSession({
+        ...sessionRef.current,
+        tableWinds: upsertTableWind(
+          sessionRef.current.tableWinds ?? {},
+          String(tableNumber),
+          nextWind,
+        ),
+      });
+    }
+    if (celebration) setFlash(celebration);
+  }, [showSession, tableNumber]);
+
   const filteredPlayers = useMemo(
     () =>
       players.filter(
@@ -299,6 +667,14 @@ export default function FocusedTableView({
         if (result.status === "table_full") {
           throw new Error("This table filled up before the change was saved.");
         }
+        if (layoutMode === "wind" && action === "seat") {
+          const nextSeats =
+            result.session.tables?.[String(tableNumber)] ?? [];
+          const nextWinds = result.session.tableWinds?.[String(tableNumber)];
+          if (nextSeats.filter(Boolean).length === 4 && nextWinds) {
+            setRestartPromptOpen(true);
+          }
+        }
       } catch (nextError) {
         play("error");
         setError(nextError instanceof Error ? nextError.message : "Unable to update the table. Your last change was reverted.");
@@ -339,46 +715,128 @@ export default function FocusedTableView({
     if (!requestKey.current) requestKey.current = crypto.randomUUID();
     setBusy(true);
     setError(null);
+
+    const gameInput = {
+      entries: Object.entries(scores).map(([playerId, score]) => ({
+        playerId,
+        score,
+      })),
+      createdBy: user?.uid ?? `guest:${clubId}:${tableNumber}`,
+      seasonNumber: session.seasonNumber,
+      tableId: String(tableNumber),
+      winType: (draw
+        ? "draw"
+        : winType === "self"
+          ? "self_draw"
+          : "discard") as "draw" | "self_draw" | "discard",
+      loserPlayerId: draw || winType === "self" ? null : loser,
+      fan: draw ? null : fan,
+      notes: null,
+      idempotencyKey: requestKey.current,
+    };
+    const celebration: ScoreCelebrationResult = {
+      scores,
+      winner: draw ? null : winner,
+    };
+
+    // Close the sheet immediately so the table (and wind spin) is visible.
+    setResultOpen(false);
+    requestKey.current = "";
+    play(draw ? "draw" : "win");
+    setTableScores((current) => {
+      const next = { ...current };
+      for (const [playerId, score] of Object.entries(scores)) {
+        next[playerId] = (next[playerId] ?? 0) + score;
+      }
+      return next;
+    });
+
+    let willRotate = false;
+    if (layoutMode === "wind" && windState) {
+      const computed = nextWindState({
+        mode: windRotation.mode,
+        outcome: gameInput.winType,
+        winnerPlayerId: draw ? null : winner,
+        state: windState,
+        liveSeatOrder: occupants,
+      });
+      willRotate = computed.rotated;
+      if (willRotate) {
+        pendingWindRef.current = computed.state;
+        pendingCelebrationRef.current = celebration;
+        pendingPostRotateSessionRef.current = null;
+        windAnimatingRef.current = true;
+        setWindAnimating(true);
+      } else {
+        showSession({
+          ...session,
+          tableWinds: upsertTableWind(
+            session.tableWinds ?? {},
+            String(tableNumber),
+            computed.state,
+          ),
+        });
+        setFlash(celebration);
+      }
+    } else {
+      setFlash(celebration);
+    }
+
     try {
-      const gameInput = {
-        entries: Object.entries(scores).map(([playerId, score]) => ({
-          playerId,
-          score,
-        })),
-        createdBy: user?.uid ?? `guest:${clubId}:${tableNumber}`,
-        seasonNumber: session.seasonNumber,
-        tableId: String(tableNumber),
-        winType: (draw
-          ? "draw"
-          : winType === "self"
-            ? "self_draw"
-            : "discard") as "draw" | "self_draw" | "discard",
-        loserPlayerId: draw || winType === "self" ? null : loser,
-        fan: draw ? null : fan,
-        notes: null,
-        idempotencyKey: requestKey.current,
-      };
       const result = isGuest
         ? await createGuestGame(clubId, {
             ...gameInput,
             createdBy: `guest:${clubId}:${tableNumber}`,
           }).then(() => ({ status: "synced" as const }))
         : await saveGameWithOfflineSupport(clubId, gameInput);
-      setResultOpen(false);
-      requestKey.current = "";
-      play(draw ? "draw" : "win");
-      setFlash({ scores, winner: draw ? null : winner });
-      setToast(result.status === "synced"
-        ? draw ? "Draw synced." : "Game synced!"
-        : result.status === "queued"
-          ? `${draw ? "Draw" : "Game"} saved on this device. It will sync when the connection returns.`
-          : `${draw ? "Draw" : "Game"} saved on this device, but syncing needs attention.`);
+
+      if (layoutMode === "wind" && windState) {
+        try {
+          const advanced = await tableAction<{
+            status: string;
+            session: TableSession;
+            rotated?: boolean;
+          }>({
+            action: "advanceTableWinds",
+            clubId,
+            tableNumber,
+            outcome: gameInput.winType,
+            winnerPlayerId: draw ? null : winner,
+            mode: windRotation.mode,
+          });
+          if (willRotate && windAnimatingRef.current) {
+            pendingPostRotateSessionRef.current = advanced.session;
+          } else {
+            acceptServerSession(advanced.session);
+          }
+        } catch {
+          /* game already saved; wind sync can retry via realtime */
+        }
+      }
+
+      setScoresTick((tick) => tick + 1);
+      setToast(
+        result.status === "synced"
+          ? draw
+            ? "Draw synced."
+            : "Game synced!"
+          : result.status === "queued"
+            ? `${draw ? "Draw" : "Game"} saved on this device. It will sync when the connection returns.`
+            : `${draw ? "Draw" : "Game"} saved on this device, but syncing needs attention.`,
+      );
     } catch (nextError) {
       setError(
         nextError instanceof Error
           ? nextError.message
           : "Unable to save the game.",
       );
+      if (willRotate) {
+        pendingWindRef.current = null;
+        pendingCelebrationRef.current = null;
+        pendingPostRotateSessionRef.current = null;
+        windAnimatingRef.current = false;
+        setWindAnimating(false);
+      }
     } finally {
       setBusy(false);
     }
@@ -564,57 +1022,100 @@ export default function FocusedTableView({
           </section>
         ) : (
           <>
-            <section
-              className="grid grid-cols-2 gap-3"
-              aria-label={`Table ${tableNumber} seats`}
-            >
-              {Array.from({ length: 4 }, (_, index) => {
-                const id = occupants[index];
-                if (!id)
-                  return (
-                    <button
-                      key={index}
-                      type="button"
-                      disabled={busy}
-                      onClick={() => setPickerOpen(true)}
-                      className="min-h-36 rounded-xl border-2 border-dashed border-[rgb(var(--line))] bg-[rgb(var(--surface))] text-sm font-black text-[rgb(var(--bamboo))]"
-                    >
-                      <span className="block text-3xl">＋</span>Add player
-                    </button>
-                  );
-                const info = player(id);
-                return (
-                  <article
-                    key={id}
-                    className="relative flex min-h-36 flex-col items-center justify-center rounded-xl border border-[rgb(var(--line))] bg-[rgb(var(--surface))] p-3 text-center shadow-sm"
-                  >
+            {layoutMode === "wind" && windState && occupants.length === 4 ? (
+              <>
+                <div className="focused-wind-status">
+                  <div className="focused-wind-status-round">
+                    <span className="focused-wind-status-label">Round</span>
                     <button
                       type="button"
-                      disabled={busy}
-                      onClick={() => void mutate("remove", { playerId: id })}
-                      aria-label={`Remove ${info.displayName}`}
-                      className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-full border border-[rgb(var(--line))] bg-[rgb(var(--surface-2))] font-black"
+                      disabled={busy || windAnimating}
+                      onClick={() => setWindAdjustOpen(true)}
+                      className="focused-wind-round-pill"
+                      aria-label={`Table wind ${WIND_LABELS[windState.roundWind]}. Adjust winds.`}
                     >
-                      ×
-                    </button>
-                    <span className="text-4xl">{info.icon}</span>
-                    <h2 className="mt-2 max-w-full truncate text-base font-black">
-                      {info.displayName}
-                    </h2>
-                    {user && info.authUid === user.uid ? (
-                      <span className="mt-1 rounded-full bg-[rgb(var(--bamboo)/.12)] px-2 py-1 text-[10px] font-black uppercase text-[rgb(var(--bamboo))]">
-                        You
+                      <span className="focused-wind-round-char" aria-hidden="true">
+                        <StaticMahjongTile id={windState.roundWind} size={28} />
                       </span>
-                    ) : null}
-                  </article>
-                );
-              })}
-            </section>
+                      {WIND_LABELS[windState.roundWind].toUpperCase()} ROUND
+                    </button>
+                    <span className="focused-wind-hand">Hand {windState.handNumber}</span>
+                  </div>
+                  <div className="focused-wind-status-dealer">
+                    <span className="focused-wind-status-label">Dealer Seat</span>
+                    <button
+                      type="button"
+                      disabled={busy || windAnimating}
+                      onClick={() => setWindAdjustOpen(true)}
+                      className="focused-wind-dealer-box"
+                      aria-label={`Dealer ${dealerName ?? "unknown"}. Adjust winds.`}
+                    >
+                      {(dealerName ?? "—").toUpperCase()}
+                    </button>
+                  </div>
+                </div>
+                <FocusedWindLayout
+                  cards={windCards}
+                  animating={windAnimating}
+                  onRotationComplete={finishWindRotation}
+                  onSeatClick={(_playerId, _seatIndex) => setPickerOpen(true)}
+                />
+              </>
+            ) : (
+              <section
+                className="grid grid-cols-2 gap-3"
+                aria-label={`Table ${tableNumber} seats`}
+              >
+                {Array.from({ length: 4 }, (_, index) => {
+                  const id = occupants[index];
+                  if (!id)
+                    return (
+                      <button
+                        key={index}
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setPickerOpen(true)}
+                        className="min-h-36 rounded-xl border-2 border-dashed border-[rgb(var(--line))] bg-[rgb(var(--surface))] text-sm font-black text-[rgb(var(--bamboo))]"
+                      >
+                        <span className="block text-3xl">＋</span>Add player
+                      </button>
+                    );
+                  const info = player(id);
+                  return (
+                    <article
+                      key={id}
+                      className="relative flex min-h-36 flex-col items-center justify-center rounded-xl border border-[rgb(var(--line))] bg-[rgb(var(--surface))] p-3 text-center shadow-sm"
+                    >
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void mutate("remove", { playerId: id })}
+                        aria-label={`Remove ${info.displayName}`}
+                        className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-full border border-[rgb(var(--line))] bg-[rgb(var(--surface-2))] font-black"
+                      >
+                        ×
+                      </button>
+                      <span className="text-4xl">{info.icon}</span>
+                      <h2 className="mt-2 max-w-full truncate text-base font-black">
+                        {info.displayName}
+                      </h2>
+                      {user && info.authUid === user.uid ? (
+                        <span className="mt-1 rounded-full bg-[rgb(var(--bamboo)/.12)] px-2 py-1 text-[10px] font-black uppercase text-[rgb(var(--bamboo))]">
+                          You
+                        </span>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </section>
+            )}
             <p
               className={`mt-4 rounded-lg p-3 text-center text-sm font-black ${occupants.length === 4 ? "bg-[rgb(var(--bamboo)/.12)] text-[rgb(var(--bamboo))]" : "bg-[rgb(var(--surface-2))] text-[rgb(var(--muted))]"}`}
             >
               {occupants.length === 4
-                ? "Ready to score"
+                ? layoutMode === "wind" && !windState
+                  ? "Choose who starts as East"
+                  : "Ready to score"
                 : `${occupants.length} of 4 players · add ${4 - occupants.length} more`}
             </p>
           </>
@@ -624,22 +1125,33 @@ export default function FocusedTableView({
       <footer className="focused-table-actions fixed inset-x-0 z-20 mx-auto flex max-w-xl gap-2 border-t border-[rgb(var(--line))] bg-[rgb(var(--surface))] p-3 pb-[max(.75rem,env(safe-area-inset-bottom))]">
         <button
           type="button"
-          disabled={occupants.length !== 4 || busy}
+          disabled={occupants.length !== 4 || busy || (layoutMode === "wind" && !windState)}
+          onClick={openResults}
+          className="min-h-12 flex-[1.4] rounded-lg bg-[rgb(var(--bamboo))] font-black text-white disabled:opacity-40"
+        >
+          + Record win
+        </button>
+        <button
+          type="button"
+          disabled={occupants.length !== 4 || busy || (layoutMode === "wind" && !windState)}
           onClick={() => {
             requestKey.current = crypto.randomUUID();
             void saveGame(true);
           }}
           className="min-h-12 flex-1 rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface-2))] font-black disabled:opacity-40"
         >
-          Draw (0 pts)
+          Draw
         </button>
         <button
           type="button"
-          disabled={occupants.length !== 4 || busy}
-          onClick={openResults}
-          className="min-h-12 flex-1 rounded-lg bg-[rgb(var(--bamboo))] font-black text-white disabled:opacity-40"
+          aria-label="Table view settings"
+          aria-expanded={settingsOpen}
+          onClick={() => setSettingsOpen((open) => !open)}
+          className="flex min-h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[rgb(var(--bamboo))] text-white"
         >
-          Winner…
+          <span aria-hidden="true" className="focused-settings-glyph">
+            ☰
+          </span>
         </button>
       </footer>
 
@@ -1066,12 +1578,252 @@ export default function FocusedTableView({
         <ScoreCalculatorModal
           clubId={clubId}
           scoringRules={scoringRules}
+          initialSeatWind={
+            windState && winner
+              ? seatWindForPlayer(windState, winner, occupants) ?? undefined
+              : windState?.roundWind
+          }
+          initialRoundWind={windState?.roundWind}
           onClose={() => setScoreCalculatorOpen(false)}
           onApplyFan={(value) => {
             setFan(value);
             setScoreCalculatorOpen(false);
           }}
         />
+      ) : null}
+
+      {starterOpen && occupants.length === 4 ? (
+        <div className="viewport-overlay fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="focused-starter-title"
+            className="w-full max-w-md rounded-t-2xl bg-[rgb(var(--surface))] p-5 sm:rounded-2xl"
+          >
+            <h2 id="focused-starter-title" className="text-xl font-black">
+              Who starts as East?
+            </h2>
+            <p className="mt-2 text-sm text-[rgb(var(--muted))]">
+              The starting East seat is the dealer for hand 1 of the East round.
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              {occupants.map((id) => {
+                const info = player(id);
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void persistStarter(id)}
+                    className="min-h-14 rounded-xl border border-[rgb(var(--line))] bg-[rgb(var(--surface-2))] px-3 py-2 text-sm font-black"
+                  >
+                    {info.icon} {info.displayName}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {settingsOpen ? (
+        <div
+          className="viewport-overlay fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
+          onMouseDown={(event) =>
+            event.target === event.currentTarget && setSettingsOpen(false)
+          }
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="focused-layout-title"
+            className="w-full max-w-md rounded-t-2xl bg-[rgb(var(--surface))] p-5 sm:rounded-2xl"
+          >
+            <h2 id="focused-layout-title" className="text-xl font-black">
+              Table view
+            </h2>
+            <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-[rgb(var(--line))] p-3">
+              <div>
+                <p className="text-sm font-black">Wind tracker</p>
+                <p className="text-xs text-[rgb(var(--muted))]">
+                  Default compass layout with round and seat winds
+                </p>
+              </div>
+              <label className="focused-layout-switch">
+                <span className="sr-only">Use wind tracker layout</span>
+                <input
+                  type="checkbox"
+                  checked={layoutMode === "wind"}
+                  onChange={(event) =>
+                    setLayoutPreference(event.target.checked ? "wind" : "basic")
+                  }
+                />
+                <span aria-hidden="true" />
+              </label>
+            </div>
+            <p className="mt-2 text-xs font-bold text-[rgb(var(--muted))]">
+              {layoutMode === "wind" ? "Wind view (default)" : "Basic seat grid"}
+            </p>
+            {layoutMode === "wind" ? (
+              <>
+                <button
+                  type="button"
+                  disabled={busy || !windState}
+                  onClick={() => {
+                    setSettingsOpen(false);
+                    setWindAdjustOpen(true);
+                  }}
+                  className="mt-4 min-h-11 w-full rounded-lg border border-[rgb(var(--line))] font-bold disabled:opacity-40"
+                >
+                  Adjust winds…
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || !windState}
+                  onClick={() => void clearWinds()}
+                  className="mt-2 min-h-11 w-full rounded-lg border border-[rgb(var(--line))] font-bold text-[rgb(var(--cinnabar))] disabled:opacity-40"
+                >
+                  Restart winds…
+                </button>
+              </>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(false)}
+              className="mt-2 min-h-11 w-full rounded-lg bg-[rgb(var(--bamboo))] font-black text-white"
+            >
+              Done
+            </button>
+          </section>
+        </div>
+      ) : null}
+
+      {windAdjustOpen && windState && occupants.length === 4 ? (
+        <div className="viewport-overlay fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="focused-wind-adjust-title"
+            className="w-full max-w-md rounded-t-2xl bg-[rgb(var(--surface))] p-5 sm:rounded-2xl"
+          >
+            <h2 id="focused-wind-adjust-title" className="text-xl font-black">
+              Adjust table winds
+            </h2>
+            <p className="mt-2 text-sm text-[rgb(var(--muted))]">
+              Correct the prevailing round wind or dealer without restarting the table.
+            </p>
+
+            <p className="mt-4 text-xs font-black uppercase tracking-wide text-[rgb(var(--muted))]">
+              Table wind
+            </p>
+            <div
+              className="mt-2 grid grid-cols-4 gap-2"
+              role="group"
+              aria-label="Table wind"
+            >
+              {WINDS.map((wind) => (
+                <button
+                  key={wind}
+                  type="button"
+                  disabled={busy}
+                  aria-pressed={windState.roundWind === wind}
+                  onClick={() => void patchWinds({ roundWind: wind })}
+                  className={`min-h-14 rounded-xl border font-black ${
+                    windState.roundWind === wind
+                      ? "border-[rgb(var(--bamboo))] bg-[rgb(var(--bamboo)/.12)]"
+                      : "border-[rgb(var(--line))] bg-[rgb(var(--surface-2))]"
+                  }`}
+                >
+                  <span className="mx-auto block w-fit" aria-hidden="true">
+                    <StaticMahjongTile id={wind} size={36} />
+                  </span>
+                  <span className="mt-1 block text-[10px] uppercase tracking-wide">
+                    {WIND_LABELS[wind]}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <p className="mt-4 text-xs font-black uppercase tracking-wide text-[rgb(var(--muted))]">
+              Dealer (East)
+            </p>
+            <div
+              className="mt-2 grid grid-cols-2 gap-2"
+              role="group"
+              aria-label="Dealer seat"
+            >
+              {occupants.map((playerId, seatIndex) => {
+                const info = player(playerId);
+                const selected = windState.dealerPlayerId === playerId;
+                return (
+                  <button
+                    key={playerId}
+                    type="button"
+                    disabled={busy}
+                    aria-pressed={selected}
+                    onClick={() => void patchWinds({ dealerPlayerId: playerId })}
+                    className={`min-h-12 rounded-xl border px-3 text-left font-bold ${
+                      selected
+                        ? "border-[rgb(var(--bamboo))] bg-[rgb(var(--bamboo)/.12)]"
+                        : "border-[rgb(var(--line))]"
+                    }`}
+                  >
+                    <span className="block text-[10px] uppercase tracking-wide text-[rgb(var(--muted))]">
+                      Seat {seatIndex + 1}
+                    </span>
+                    {info.icon} {info.displayName}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setWindAdjustOpen(false)}
+              className="mt-4 min-h-11 w-full rounded-lg bg-[rgb(var(--bamboo))] font-black text-white"
+            >
+              Done
+            </button>
+          </section>
+        </div>
+      ) : null}
+
+      {restartPromptOpen && windState && occupants.length === 4 ? (
+        <div className="viewport-overlay fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="focused-roster-wind-title"
+            className="w-full max-w-md rounded-t-2xl bg-[rgb(var(--surface))] p-5 sm:rounded-2xl"
+          >
+            <h2 id="focused-roster-wind-title" className="text-xl font-black">
+              New player added
+            </h2>
+            <p className="mt-2 text-sm text-[rgb(var(--muted))]">
+              Keep going on{" "}
+              <span className="font-black text-[rgb(var(--ink))]">
+                {WIND_LABELS[windState.roundWind]} round · Hand{" "}
+                {windState.handNumber}
+              </span>
+              , or reset to East and choose a new dealer.
+            </p>
+            <button
+              type="button"
+              onClick={() => setRestartPromptOpen(false)}
+              className="mt-4 min-h-11 w-full rounded-lg bg-[rgb(var(--bamboo))] font-black text-white"
+            >
+              Continue this hand
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void clearWinds()}
+              className="mt-2 min-h-11 w-full rounded-lg border border-[rgb(var(--line))] font-bold"
+            >
+              Choose new dealer · reset to East
+            </button>
+          </section>
+        </div>
       ) : null}
     </main>
   );

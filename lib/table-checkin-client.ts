@@ -3,9 +3,20 @@
 import { auth } from '@/lib/firebase'
 import { readGuestTableSession } from '@/lib/guest-table-session'
 import type { ScoringRules } from '@/lib/scoring-rules'
+import type { TableWindState, TableWindsMap } from '@/lib/table-winds'
+import type { WindRotationSettings } from '@/lib/wind-rotation-settings'
 
 export type TablePlayer = { id: string; displayName: string; icon: string; authUid: string | null }
-export type TableSession = { id: string; seasonNumber: number; tableCount: number; participants: string[]; tables: Record<string, string[]>; sideline: string[]; revision: number }
+export type TableSession = {
+  id: string
+  seasonNumber: number
+  tableCount: number
+  participants: string[]
+  tables: Record<string, string[]>
+  sideline: string[]
+  tableWinds: TableWindsMap
+  revision: number
+}
 export type TableContext = {
   clubId: string
   clubName: string
@@ -15,8 +26,10 @@ export type TableContext = {
   players: TablePlayer[]
   linkedPlayer: TablePlayer | null
   scoringRules?: ScoringRules
+  windRotation?: WindRotationSettings
   guest?: boolean
 }
+export type { TableWindState }
 export type TableQr = { tableNumber: number; publicId: string; enabled: boolean; url: string; svg: string }
 
 async function authHeaders() {

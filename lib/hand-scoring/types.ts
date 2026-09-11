@@ -13,6 +13,8 @@ export type HandScoringInput = {
   flowers: MahjongTileId[]
   melds: Meld[]
   pair?: MahjongTileId[]
+  /** Tiles in hand not yet locked into melds/pair (paths tracker). */
+  looseTiles?: MahjongTileId[]
   bonuses: Set<string>
   includeNonTraditional: boolean
 }

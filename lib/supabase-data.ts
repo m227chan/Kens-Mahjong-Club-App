@@ -40,6 +40,12 @@ import {
   type ActivitySettings,
 } from '@/lib/activity-settings'
 import {
+  windRotationSettingsFromRow,
+  DEFAULT_WIND_ROTATION_SETTINGS,
+  type WindRotationSettings,
+} from '@/lib/wind-rotation-settings'
+import { parseTableWindsMap } from '@/lib/table-winds'
+import {
   sessionWindowDateBounds,
   sessionWindowRequestBody,
   type SessionPointWindow,
@@ -203,6 +209,7 @@ function mapSession(row: Row): SessionDoc {
     participants,
     tables,
     sideline,
+    tableWinds: parseTableWindsMap(row.table_winds),
     closedAt: nullableTs(row.closed_at),
   }
 }
@@ -477,6 +484,10 @@ export const updateTitleRules = (clubId: string, rules: TitleRules) =>
   serverAction<void>('updateTitleRules', { clubId, rules })
 export const updateActivitySettings = (clubId: string, settings: ActivitySettings) =>
   serverAction<void>('updateActivitySettings', { clubId, settings })
+export const updateWindRotationSettings = (
+  clubId: string,
+  settings: WindRotationSettings,
+) => serverAction<void>('updateWindRotationSettings', { clubId, settings })
 export const deleteClub = (clubId: string) =>
   serverAction<void>('deleteClub', { clubId })
 export async function createGame(clubId: string, input: Row) {
@@ -568,6 +579,29 @@ export function subscribeActivitySettings(
   }
   return realtime(
     `activity-settings:${clubId}`,
+    'app_configs',
+    `club_id=eq.${clubId}`,
+    load,
+    callback,
+  )
+}
+export function subscribeWindRotationSettings(
+  clubId: string,
+  callback: (settings: WindRotationSettings) => void,
+) {
+  const load = async () => {
+    const { data, error } = await client()
+      .from('app_configs')
+      .select('wind_rotation_mode')
+      .eq('club_id', clubId)
+      .maybeSingle()
+    if (error) throw error
+    return data
+      ? windRotationSettingsFromRow(data as Row)
+      : DEFAULT_WIND_ROTATION_SETTINGS
+  }
+  return realtime(
+    `wind-rotation-settings:${clubId}`,
     'app_configs',
     `club_id=eq.${clubId}`,
     load,
@@ -954,6 +988,7 @@ export async function updateSession(
   if (values.participants) mapped.participants = values.participants
   if (values.tables) mapped.tables = values.tables
   if (values.sideline) mapped.sideline = values.sideline
+  if (values.tableWinds !== undefined) mapped.table_winds = values.tableWinds
   if (values.closedAt !== undefined)
     mapped.closed_at = values.closedAt?.toDate().toISOString() ?? null
   const { error } = await client()
