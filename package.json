@@ -24,7 +24,7 @@
     "supabase:claims": "node --env-file=.env.local scripts/set-supabase-firebase-claims.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.112.2",
+    "@supabase/supabase-js": "^2.115.0",
     "embla-carousel-react": "^8.6.0",
     "firebase": "^12.18.0",
     "firebase-admin": "^14.3.0",
