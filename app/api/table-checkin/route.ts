@@ -62,11 +62,13 @@ export async function POST(request: NextRequest) {
           String(body.icon ?? ''),
         )
       }
-      if (['checkIn', 'seat', 'remove', 'clear', 'clearAll'].includes(action)) {
+      if (['checkIn', 'seat', 'remove', 'clear', 'clearAll', 'swap'].includes(action)) {
         if (caller.kind === 'guest') {
           assertGuestTableScope(caller, clubId, Number(body.tableNumber))
-          if (!['seat', 'remove', 'clear'].includes(action))
-            throw new Error('Guests can only seat players, remove players, or clear this table.')
+          if (!['seat', 'remove', 'clear', 'swap'].includes(action))
+            throw new Error(
+              'Guests can only seat, remove, swap, or clear players at this table.',
+            )
         }
         return mutateTable(db, caller, {
           action: action as
@@ -74,10 +76,14 @@ export async function POST(request: NextRequest) {
             | 'seat'
             | 'remove'
             | 'clear'
-            | 'clearAll',
+            | 'clearAll'
+            | 'swap',
           clubId,
           tableNumber: Number(body.tableNumber),
           playerId: body.playerId ? String(body.playerId) : undefined,
+          otherPlayerId: body.otherPlayerId
+            ? String(body.otherPlayerId)
+            : undefined,
           replacePlayerId: body.replacePlayerId
             ? String(body.replacePlayerId)
             : undefined,

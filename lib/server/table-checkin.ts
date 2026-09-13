@@ -31,7 +31,7 @@ type Caller = {
   picture?: string | null
 }
 type SessionRow = Record<string, unknown>
-type MutationAction = 'checkIn' | 'seat' | 'remove' | 'clear' | 'clearAll'
+type MutationAction = 'checkIn' | 'seat' | 'remove' | 'clear' | 'clearAll' | 'swap'
 
 const rowId = () => randomBytes(10).toString('hex')
 const STALE_SWEEP_INTERVAL_MS = 60_000
@@ -500,6 +500,7 @@ export async function mutateTable(
     clubId: string
     tableNumber?: number
     playerId?: string
+    otherPlayerId?: string
     replacePlayerId?: string
   },
 ) {
@@ -514,8 +515,10 @@ export async function mutateTable(
 
   if (isGuest) {
     assertGuestTableScope(authCaller, clubId, targetTable)
-    if (!['seat', 'remove', 'clear'].includes(input.action))
-      throw new Error('Guests can only seat players, remove players, or clear this table.')
+    if (!['seat', 'remove', 'clear', 'swap'].includes(input.action))
+      throw new Error(
+        'Guests can only seat, remove, swap, or clear players at this table.',
+      )
   }
 
   const memberUid = isGuest
@@ -670,6 +673,22 @@ export async function mutateTable(
     sideline = [...new Set([...sideline, playerId])]
     if (tables[key].length === 0)
       await markCleared(db, String(row.id), targetTable)
+  } else if (input.action === 'swap') {
+    const firstId = String(input.playerId ?? '')
+    const secondId = String(input.otherPlayerId ?? '')
+    if (!firstId || !secondId || firstId === secondId) {
+      throw new Error('Choose two different seated players to swap.')
+    }
+    const key = String(targetTable)
+    const seats = [...(tables[key] ?? [])]
+    const firstIndex = seats.indexOf(firstId)
+    const secondIndex = seats.indexOf(secondId)
+    if (firstIndex < 0 || secondIndex < 0) {
+      throw new Error('Both players must already be seated at this table.')
+    }
+    seats[firstIndex] = secondId
+    seats[secondIndex] = firstId
+    tables[key] = seats
   } else {
     if (!playerId) throw new Error('Choose a player.')
     if (!state.player_available && input.action !== 'checkIn')
