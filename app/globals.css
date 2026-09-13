@@ -2252,6 +2252,12 @@ html.dark .club-workspace-header {
   border-radius: .35rem;
   background: transparent;
 }
+.focused-wind-round-glyph {
+  display: none;
+  font-size: 1rem;
+  font-weight: 900;
+  line-height: 1;
+}
 .focused-wind-hand {
   display: block;
   margin-top: .35rem;
@@ -2284,6 +2290,9 @@ html.dark .club-workspace-header {
   padding: .25rem 0 1rem;
   overflow: hidden;
 }
+.focused-wind-compass.is-orbiting {
+  overflow: visible;
+}
 .focused-wind-stage {
   position: relative;
   display: grid;
@@ -2291,7 +2300,6 @@ html.dark .club-workspace-header {
   grid-template-rows: auto auto auto;
   gap: .65rem;
   min-height: 22rem;
-  transform-origin: center center;
 }
 .focused-wind-seat {
   display: flex;
@@ -2305,6 +2313,7 @@ html.dark .club-workspace-header {
   background: linear-gradient(160deg, rgb(var(--surface)), rgb(var(--surface-2)));
   text-align: left;
   box-shadow: 0 8px 20px rgb(var(--shadow) / .08);
+  will-change: transform;
 }
 .focused-wind-seat-inner {
   display: flex;
@@ -2325,24 +2334,54 @@ html.dark .club-workspace-header {
   border-color: rgb(var(--bamboo));
   box-shadow: 0 0 0 2px rgb(var(--bamboo) / .25), 0 10px 24px rgb(var(--shadow) / .12);
 }
-.focused-wind-stage.is-rotating {
-  animation: focused-wind-rotate .8s cubic-bezier(.2, .8, .2, 1) both;
+.focused-wind-seat.is-selected {
+  border-color: rgb(var(--bamboo));
+  box-shadow: 0 0 0 3px rgb(var(--bamboo) / .35), 0 10px 24px rgb(var(--shadow) / .14);
+  outline: 2px solid rgb(var(--bamboo) / .45);
+  outline-offset: 2px;
 }
-.focused-wind-stage.is-rotating .focused-wind-seat-inner {
-  animation: focused-wind-counter-rotate .8s cubic-bezier(.2, .8, .2, 1) both;
+/* Clockwise orbit: seats slide to the next compass slot without rotating. */
+.focused-wind-stage.is-orbiting .focused-wind-seat--bottom {
+  z-index: 4;
+  animation: focused-wind-orbit-bottom .8s cubic-bezier(.2, .8, .2, 1) both;
 }
-/* Clockwise 90°: South (right) → East (bottom) as dealer advances. */
-@keyframes focused-wind-rotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(90deg); }
+.focused-wind-stage.is-orbiting .focused-wind-seat--right {
+  z-index: 3;
+  animation: focused-wind-orbit-right .8s cubic-bezier(.2, .8, .2, 1) both;
 }
-@keyframes focused-wind-counter-rotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(-90deg); }
+.focused-wind-stage.is-orbiting .focused-wind-seat--top {
+  z-index: 2;
+  animation: focused-wind-orbit-top .8s cubic-bezier(.2, .8, .2, 1) both;
+}
+.focused-wind-stage.is-orbiting .focused-wind-seat--left {
+  z-index: 1;
+  animation: focused-wind-orbit-left .8s cubic-bezier(.2, .8, .2, 1) both;
+}
+@keyframes focused-wind-orbit-bottom {
+  0% { transform: translate(0, 0); }
+  45% { transform: translate(calc(-45% - .3rem), calc(28%)); }
+  100% { transform: translate(calc(-100% - .65rem), calc(-100% - .65rem)); }
+}
+@keyframes focused-wind-orbit-right {
+  0% { transform: translate(0, 0); }
+  45% { transform: translate(calc(28%), calc(45% + .3rem)); }
+  100% { transform: translate(calc(-100% - .65rem), calc(100% + .65rem)); }
+}
+@keyframes focused-wind-orbit-top {
+  0% { transform: translate(0, 0); }
+  45% { transform: translate(calc(45% + .3rem), calc(-28%)); }
+  100% { transform: translate(calc(100% + .65rem), calc(100% + .65rem)); }
+}
+@keyframes focused-wind-orbit-left {
+  0% { transform: translate(0, 0); }
+  45% { transform: translate(calc(-28%), calc(-45% - .3rem)); }
+  100% { transform: translate(calc(100% + .65rem), calc(-100% - .65rem)); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .focused-wind-stage.is-rotating,
-  .focused-wind-stage.is-rotating .focused-wind-seat-inner {
+  .focused-wind-stage.is-orbiting .focused-wind-seat--bottom,
+  .focused-wind-stage.is-orbiting .focused-wind-seat--right,
+  .focused-wind-stage.is-orbiting .focused-wind-seat--top,
+  .focused-wind-stage.is-orbiting .focused-wind-seat--left {
     animation: none;
   }
 }
@@ -2352,6 +2391,20 @@ html.dark .club-workspace-header {
   justify-content: center;
   flex-shrink: 0;
   line-height: 0;
+}
+.focused-wind-tile--glyph {
+  display: none;
+  width: 2.4rem;
+  height: 2.8rem;
+  border-radius: .45rem;
+  background: rgb(var(--bamboo));
+  color: #fff;
+  box-shadow: inset 0 0 0 2px rgb(255 255 255 / .2);
+  line-height: 1;
+}
+.focused-wind-tile-char {
+  font-size: 1.25rem;
+  font-weight: 900;
 }
 .focused-wind-tile .static-mahjong-tile {
   border-radius: .35rem;
@@ -2377,6 +2430,86 @@ html.dark .club-workspace-header {
   color: rgb(var(--ink));
 }
 .focused-wind-score.is-negative { color: rgb(var(--cinnabar)); }
+@media (max-width: 767px) {
+  .focused-wind-status {
+    gap: .55rem;
+    margin-bottom: .75rem;
+  }
+  .focused-wind-compass,
+  .focused-wind-stage {
+    min-height: 16.5rem;
+  }
+  .focused-wind-stage {
+    gap: .4rem;
+  }
+  .focused-wind-seat {
+    min-height: 5rem;
+    padding: .5rem .55rem;
+    gap: .25rem;
+    border-radius: .85rem;
+  }
+  .focused-wind-seat-inner {
+    gap: .2rem;
+  }
+  .focused-wind-phonetic {
+    font-size: .58rem;
+  }
+  .focused-wind-name {
+    font-size: .66rem;
+  }
+  .focused-wind-score {
+    margin-top: 0;
+    font-size: 1.15rem;
+  }
+  .focused-wind-tile--art,
+  .focused-wind-round-art {
+    display: none;
+  }
+  .focused-wind-tile--glyph {
+    display: inline-flex;
+    width: 1.85rem;
+    height: 2.15rem;
+    border-radius: .4rem;
+  }
+  .focused-wind-tile-char {
+    font-size: 1.05rem;
+  }
+  .focused-wind-round-char {
+    width: 1.55rem;
+    height: 1.55rem;
+    border-radius: 999px;
+    background: rgb(255 255 255 / .18);
+  }
+  .focused-wind-round-glyph {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .95rem;
+  }
+  .focused-wind-round-pill {
+    min-height: 2.35rem;
+    padding: .3rem .7rem;
+    font-size: .72rem;
+  }
+  .focused-wind-dealer-box {
+    min-height: 2.35rem;
+    padding: .35rem .7rem;
+    font-size: .78rem;
+  }
+}
+@media (max-width: 390px) {
+  .focused-wind-compass,
+  .focused-wind-stage {
+    min-height: 15rem;
+  }
+  .focused-wind-seat {
+    min-height: 4.5rem;
+    padding: .4rem .45rem;
+  }
+  .focused-wind-score {
+    font-size: 1.05rem;
+  }
+}
 .focused-layout-switch {
   position: relative;
   display: inline-flex;

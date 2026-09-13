@@ -47,6 +47,7 @@ import {
   optimisticallyClearTable,
   optimisticallyRemovePlayer,
   optimisticallySeatPlayer,
+  optimisticallySwapPlayers,
 } from "@/lib/optimistic-session";
 import FocusedWindLayout, {
   buildWindSeatCards,
@@ -54,6 +55,7 @@ import FocusedWindLayout, {
 import { StaticMahjongTile } from "@/components/MahjongTile";
 import {
   WINDS,
+  WIND_CHARS,
   WIND_LABELS,
   continueWindsAfterRosterChange,
   nextWindState,
@@ -126,6 +128,7 @@ export default function FocusedTableView({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [windAdjustOpen, setWindAdjustOpen] = useState(false);
   const [restartPromptOpen, setRestartPromptOpen] = useState(false);
+  const [swapPlayerId, setSwapPlayerId] = useState<string | null>(null);
   const [windAnimating, setWindAnimating] = useState(false);
   const [fan, setFan] = useState(DEFAULT_SCORING_RULES.minFan);
   const [scoreCalculatorOpen, setScoreCalculatorOpen] = useState(false);
@@ -643,18 +646,54 @@ export default function FocusedTableView({
     const current = sessionRef.current;
     if (!current) return false;
     const playerId = typeof values.playerId === "string" ? values.playerId : "";
-    const optimistic = action === "seat" && playerId
-      ? optimisticallySeatPlayer(current, String(tableNumber), playerId)
-      : action === "remove" && playerId
-        ? optimisticallyRemovePlayer(current, String(tableNumber), playerId)
-        : action === "clear"
-          ? optimisticallyClearTable(current, String(tableNumber))
-          : current;
-    if (action === "seat" && optimistic === current) {
+    const otherPlayerId =
+      typeof values.otherPlayerId === "string" ? values.otherPlayerId : "";
+    const optimisticBase =
+      action === "seat" && playerId
+        ? optimisticallySeatPlayer(current, String(tableNumber), playerId)
+        : action === "remove" && playerId
+          ? optimisticallyRemovePlayer(current, String(tableNumber), playerId)
+          : action === "clear"
+            ? optimisticallyClearTable(current, String(tableNumber))
+            : action === "swap" && playerId && otherPlayerId
+              ? optimisticallySwapPlayers(
+                  current,
+                  String(tableNumber),
+                  playerId,
+                  otherPlayerId,
+                )
+              : current;
+    if (action === "seat" && optimisticBase === current) {
       setError("This table is already full.");
       play("error");
       return false;
     }
+    if (action === "swap" && optimisticBase === current) {
+      setError("Both players must already be seated at this table.");
+      play("error");
+      return false;
+    }
+
+    const tableKey = String(tableNumber);
+    const nextSeats = optimisticBase.tables[tableKey] ?? [];
+    const currentWinds = optimisticBase.tableWinds?.[tableKey];
+    const continuedWinds =
+      action === "swap" || action === "seat" || action === "remove"
+        ? continueWindsAfterRosterChange(currentWinds, nextSeats)
+        : action === "clear"
+          ? null
+          : currentWinds;
+    const optimistic =
+      action === "clear" || action === "swap" || action === "seat" || action === "remove"
+        ? {
+            ...optimisticBase,
+            tableWinds: upsertTableWind(
+              optimisticBase.tableWinds ?? {},
+              tableKey,
+              continuedWinds,
+            ),
+          }
+        : optimisticBase;
 
     setError(null);
     showSession(optimistic);
@@ -684,6 +723,21 @@ export default function FocusedTableView({
       }
     });
     return true;
+  };
+
+  const handleSeatTap = (playerId: string) => {
+    if (busy || windAnimating) return;
+    if (!swapPlayerId) {
+      setSwapPlayerId(playerId);
+      return;
+    }
+    if (swapPlayerId === playerId) {
+      setSwapPlayerId(null);
+      return;
+    }
+    const firstId = swapPlayerId;
+    setSwapPlayerId(null);
+    void mutate("swap", { playerId: firstId, otherPlayerId: playerId });
   };
 
   const openResults = () => {
@@ -1035,7 +1089,12 @@ export default function FocusedTableView({
                       aria-label={`Table wind ${WIND_LABELS[windState.roundWind]}. Adjust winds.`}
                     >
                       <span className="focused-wind-round-char" aria-hidden="true">
-                        <StaticMahjongTile id={windState.roundWind} size={28} />
+                        <span className="focused-wind-round-art">
+                          <StaticMahjongTile id={windState.roundWind} size={28} />
+                        </span>
+                        <span className="focused-wind-round-glyph">
+                          {WIND_CHARS[windState.roundWind]}
+                        </span>
                       </span>
                       {WIND_LABELS[windState.roundWind].toUpperCase()} ROUND
                     </button>
@@ -1057,8 +1116,9 @@ export default function FocusedTableView({
                 <FocusedWindLayout
                   cards={windCards}
                   animating={windAnimating}
+                  selectedPlayerId={swapPlayerId}
                   onRotationComplete={finishWindRotation}
-                  onSeatClick={(_playerId, _seatIndex) => setPickerOpen(true)}
+                  onSeatClick={(playerId) => handleSeatTap(playerId)}
                 />
               </>
             ) : (
@@ -1074,17 +1134,25 @@ export default function FocusedTableView({
                         key={index}
                         type="button"
                         disabled={busy}
-                        onClick={() => setPickerOpen(true)}
+                        onClick={() => {
+                          setSwapPlayerId(null);
+                          setPickerOpen(true);
+                        }}
                         className="min-h-36 rounded-xl border-2 border-dashed border-[rgb(var(--line))] bg-[rgb(var(--surface))] text-sm font-black text-[rgb(var(--bamboo))]"
                       >
                         <span className="block text-3xl">＋</span>Add player
                       </button>
                     );
                   const info = player(id);
+                  const selected = swapPlayerId === id;
                   return (
                     <article
                       key={id}
-                      className="relative flex min-h-36 flex-col items-center justify-center rounded-xl border border-[rgb(var(--line))] bg-[rgb(var(--surface))] p-3 text-center shadow-sm"
+                      className={`relative flex min-h-36 flex-col items-center justify-center rounded-xl border bg-[rgb(var(--surface))] p-3 text-center shadow-sm ${
+                        selected
+                          ? "border-[rgb(var(--bamboo))] ring-2 ring-[rgb(var(--bamboo)/.35)]"
+                          : "border-[rgb(var(--line))]"
+                      }`}
                     >
                       <button
                         type="button"
@@ -1095,15 +1163,23 @@ export default function FocusedTableView({
                       >
                         ×
                       </button>
-                      <span className="text-4xl">{info.icon}</span>
-                      <h2 className="mt-2 max-w-full truncate text-base font-black">
-                        {info.displayName}
-                      </h2>
-                      {user && info.authUid === user.uid ? (
-                        <span className="mt-1 rounded-full bg-[rgb(var(--bamboo)/.12)] px-2 py-1 text-[10px] font-black uppercase text-[rgb(var(--bamboo))]">
-                          You
-                        </span>
-                      ) : null}
+                      <button
+                        type="button"
+                        disabled={busy}
+                        aria-pressed={selected}
+                        onClick={() => handleSeatTap(id)}
+                        className="flex min-h-28 w-full flex-col items-center justify-center rounded-lg px-2"
+                      >
+                        <span className="text-4xl">{info.icon}</span>
+                        <h2 className="mt-2 max-w-full truncate text-base font-black">
+                          {info.displayName}
+                        </h2>
+                        {user && info.authUid === user.uid ? (
+                          <span className="mt-1 rounded-full bg-[rgb(var(--bamboo)/.12)] px-2 py-1 text-[10px] font-black uppercase text-[rgb(var(--bamboo))]">
+                            You
+                          </span>
+                        ) : null}
+                      </button>
                     </article>
                   );
                 })}
@@ -1112,12 +1188,27 @@ export default function FocusedTableView({
             <p
               className={`mt-4 rounded-lg p-3 text-center text-sm font-black ${occupants.length === 4 ? "bg-[rgb(var(--bamboo)/.12)] text-[rgb(var(--bamboo))]" : "bg-[rgb(var(--surface-2))] text-[rgb(var(--muted))]"}`}
             >
-              {occupants.length === 4
-                ? layoutMode === "wind" && !windState
-                  ? "Choose who starts as East"
-                  : "Ready to score"
+              {swapPlayerId
+                ? "Tap another seat to swap places"
+                : occupants.length === 4
+                  ? layoutMode === "wind" && !windState
+                    ? "Choose who starts as East"
+                    : "Ready to score · tap two seats to rearrange"
                 : `${occupants.length} of 4 players · add ${4 - occupants.length} more`}
             </p>
+            {occupants.length > 0 ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setSwapPlayerId(null);
+                  setPickerOpen(true);
+                }}
+                className="mt-2 min-h-11 w-full rounded-lg border border-[rgb(var(--line))] text-sm font-bold text-[rgb(var(--bamboo))]"
+              >
+                Add or replace players…
+              </button>
+            ) : null}
           </>
         )}
       </div>

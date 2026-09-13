@@ -7,6 +7,7 @@ import type { TablePlayer } from '@/lib/table-checkin-client'
 import type { TableWindState } from '@/lib/table-winds'
 import {
   COMPASS_POSITIONS,
+  WIND_CHARS,
   WIND_LABELS,
   WIND_PHONETICS,
   seatWindsForOrder,
@@ -46,11 +47,13 @@ const ROTATION_MS = 800
 export default function FocusedWindLayout({
   cards,
   animating,
+  selectedPlayerId,
   onSeatClick,
   onRotationComplete,
 }: {
   cards: WindSeatCard[]
   animating: boolean
+  selectedPlayerId?: string | null
   onSeatClick: (playerId: string, seatIndex: number) => void
   onRotationComplete?: () => void
 }) {
@@ -88,9 +91,12 @@ export default function FocusedWindLayout({
   >
 
   return (
-    <div className="focused-wind-compass" aria-label="Table wind seats">
+    <div
+      className={`focused-wind-compass${spinning ? ' is-orbiting' : ''}`}
+      aria-label="Table wind seats"
+    >
       <div
-        className={`focused-wind-stage${spinning ? ' is-rotating' : ''}`}
+        className={`focused-wind-stage${spinning ? ' is-orbiting' : ''}`}
       >
         {(['west', 'north', 'south', 'east'] as Wind[]).map((wind) => {
           const card = byWind[wind]
@@ -107,13 +113,17 @@ export default function FocusedWindLayout({
             <button
               key={card.playerId}
               type="button"
-              className={`focused-wind-seat focused-wind-seat--${position}${card.isDealer ? ' is-dealer' : ''}`}
+              className={`focused-wind-seat focused-wind-seat--${position}${card.isDealer ? ' is-dealer' : ''}${selectedPlayerId === card.playerId ? ' is-selected' : ''}`}
               onClick={() => onSeatClick(card.playerId, card.seatIndex)}
+              aria-pressed={selectedPlayerId === card.playerId}
               aria-label={`Seat ${card.seatIndex + 1} ${card.player?.displayName ?? 'Empty'}, ${WIND_LABELS[card.wind]}`}
             >
               <span className="focused-wind-seat-inner">
-                <span className="focused-wind-tile" aria-hidden="true">
+                <span className="focused-wind-tile focused-wind-tile--art" aria-hidden="true">
                   <StaticMahjongTile id={card.wind} size={40} />
+                </span>
+                <span className="focused-wind-tile focused-wind-tile--glyph" aria-hidden="true">
+                  <span className="focused-wind-tile-char">{WIND_CHARS[card.wind]}</span>
                 </span>
                 <span className="focused-wind-meta">
                   <span className="focused-wind-phonetic">
