@@ -51,6 +51,24 @@ export function optimisticallyClearTable<T extends OptimisticSessionLayout>(sess
   return { ...session, tables, sideline: [...new Set([...session.sideline, ...removed])] }
 }
 
+export function optimisticallySwapPlayers<T extends OptimisticSessionLayout>(
+  session: T,
+  tableId: string,
+  playerId: string,
+  otherPlayerId: string,
+): T {
+  if (!playerId || !otherPlayerId || playerId === otherPlayerId) return session
+  const tables = cloneTables(session.tables)
+  const seats = [...(tables[tableId] ?? [])]
+  const firstIndex = seats.indexOf(playerId)
+  const secondIndex = seats.indexOf(otherPlayerId)
+  if (firstIndex < 0 || secondIndex < 0) return session
+  seats[firstIndex] = otherPlayerId
+  seats[secondIndex] = playerId
+  tables[tableId] = seats
+  return { ...session, tables }
+}
+
 export function optimisticallyClearAllTables<T extends OptimisticSessionLayout>(session: T): T {
   const tables = cloneTables(session.tables)
   const removed = Object.values(tables).flat()

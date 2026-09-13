@@ -282,6 +282,50 @@ describe('focused table scoring', () => {
     expect(await screen.findByRole('button', { name: /Table wind South\. Adjust winds/i })).toBeTruthy()
   })
 
+  it('lets players rearrange seats by tapping two players', async () => {
+    window.localStorage.setItem('focused-table-layout', 'wind')
+    tableActionMock.mockImplementation((body: {
+      action: string
+      playerId?: string
+      otherPlayerId?: string
+    }) => {
+      if (body.action === 'context') return Promise.resolve(context)
+      if (body.action === 'swap') {
+        return Promise.resolve({
+          status: 'ok',
+          session: {
+            ...session,
+            tables: { '1': ['bob', 'jane', 'jeff', 'matt'] },
+            tableWinds: {
+              '1': {
+                ...windState,
+                seatOrder: ['bob', 'jane', 'jeff', 'matt'],
+              },
+            },
+            revision: 2,
+          },
+        })
+      }
+      return Promise.resolve({ status: 'ok', session })
+    })
+
+    render(<FocusedTableView clubId="TEST" tableNumber={1} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /Seat 1 Jane, East/i }))
+    expect(screen.getByText(/Tap another seat to swap places/i)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Seat 2 Bob, South/i }))
+
+    await waitFor(() =>
+      expect(tableActionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'swap',
+          playerId: 'jane',
+          otherPlayerId: 'bob',
+        }),
+      ),
+    )
+  })
+
   it('keeps all four wind seats visible when the dealer was moved off the table', async () => {
     window.localStorage.setItem('focused-table-layout', 'wind')
     const driftedSession = {
