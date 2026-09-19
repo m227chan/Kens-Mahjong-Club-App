@@ -65,8 +65,8 @@ describe('data deletion request API', () => {
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toEqual({ ok: true })
     expect(fetchMock).toHaveBeenCalledOnce()
-    const [, init] = fetchMock.mock.calls[0]
-    const body = JSON.parse(String(init?.body))
+    const call = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    const body = JSON.parse(String(call[1].body))
     expect(body.to).toEqual(['hello@mahjongmessiah.club'])
     expect(body.reply_to).toBe('alex@example.com')
     expect(body.subject).toContain('Alex Player')
