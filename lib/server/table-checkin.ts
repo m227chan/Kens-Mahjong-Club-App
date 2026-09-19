@@ -23,6 +23,7 @@ import { addPlayerToActiveSession } from '@/lib/server/roster-session'
 import { assertClubCompetitionEditable } from '@/lib/server/season-management'
 import type { AuthCaller } from '@/lib/server/auth-caller'
 import { assertGuestTableScope } from '@/lib/server/auth-caller'
+import { GUEST_CROSS_TABLE_SEAT_MESSAGE } from '@/lib/guest-table-messages'
 
 type Caller = {
   uid: string
@@ -56,6 +57,19 @@ function sessionPayload(row: SessionRow | undefined) {
     sideline: normalized.sideline,
     tableWinds: parseTableWindsMap(row.table_winds),
     revision: Number(row.revision ?? 0),
+  }
+}
+
+function guestScopedSession(
+  session: NonNullable<ReturnType<typeof sessionPayload>>,
+  tableNumber: number,
+) {
+  const key = String(tableNumber)
+  const tableWinds = session.tableWinds ?? {}
+  return {
+    ...session,
+    tables: { [key]: session.tables[key] ?? [] },
+    tableWinds: tableWinds[key] ? { [key]: tableWinds[key] } : {},
   }
 }
 
@@ -311,7 +325,7 @@ export async function getTableContext(
       await db.query(
         `select c.name,c.active_season_number,
           (select to_jsonb(s) from sessions s where s.club_id=c.id and s.is_active limit 1) active_session,
-          coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'displayName',p.display_name,'icon',p.icon,'authUid',p.auth_uid) order by p.display_name)
+          coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'displayName',p.display_name,'icon',p.icon,'authUid',null) order by p.display_name)
             from players p where p.club_id=c.id and p.active),'[]'::jsonb) players
          from clubs c
          where c.id=$1 and c.active`,
@@ -331,7 +345,7 @@ export async function getTableContext(
       clubName: String(context.name),
       seasonNumber: session.seasonNumber,
       tableNumber: normalizedTable,
-      session,
+      session: guestScopedSession(session, normalizedTable),
       players,
       linkedPlayer: null,
       scoringRules: await loadScoringRules(db, normalizedClub),
@@ -696,12 +710,23 @@ export async function mutateTable(
     const key = String(targetTable)
     const target = tables[key] ?? []
     const alreadyAtTarget = target.includes(playerId)
+    if (isGuest && !alreadyAtTarget) {
+      const seatedElsewhere = Object.entries(tables).some(
+        ([tableKey, ids]) => tableKey !== key && ids.includes(playerId),
+      )
+      if (seatedElsewhere) throw new Error(GUEST_CROSS_TABLE_SEAT_MESSAGE)
+    }
     if (!alreadyAtTarget && target.length >= 4) {
       if (!input.replacePlayerId || !target.includes(input.replacePlayerId))
         return {
           status: 'table_full' as const,
           occupants: target,
-          session: sessionPayload(row),
+          session: (() => {
+            const payload = sessionPayload(row)
+            return isGuest && payload
+              ? guestScopedSession(payload, targetTable)
+              : payload
+          })(),
         }
       tables[key] = target.filter((id) => id !== input.replacePlayerId)
       sideline = [...new Set([...sideline, input.replacePlayerId])]
@@ -744,7 +769,14 @@ export async function mutateTable(
       ],
     )
   ).rows[0]
-  return { status: 'ok' as const, session: sessionPayload(updated) }
+  const session = sessionPayload(updated)
+  return {
+    status: 'ok' as const,
+    session:
+      isGuest && session
+        ? guestScopedSession(session, targetTable)
+        : session,
+  }
 }
 
 async function lockActiveSession(

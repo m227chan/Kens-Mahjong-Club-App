@@ -11,6 +11,7 @@ import { FloatingSessionTrackerProvider } from '@/contexts/FloatingSessionTracke
 import FloatingSessionTracker from '@/components/FloatingSessionTracker'
 import ViewportMetrics from '@/components/ViewportMetrics'
 import { BrandLockup } from '@/components/BrandMark'
+import CookieConsentBanner from '@/components/CookieConsentBanner'
 
 export const metadata: Metadata = {
   title: 'Mahjong Messiah Score Tracker',
@@ -53,7 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <Link
                   href="/"
                   aria-label="Mahjong Messiah — personal dashboard"
-                  className="brand-home-link group flex min-h-11 min-w-0 cursor-pointer items-center rounded-sm focus-visible:outline-none"
+                  className="brand-home-link group flex min-h-11 min-w-0 cursor-pointer items-center rounded-sm"
                 >
                   <BrandLockup className="brand-lockup-header" showDescriptor />
                 </Link>
@@ -67,6 +68,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <main id="main-content" tabIndex={-1} className="min-w-0 flex-1">{children}</main>
           </div>
           <FloatingSessionTracker />
+          <CookieConsentBanner />
           </FloatingSessionTrackerProvider>
           </GameSyncProvider>
           </SoundProvider>

@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import MenuGlyph from '@/components/MenuGlyph'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSound } from '@/contexts/SoundContext'
 import { deleteAccount, getAccountDeletionPlan } from '@/lib/data'
+import { LEGAL } from '@/lib/legal'
 import { useModalFocus } from '@/lib/use-modal-focus'
 import type {
   AccountDeletionPlan,
@@ -109,6 +111,14 @@ export default function UserSettings() {
     })
     return () => window.cancelAnimationFrame(frame)
   }, [deletingMode, open])
+
+  useEffect(() => {
+    if (user) return
+    setOpen(false)
+    setDeletingMode(false)
+    setError(null)
+    setPlan(null)
+  }, [user])
 
   useEffect(() => {
     if (!open) return
@@ -292,7 +302,14 @@ export default function UserSettings() {
                           <small>{user.email}</small>
                         </span>
                       </div>
-                      <button type="button" onClick={() => void signOut()} className="app-menu-row">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpen(false)
+                          void signOut()
+                        }}
+                        className="app-menu-row"
+                      >
                         <MenuGlyph name="sign-out" />
                         <span className="app-menu-row-copy"><strong>Sign Out</strong></span>
                       </button>
@@ -317,6 +334,70 @@ export default function UserSettings() {
                         </span>
                         <span className="app-menu-trailing" aria-hidden="true"><span className="app-menu-chevron" /></span>
                       </button>
+                    </div>
+                  </section>
+
+                  <section aria-labelledby="legal-privacy-label">
+                    <h3 id="legal-privacy-label" className="app-menu-group-label">Legal &amp; privacy</h3>
+                    <div className="app-menu-group">
+                      <Link
+                        href="/privacy"
+                        className="app-menu-row"
+                        onClick={() => setOpen(false)}
+                      >
+                        <MenuGlyph name="legal" />
+                        <span className="app-menu-row-copy">
+                          <strong>Privacy Policy</strong>
+                          <small>How we handle your information</small>
+                        </span>
+                        <span className="app-menu-trailing" aria-hidden="true"><span className="app-menu-chevron" /></span>
+                      </Link>
+                      <Link
+                        href="/terms"
+                        className="app-menu-row"
+                        onClick={() => setOpen(false)}
+                      >
+                        <MenuGlyph name="legal" />
+                        <span className="app-menu-row-copy">
+                          <strong>Terms of Service</strong>
+                          <small>Rules for using {LEGAL.productName}</small>
+                        </span>
+                        <span className="app-menu-trailing" aria-hidden="true"><span className="app-menu-chevron" /></span>
+                      </Link>
+                      <Link
+                        href="/cookies"
+                        className="app-menu-row"
+                        onClick={() => setOpen(false)}
+                      >
+                        <MenuGlyph name="legal" />
+                        <span className="app-menu-row-copy">
+                          <strong>Cookie Policy</strong>
+                          <small>Cookies and local storage</small>
+                        </span>
+                        <span className="app-menu-trailing" aria-hidden="true"><span className="app-menu-chevron" /></span>
+                      </Link>
+                      <Link
+                        href="/data-deletion"
+                        className="app-menu-row"
+                        onClick={() => setOpen(false)}
+                      >
+                        <MenuGlyph name="delete" />
+                        <span className="app-menu-row-copy">
+                          <strong>Request data deletion</strong>
+                          <small>Form if you cannot use Delete Account</small>
+                        </span>
+                        <span className="app-menu-trailing" aria-hidden="true"><span className="app-menu-chevron" /></span>
+                      </Link>
+                      <a
+                        href={`mailto:${LEGAL.contactEmail}`}
+                        className="app-menu-row"
+                      >
+                        <MenuGlyph name="mail" />
+                        <span className="app-menu-row-copy">
+                          <strong>Contact</strong>
+                          <small>{LEGAL.operatorName} · {LEGAL.contactEmail}</small>
+                        </span>
+                      </a>
                     </div>
                   </section>
 

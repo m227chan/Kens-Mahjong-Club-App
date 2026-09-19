@@ -161,17 +161,21 @@ function detectSequencePatterns(input: HandScoringInput): string[] {
       }
     }
 
+    // Mixed Triple Sequence: same numbered ranks in all three suits (not merely 3+ chows of those ranks).
     if (chows.length >= 3) {
-      const byRank = new Map<string, number>()
+      const suitsByRanks = new Map<string, Set<string>>()
       for (const chow of chows) {
-        const parsed = chow.tiles.map(parseTile) as { kind: 'numbered'; suit: string; rank: number }[]
+        const parsed = chow.tiles.map(parseTile)
         if (!parsed.every((p) => p.kind === 'numbered')) continue
-        const ranks = parsed.map((p) => p.rank).sort((a, b) => a - b).join('-')
-        const key = ranks
-        byRank.set(key, (byRank.get(key) ?? 0) + 1)
+        const numbered = parsed as { kind: 'numbered'; suit: string; rank: number }[]
+        const ranks = numbered.map((p) => p.rank).sort((a, b) => a - b).join('-')
+        const suit = numbered[0].suit
+        const suits = suitsByRanks.get(ranks) ?? new Set<string>()
+        suits.add(suit)
+        suitsByRanks.set(ranks, suits)
       }
-      for (const [, count] of byRank) {
-        if (count >= 3) {
+      for (const suits of suitsByRanks.values()) {
+        if (suits.has('character') && suits.has('bamboo') && suits.has('circle')) {
           matched.push('mixed-triple-sequence')
           break
         }
