@@ -26,6 +26,7 @@ import {
   exitGuestTableToLogin,
   guestSessionMatches,
 } from "@/lib/guest-table-session";
+import { GUEST_CROSS_TABLE_SEAT_MESSAGE } from "@/lib/guest-table-messages";
 import { calculateTableScores, type TableWinType } from "@/lib/table-scoring";
 import {
   basePointsForFan,
@@ -135,6 +136,9 @@ export default function FocusedTableView({
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [upgradeBusy, setUpgradeBusy] = useState(false);
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
+  const [upgradeMode, setUpgradeMode] = useState<"default" | "cross-table">(
+    "default",
+  );
   const requestKey = useRef("");
   const sessionRef = useRef<TableSession | null>(null);
   const confirmedSessionRef = useRef<TableSession | null>(null);
@@ -716,7 +720,18 @@ export default function FocusedTableView({
         }
       } catch (nextError) {
         play("error");
-        setError(nextError instanceof Error ? nextError.message : "Unable to update the table. Your last change was reverted.");
+        const message =
+          nextError instanceof Error
+            ? nextError.message
+            : "Unable to update the table. Your last change was reverted.";
+        if (isGuest && message === GUEST_CROSS_TABLE_SEAT_MESSAGE) {
+          setUpgradeMode("cross-table");
+          setUpgradeMessage(null);
+          setUpgradeOpen(true);
+          setError(null);
+        } else {
+          setError(message);
+        }
       } finally {
         pendingTableMutationsRef.current -= 1;
         if (pendingTableMutationsRef.current === 0) showSession(confirmedSessionRef.current);
@@ -1029,6 +1044,7 @@ export default function FocusedTableView({
           <button
             type="button"
             onClick={() => {
+              setUpgradeMode("default");
               setUpgradeMessage(null);
               setUpgradeOpen(true);
             }}
@@ -1344,24 +1360,40 @@ export default function FocusedTableView({
                   </p>
                 ) : (
                   filteredPlayers.map((item) => {
-                    const other = Object.entries(session?.tables ?? {}).find(
-                      ([, ids]) => ids.includes(item.id),
+                    const otherTable = Object.entries(session?.tables ?? {}).find(
+                      ([key, ids]) =>
+                        key !== String(tableNumber) && ids.includes(item.id),
                     )?.[0];
-                    const status = other
-                      ? `Table ${other}`
-                      : session?.sideline.includes(item.id)
-                        ? "Sideline"
-                        : "Not in session";
+                    const seatedElsewhere =
+                      Boolean(otherTable) ||
+                      (Boolean(session?.participants.includes(item.id)) &&
+                        !occupants.includes(item.id) &&
+                        !session?.sideline.includes(item.id));
+                    const status = otherTable
+                      ? `Table ${otherTable}`
+                      : seatedElsewhere
+                        ? "Other table"
+                        : session?.sideline.includes(item.id)
+                          ? "Sideline"
+                          : "Not in session";
                     return (
                       <button
                         key={item.id}
                         type="button"
                         disabled={busy || occupants.length >= 4}
                         onClick={async () => {
+                          if (isGuest && seatedElsewhere) {
+                            setPickerOpen(false);
+                            setSearch("");
+                            setUpgradeMode("cross-table");
+                            setUpgradeMessage(null);
+                            setUpgradeOpen(true);
+                            return;
+                          }
                           if (
-                            other &&
+                            otherTable &&
                             !window.confirm(
-                              `Move ${item.displayName} from Table ${other} to Table ${tableNumber}?`,
+                              `Move ${item.displayName} from Table ${otherTable} to Table ${tableNumber}?`,
                             )
                           )
                             return;
@@ -1626,10 +1658,14 @@ export default function FocusedTableView({
             className="w-full max-w-md rounded-t-2xl bg-[rgb(var(--surface))] p-5 sm:rounded-2xl"
           >
             <h2 id="guest-upgrade-title" className="text-xl font-black text-[rgb(var(--ink))]">
-              Want to track your points and more?
+              {upgradeMode === "cross-table"
+                ? "Sign in to move that player"
+                : "Want to track your points and more?"}
             </h2>
             <p className="mt-2 text-sm text-[rgb(var(--muted))]">
-              Sign in with Google and join this club to unlock session point tracking, roster tools, and your personal standings.
+              {upgradeMode === "cross-table"
+                ? GUEST_CROSS_TABLE_SEAT_MESSAGE
+                : "Sign in with Google and join this club to unlock session point tracking, roster tools, and your personal standings."}
             </p>
             {upgradeMessage ? (
               <p className="mt-3 rounded-lg border border-[rgb(var(--line))] bg-[rgb(var(--surface-2))] p-3 text-sm font-bold text-[rgb(var(--ink))]" role="status">

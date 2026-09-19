@@ -457,4 +457,41 @@ describe('hand scoring engine', () => {
     const openResult = calculateFan(baseInput({ melds: opened, pair }), DEFAULT_SCORING_RULES)
     expect(openResult.patterns.map((p) => p.id)).not.toContain('concealed-hand')
   })
+
+  it('does not award Mixed Triple Sequence for three identical chows plus one other suit', () => {
+    // Screenshot regression: 3× 123 Characters + 123 Bamboo + pair of 2 Dots.
+    // Mixed Triple Sequence requires the same ranks in Characters, Bamboo, AND Circles.
+    const input = baseInput({
+      includeNonTraditional: true,
+      melds: [
+        chow('c1', 'c2', 'c3', true),
+        chow('c1', 'c2', 'c3', true),
+        chow('c1', 'c2', 'c3', true),
+        chow('b1', 'b2', 'b3', true),
+      ],
+      pair: ['o2', 'o2'],
+    })
+    const detected = detectPatterns(input)
+    const result = calculateFan(input, DEFAULT_SCORING_RULES)
+
+    expect(detected).toContain('three-identical-sequences')
+    expect(detected).not.toContain('mixed-triple-sequence')
+    expect(result.patterns.map((p) => p.id)).not.toContain('mixed-triple-sequence')
+  })
+
+  it('awards Mixed Triple Sequence only when the same ranks appear in all three suits', () => {
+    const input = baseInput({
+      includeNonTraditional: true,
+      flowers: ['f1'],
+      melds: [
+        chow('c5', 'c6', 'c7', false),
+        chow('b5', 'b6', 'b7', false),
+        chow('o5', 'o6', 'o7', false),
+        pong('red', false),
+      ],
+      pair: ['north', 'north'],
+    })
+    expect(detectPatterns(input)).toContain('mixed-triple-sequence')
+  })
 })
+

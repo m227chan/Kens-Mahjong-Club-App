@@ -19,6 +19,8 @@ export type MenuGlyphName =
   | 'clear-tables'
   | 'shuffle'
   | 'reset'
+  | 'legal'
+  | 'mail'
 
 export default function MenuGlyph({ name }: { name: MenuGlyphName }) {
   const paths: Record<MenuGlyphName, ReactNode> = {
@@ -40,6 +42,8 @@ export default function MenuGlyph({ name }: { name: MenuGlyphName }) {
     'clear-tables': <><path d="M4 6h16M6 10h12M8 14h8M10 18h4" /></>,
     shuffle: <><path d="M16 3h5v5M3 16l18-13M8 21H3v-5M21 8l-5 5" /></>,
     reset: <><path d="M4 11a8 8 0 1 0 2-5.3L3 9" /><path d="M3 4v5h5" /></>,
+    legal: <><path d="M8 3h8v4H8zM6 7h12v14H6z" /><path d="M9 12h6M9 16h6" /></>,
+    mail: <><path d="M4 6h16v12H4z" /><path d="m4 7 8 6 8-6" /></>,
   }
 
   return (

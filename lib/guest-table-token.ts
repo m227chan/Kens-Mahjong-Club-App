@@ -10,7 +10,7 @@ export type GuestTableClaims = {
 }
 
 const TOKEN_PREFIX = 'g1'
-const DEFAULT_TTL_MS = 12 * 60 * 60 * 1000
+const DEFAULT_TTL_MS = 2 * 60 * 60 * 1000
 
 function signingSecret() {
   const value =

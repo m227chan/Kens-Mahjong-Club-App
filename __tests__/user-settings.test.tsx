@@ -8,6 +8,10 @@ const mocks = vi.hoisted(() => ({
   toggleSound: vi.fn(),
   replace: vi.fn(),
   refresh: vi.fn(),
+  authUser: {
+    displayName: 'Matthew Chan',
+    email: 'matt@example.com',
+  } as { displayName: string; email: string } | null,
 }))
 
 vi.mock('next/navigation', () => ({
@@ -15,7 +19,9 @@ vi.mock('next/navigation', () => ({
 }))
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
-    user: { displayName: 'Matthew Chan', email: 'matt@example.com' },
+    get user() {
+      return mocks.authUser
+    },
     signOut: mocks.signOut,
   }),
 }))
@@ -33,6 +39,11 @@ describe('user settings', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     window.localStorage.clear()
+    document.body.style.overflow = ''
+    mocks.authUser = {
+      displayName: 'Matthew Chan',
+      email: 'matt@example.com',
+    }
     mocks.getAccountDeletionPlan.mockResolvedValue({
       confirmationName: 'Matthew Chan',
       soleManagerClubs: [{
@@ -46,7 +57,25 @@ describe('user settings', () => {
     mocks.signOut.mockResolvedValue(undefined)
   })
 
-  afterEach(() => cleanup())
+  afterEach(() => {
+    cleanup()
+    document.body.style.overflow = ''
+  })
+
+  it('restores page scroll when signing out from the open settings menu', async () => {
+    const { rerender } = render(<UserSettings />)
+    fireEvent.click(screen.getByRole('button', { name: 'Account and app settings' }))
+    await waitFor(() => expect(document.body.style.overflow).toBe('hidden'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sign Out' }))
+    await waitFor(() => expect(mocks.signOut).toHaveBeenCalled())
+    expect(document.body.style.overflow).toBe('')
+
+    mocks.authUser = null
+    rerender(<UserSettings />)
+    expect(document.body.style.overflow).toBe('')
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
 
   it('consolidates preferences and requires a valid manager handoff plus exact name', async () => {
     render(<UserSettings />)
@@ -89,18 +118,18 @@ describe('user settings', () => {
     fireEvent.click(trigger)
     const dialog = screen.getByRole('dialog')
     const closeButton = screen.getByRole('button', { name: 'Close settings' })
-    const deleteRow = screen.getByRole('button', { name: 'Delete Account' })
+    const lastMenuLink = screen.getByRole('link', { name: /Contact/i })
     expect(dialog).toBeTruthy()
     await waitFor(() => {
       expect(document.activeElement).toBe(closeButton)
       expect(container.hasAttribute('inert')).toBe(true)
     })
 
-    deleteRow.focus()
+    lastMenuLink.focus()
     fireEvent.keyDown(window, { key: 'Tab' })
     expect(document.activeElement).toBe(closeButton)
     fireEvent.keyDown(window, { key: 'Tab', shiftKey: true })
-    expect(document.activeElement).toBe(deleteRow)
+    expect(document.activeElement).toBe(lastMenuLink)
 
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(screen.queryByRole('dialog')).toBeNull()
