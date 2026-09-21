@@ -29,7 +29,7 @@
     "embla-carousel-react": "^8.6.0",
     "firebase": "^12.19.0",
     "firebase-admin": "^14.4.0",
-    "next": "^16.3.4",
+    "next": "^16.3.5",
     "openskill": "^5.0.1",
     "pg": "^8.23.0",
     "qrcode": "^1.5.4",
