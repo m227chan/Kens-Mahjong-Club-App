@@ -38,7 +38,7 @@ export const privacySections: LegalSection[] = [
     id: 'children',
     title: 'Children under 13',
     paragraphs: [
-      `${LEGAL.productName} is not directed at children under 13. We do not knowingly collect personal information from anyone under 13. You must confirm you are 13 or older before signing in or using guest table scoring from the login page.`,
+      `${LEGAL.productName} is not directed at children under 13. We do not knowingly collect personal information from anyone under 13. You must be 13 or older to sign in or use guest table scoring.`,
       'If you believe a child under 13 has created an account or otherwise provided personal information, contact us and we will take steps to delete that information.',
     ],
   },

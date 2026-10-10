@@ -210,6 +210,7 @@ function mapSession(row: Row): SessionDoc {
     tables,
     sideline,
     tableWinds: parseTableWindsMap(row.table_winds),
+    revision: Number(row.revision ?? 0),
     closedAt: nullableTs(row.closed_at),
   }
 }

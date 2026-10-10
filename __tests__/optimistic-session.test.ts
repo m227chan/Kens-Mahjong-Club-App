@@ -5,6 +5,7 @@ import {
   optimisticallyRemovePlayer,
   optimisticallySeatPlayer,
   optimisticallySwapPlayers,
+  replacePlayerAtSeat,
 } from '@/lib/optimistic-session'
 
 const session = {
@@ -47,5 +48,26 @@ describe('optimistic session layouts', () => {
     const next = optimisticallySwapPlayers(session, '1', 'a', 'b')
     expect(next.tables['1']).toEqual(['b', 'a'])
     expect(next.sideline).toEqual(['e'])
+  })
+
+  it('replaces a seated player in the same chair instead of appending', () => {
+    expect(replacePlayerAtSeat(['a', 'b', 'c', 'd'], 'a', 'e')).toEqual([
+      'e',
+      'b',
+      'c',
+      'd',
+    ])
+    expect(replacePlayerAtSeat(['a', 'b', 'c', 'd'], 'c', 'e')).toEqual([
+      'a',
+      'b',
+      'e',
+      'd',
+    ])
+    expect(replacePlayerAtSeat(['a', 'b', 'c', 'd'], 'd', 'e')).toEqual([
+      'a',
+      'b',
+      'c',
+      'e',
+    ])
   })
 })

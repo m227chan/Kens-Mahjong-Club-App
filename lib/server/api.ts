@@ -54,6 +54,19 @@ export function apiError(error: unknown, fallback: string) {
     )
   const message = error instanceof Error ? error.message : ''
   if (
+    /lock timeout|statement timeout|This table is busy with another update/i.test(
+      message,
+    )
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          'This table is busy with another update. Wait a moment and try again.',
+      },
+      { status: 409 },
+    )
+  }
+  if (
     /^Only an active club (?:manager|member) can do that\.$/.test(message) ||
     /^Only a club manager or the user linked to this player can edit the profile\.$/.test(message) ||
     /^Members can only edit games they created during the first 24 hours\.$/.test(message)

@@ -84,7 +84,11 @@ describe('login age gate', () => {
     expect(google).toBeDisabled()
     expect(tryIt).toBeDisabled()
 
-    fireEvent.click(screen.getByRole('checkbox', { name: /13 years of age or older/i }))
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: /I have read and agree to Mahjong Messiah's terms & conditions and privacy policy/i,
+      })
+    )
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Continue with Google/i })).not.toBeDisabled()
@@ -94,7 +98,11 @@ describe('login age gate', () => {
 
   it('persists age confirmation and calls sign-in when enabled', async () => {
     render(<LoginPage />)
-    fireEvent.click(screen.getByRole('checkbox', { name: /13 years of age or older/i }))
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: /I have read and agree to Mahjong Messiah's terms & conditions and privacy policy/i,
+      })
+    )
     fireEvent.click(await screen.findByRole('button', { name: /Continue with Google/i }))
 
     await waitFor(() => expect(authMocks.signInWithGoogle).toHaveBeenCalledOnce())

@@ -1,8 +1,11 @@
+import { seatReplacementOrder } from '@/lib/table-winds'
+
 export type OptimisticSessionLayout = {
   tableCount: number
   participants: string[]
   tables: Record<string, string[]>
   sideline: string[]
+  tableWinds?: Record<string, { seatOrder: string[] }>
 }
 
 const cloneTables = (tables: Record<string, string[]>) =>
@@ -14,11 +17,15 @@ export function optimisticallySeatPlayer<T extends OptimisticSessionLayout>(
   playerId: string,
 ): T {
   const tables = cloneTables(session.tables)
-  const target = tables[tableId] ?? []
+  const target = (tables[tableId] ?? []).filter(Boolean)
   if (!target.includes(playerId) && target.length >= 4) return session
 
   for (const id of Object.keys(tables)) tables[id] = tables[id].filter((candidate) => candidate !== playerId)
-  tables[tableId] = [...(tables[tableId] ?? []), playerId].slice(0, 4)
+  tables[tableId] = seatReplacementOrder(
+    session.tableWinds?.[tableId]?.seatOrder,
+    tables[tableId] ?? [],
+    playerId,
+  )
 
   return {
     ...session,
@@ -68,6 +75,25 @@ export function optimisticallySwapPlayers<T extends OptimisticSessionLayout>(
   tables[tableId] = seats
   return { ...session, tables }
 }
+
+/** Put `incomingId` in `outgoingId`'s chair instead of appending after a remove. */
+export function replacePlayerAtSeat(
+  seats: string[],
+  outgoingId: string,
+  incomingId: string,
+): string[] {
+  if (!outgoingId || !incomingId) return seats.filter(Boolean).slice(0, 4)
+  if (outgoingId === incomingId) return seats.filter(Boolean).slice(0, 4)
+  const outgoingIndex = seats.indexOf(outgoingId)
+  if (outgoingIndex < 0) {
+    const next = seats.filter((id) => id && id !== incomingId)
+    return [...next, incomingId].slice(0, 4)
+  }
+  const cleaned = seats.filter((id) => id !== outgoingId && id !== incomingId)
+  cleaned.splice(Math.min(outgoingIndex, cleaned.length), 0, incomingId)
+  return cleaned.slice(0, 4)
+}
+
 
 export function optimisticallyClearAllTables<T extends OptimisticSessionLayout>(session: T): T {
   const tables = cloneTables(session.tables)

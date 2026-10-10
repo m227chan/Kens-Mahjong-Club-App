@@ -2267,6 +2267,13 @@ html.dark .club-workspace-header {
   font-weight: 700;
   color: rgb(var(--muted));
 }
+.focused-wind-starter {
+  display: block;
+  margin-top: .2rem;
+  font-size: .7rem;
+  font-weight: 700;
+  color: rgb(var(--ink) / .7);
+}
 .focused-wind-dealer-box {
   display: flex;
   align-items: center;
@@ -2318,6 +2325,7 @@ html.dark .club-workspace-header {
   will-change: transform;
 }
 .focused-wind-seat-inner {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -2335,6 +2343,22 @@ html.dark .club-workspace-header {
 .focused-wind-seat.is-dealer {
   border-color: rgb(var(--bamboo));
   box-shadow: 0 0 0 2px rgb(var(--bamboo) / .25), 0 10px 24px rgb(var(--shadow) / .12);
+}
+.focused-wind-seat.is-starter .focused-wind-starter-badge {
+  display: inline-flex;
+}
+.focused-wind-starter-badge {
+  display: none;
+  align-items: center;
+  margin-bottom: .15rem;
+  padding: .15rem .45rem;
+  border-radius: .4rem;
+  background: rgb(var(--ink) / .08);
+  color: rgb(var(--ink));
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
 }
 .focused-wind-seat.is-selected {
   border-color: rgb(var(--bamboo));

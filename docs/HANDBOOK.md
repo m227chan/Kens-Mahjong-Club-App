@@ -437,7 +437,7 @@ Each club stores its minimum fan, maximum fan cap, fan-to-base-point mapping, an
 - **Non-dealer win only:** rotate only after a non-dealer win; dealer wins and draws keep winds.
 - **Always rotate:** every recorded win or draw advances seat winds.
 
-After a full dealer cycle back to the round starter, the prevailing (table) round wind advances East → South → West → North. Seat winds are derived from the current dealer and live seat order rather than stored separately. For normal results:
+After a full dealer cycle back to the starter seat, the prevailing (table) round wind advances East → South → West → North. Seat winds are derived from the current dealer and live seat order rather than stored separately. For normal results:
 
 - **Self draw:** the winner receives three times the base value; each other player loses one base value.
 - **Discard win:** the winner receives twice the base value; the discarder loses twice the base value; uninvolved players receive zero.

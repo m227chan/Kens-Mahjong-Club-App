@@ -4,7 +4,9 @@ import {
   continueWindsAfterRosterChange,
   initTableWinds,
   nextWindState,
+  normalizeTableWindState,
   reconcileTableWindsMap,
+  seatReplacementOrder,
   seatWindForPlayer,
   seatWindsForOrder,
   shouldRotateWinds,
@@ -30,12 +32,12 @@ describe('wind rotation settings', () => {
 })
 
 describe('table winds', () => {
-  it('initializes East round with chosen starter as dealer', () => {
+  it('initializes East round with chosen starter seat as dealer', () => {
     const state = initTableWinds('p3', seats)
     expect(state).toEqual({
       roundWind: 'east',
       dealerPlayerId: 'p3',
-      roundStarterPlayerId: 'p3',
+      roundStarterSeatIndex: 2,
       handNumber: 1,
       seatOrder: seats,
     })
@@ -43,6 +45,18 @@ describe('table winds', () => {
     expect(seatWindForPlayer(state, 'p4')).toBe('south')
     expect(seatWindForPlayer(state, 'p1')).toBe('west')
     expect(seatWindForPlayer(state, 'p2')).toBe('north')
+  })
+
+  it('migrates legacy player-based starter ids to seat indexes', () => {
+    const normalized = normalizeTableWindState({
+      roundWind: 'east',
+      dealerPlayerId: 'p1',
+      roundStarterPlayerId: 'p3',
+      handNumber: 2,
+      seatOrder: seats,
+    })
+    expect(normalized?.roundStarterSeatIndex).toBe(2)
+    expect(normalized && 'roundStarterPlayerId' in normalized).toBe(false)
   })
 
   it('rotates on non-dealer win and draw for the default mode', () => {
@@ -83,7 +97,7 @@ describe('table winds', () => {
     ).toBe(false)
   })
 
-  it('advances round wind after a full dealer cycle', () => {
+  it('advances round wind after a full dealer cycle back to the starter seat', () => {
     const state = initTableWinds('p1', seats)
     const afterNorth = {
       ...state,
@@ -100,7 +114,7 @@ describe('table winds', () => {
     expect(next.advancedRound).toBe(true)
     expect(next.state.dealerPlayerId).toBe('p1')
     expect(next.state.roundWind).toBe('south')
-    expect(next.state.roundStarterPlayerId).toBe('p1')
+    expect(next.state.roundStarterSeatIndex).toBe(0)
     expect(next.state.handNumber).toBe(5)
   })
 
@@ -108,6 +122,7 @@ describe('table winds', () => {
     const state = initTableWinds('p1', seats)
     const continued = continueWindsAfterRosterChange(state, ['p1', 'p5', 'p3', 'p4'])
     expect(continued?.dealerPlayerId).toBe('p1')
+    expect(continued?.roundStarterSeatIndex).toBe(0)
     expect(continued?.seatOrder).toEqual(['p1', 'p5', 'p3', 'p4'])
   })
 
@@ -121,7 +136,7 @@ describe('table winds', () => {
     expect(paused).toEqual(state)
   })
 
-  it('lets a swapped-in player inherit the departed seat wind roles', () => {
+  it('keeps the starter seat when a substituted player inherits dealer', () => {
     const state = {
       ...initTableWinds('p1', seats),
       roundWind: 'west' as const,
@@ -139,10 +154,132 @@ describe('table winds', () => {
     expect(afterSeat).toEqual({
       roundWind: 'west',
       dealerPlayerId: 'p5',
-      roundStarterPlayerId: 'p5',
+      roundStarterSeatIndex: 0,
       handNumber: 6,
       seatOrder: ['p5', 'p2', 'p3', 'p4'],
     })
+  })
+
+  it('preserves the vacated seat index when a substitute is appended in live order', () => {
+    const state = initTableWinds('p1', seats)
+    const paused = continueWindsAfterRosterChange(state, ['p1', 'p2', 'p4'])
+    const continued = continueWindsAfterRosterChange(paused!, [
+      'p1',
+      'p2',
+      'p4',
+      'p9',
+    ])
+    expect(continued).toEqual({
+      roundWind: 'east',
+      dealerPlayerId: 'p1',
+      roundStarterSeatIndex: 0,
+      handNumber: 1,
+      seatOrder: ['p1', 'p2', 'p9', 'p4'],
+    })
+  })
+
+  it('uses live seat order when a one-for-one change also reshuffles the table', () => {
+    const state = {
+      ...initTableWinds('p1', seats),
+      dealerPlayerId: 'p2',
+      handNumber: 3,
+    }
+    const shuffled = continueWindsAfterRosterChange(state, [
+      'p3',
+      'p5',
+      'p2',
+      'p1',
+    ])
+    expect(shuffled).toEqual({
+      roundWind: 'east',
+      dealerPlayerId: 'p2',
+      roundStarterSeatIndex: 0,
+      handNumber: 3,
+      seatOrder: ['p3', 'p5', 'p2', 'p1'],
+    })
+  })
+
+  it('moves East with the seat when two seated players swap', () => {
+    const state = initTableWinds('p1', seats)
+    const swapped = continueWindsAfterRosterChange(state, ['p2', 'p1', 'p3', 'p4'])
+    expect(swapped).toEqual({
+      roundWind: 'east',
+      dealerPlayerId: 'p2',
+      roundStarterSeatIndex: 0,
+      handNumber: 1,
+      seatOrder: ['p2', 'p1', 'p3', 'p4'],
+    })
+    expect(seatWindForPlayer(swapped!, 'p2')).toBe('east')
+    expect(seatWindForPlayer(swapped!, 'p1')).toBe('south')
+  })
+
+  it('keeps the starter seat when the same four are fully reshuffled', () => {
+    const state = {
+      ...initTableWinds('p1', seats),
+      dealerPlayerId: 'p3',
+      handNumber: 4,
+    }
+    const reshuffled = continueWindsAfterRosterChange(state, [
+      'p4',
+      'p3',
+      'p1',
+      'p2',
+    ])
+    expect(reshuffled).toEqual({
+      roundWind: 'east',
+      dealerPlayerId: 'p3',
+      roundStarterSeatIndex: 0,
+      handNumber: 4,
+      seatOrder: ['p4', 'p3', 'p1', 'p2'],
+    })
+  })
+
+  it('keeps round starter on the seat when non-East seats rearrange', () => {
+    const state = {
+      ...initTableWinds('p1', seats),
+      dealerPlayerId: 'p3',
+      handNumber: 3,
+    }
+    const swapped = continueWindsAfterRosterChange(state, ['p1', 'p4', 'p3', 'p2'])
+    expect(swapped?.dealerPlayerId).toBe('p3')
+    expect(swapped?.roundStarterSeatIndex).toBe(0)
+    expect(swapped?.seatOrder).toEqual(['p1', 'p4', 'p3', 'p2'])
+  })
+
+  it('heals a stale dealer mid-advance so round wind can still change', () => {
+    const drifted = {
+      ...initTableWinds('p1', seats),
+      dealerPlayerId: 'p4',
+      handNumber: 4,
+      seatOrder: seats,
+    }
+    const next = nextWindState({
+      mode: 'non_dealer_and_draw',
+      outcome: 'discard',
+      winnerPlayerId: 'p2',
+      state: drifted,
+      liveSeatOrder: ['p1', 'p2', 'p3', 'p5'],
+    })
+    expect(next.rotated).toBe(true)
+    expect(next.advancedRound).toBe(true)
+    expect(next.state.roundWind).toBe('south')
+    expect(next.state.dealerPlayerId).toBe('p1')
+    expect(next.state.roundStarterSeatIndex).toBe(0)
+  })
+
+  it('fills the vacated chair instead of appending on seatReplacementOrder', () => {
+    expect(seatReplacementOrder(seats, ['p1', 'p2', 'p4'], 'p9')).toEqual([
+      'p1',
+      'p2',
+      'p9',
+      'p4',
+    ])
+    expect(seatReplacementOrder(undefined, ['p1', 'p2', 'p3'], 'p9')).toEqual([
+      'p1',
+      'p2',
+      'p3',
+      'p9',
+    ])
   })
 
   it('keeps round and hand when a non-dealer is swapped', () => {
@@ -161,7 +298,7 @@ describe('table winds', () => {
     expect(continued).toEqual({
       roundWind: 'south',
       dealerPlayerId: 'p1',
-      roundStarterPlayerId: 'p1',
+      roundStarterSeatIndex: 0,
       handNumber: 4,
       seatOrder: ['p1', 'p2', 'p3', 'p9'],
     })
@@ -193,7 +330,7 @@ describe('table winds', () => {
     expect(next['1']).toEqual({
       roundWind: 'south',
       dealerPlayerId: 'p5',
-      roundStarterPlayerId: 'p5',
+      roundStarterSeatIndex: 0,
       handNumber: 3,
       seatOrder: ['p5', 'p2', 'p3', 'p4'],
     })
@@ -217,8 +354,33 @@ describe('table winds', () => {
     })
     expect(patched.roundWind).toBe('south')
     expect(patched.dealerPlayerId).toBe('p3')
-    expect(patched.roundStarterPlayerId).toBe('p1')
+    expect(patched.roundStarterSeatIndex).toBe(0)
     expect(patched.handNumber).toBe(1)
     expect(seatWindForPlayer(patched, 'p3')).toBe('east')
+  })
+
+  it('advances when a new occupant sits in the starter seat after a sub', () => {
+    const state = {
+      ...initTableWinds('p1', seats),
+      dealerPlayerId: 'p4',
+      handNumber: 4,
+    }
+    const afterSub = continueWindsAfterRosterChange(state, [
+      'p5',
+      'p2',
+      'p3',
+      'p4',
+    ])!
+    expect(afterSub.roundStarterSeatIndex).toBe(0)
+    const next = nextWindState({
+      mode: 'non_dealer_and_draw',
+      outcome: 'draw',
+      winnerPlayerId: null,
+      state: afterSub,
+    })
+    expect(next.advancedRound).toBe(true)
+    expect(next.state.dealerPlayerId).toBe('p5')
+    expect(next.state.roundWind).toBe('south')
+    expect(next.state.roundStarterSeatIndex).toBe(0)
   })
 })

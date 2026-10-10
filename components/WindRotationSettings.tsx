@@ -53,7 +53,7 @@ export default function WindRotationSettings({
     <>
       <p className="text-sm leading-6 text-[rgb(var(--muted))]">
         Controls when seat winds and the dealer move after a hand in focused table wind view.
-        After a full cycle back to the round starter, the table (prevailing) wind advances.
+        After a full cycle back to the starter seat, the table (prevailing) wind advances.
       </p>
       <div className="mt-4 grid gap-3" role="radiogroup" aria-label="Wind rotation mode">
         {WIND_ROTATION_MODE_OPTIONS.map((option) => (

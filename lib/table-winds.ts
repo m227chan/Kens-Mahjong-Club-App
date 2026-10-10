@@ -4,7 +4,8 @@ import type { WindRotationMode } from '@/lib/wind-rotation-settings'
 export type TableWindState = {
   roundWind: Wind
   dealerPlayerId: string
-  roundStarterPlayerId: string
+  /** Chair that marks the end of a dealer cycle (0–3). Survives player swaps. */
+  roundStarterSeatIndex: number
   handNumber: number
   seatOrder: string[]
 }
@@ -51,38 +52,83 @@ function nextWind(wind: Wind): Wind {
   return WINDS[(WINDS.indexOf(wind) + 1) % WINDS.length]!
 }
 
-export function isTableWindState(value: unknown): value is TableWindState {
-  if (!value || typeof value !== 'object') return false
-  const state = value as Partial<TableWindState>
-  if (!WINDS.includes(state.roundWind as Wind)) return false
+export function clampStarterSeatIndex(value: unknown, fallback = 0): number {
+  if (!Number.isInteger(value)) return fallback
+  const index = value as number
+  if (index < 0 || index > 3) return fallback
+  return index
+}
+
+/** Player currently sitting in the round-starter chair. */
+export function playerAtStarterSeat(
+  state: TableWindState,
+  liveSeatOrder?: string[],
+): string | null {
+  const order =
+    liveSeatOrder && liveSeatOrder.filter(Boolean).length === 4
+      ? liveSeatOrder.filter(Boolean).slice(0, 4)
+      : state.seatOrder
+  const index = clampStarterSeatIndex(state.roundStarterSeatIndex, 0)
+  return order[index] ?? null
+}
+
+type RawWindState = Partial<TableWindState> & {
+  roundStarterPlayerId?: string
+}
+
+/** Normalize stored JSON (including legacy player-based starter) into seat-index state. */
+export function normalizeTableWindState(value: unknown): TableWindState | null {
+  if (!value || typeof value !== 'object') return null
+  const state = value as RawWindState
+  if (!WINDS.includes(state.roundWind as Wind)) return null
   if (typeof state.dealerPlayerId !== 'string' || !state.dealerPlayerId)
-    return false
-  if (
-    typeof state.roundStarterPlayerId !== 'string' ||
-    !state.roundStarterPlayerId
-  )
-    return false
+    return null
   if (
     !Number.isInteger(state.handNumber) ||
     (state.handNumber as number) < 1
   )
-    return false
+    return null
   if (
     !Array.isArray(state.seatOrder) ||
     state.seatOrder.length !== 4 ||
     !state.seatOrder.every((id) => typeof id === 'string' && id)
   )
-    return false
-  if (!state.seatOrder.includes(state.dealerPlayerId)) return false
-  if (!state.seatOrder.includes(state.roundStarterPlayerId)) return false
-  return true
+    return null
+  if (!state.seatOrder.includes(state.dealerPlayerId)) return null
+
+  let starterSeat = clampStarterSeatIndex(state.roundStarterSeatIndex, -1)
+  if (starterSeat < 0) {
+    if (
+      typeof state.roundStarterPlayerId === 'string' &&
+      state.roundStarterPlayerId
+    ) {
+      starterSeat = state.seatOrder.indexOf(state.roundStarterPlayerId)
+    }
+    if (starterSeat < 0) {
+      starterSeat = state.seatOrder.indexOf(state.dealerPlayerId)
+    }
+  }
+  if (starterSeat < 0) return null
+
+  return {
+    roundWind: state.roundWind as Wind,
+    dealerPlayerId: state.dealerPlayerId,
+    roundStarterSeatIndex: starterSeat,
+    handNumber: state.handNumber as number,
+    seatOrder: [...state.seatOrder],
+  }
+}
+
+export function isTableWindState(value: unknown): value is TableWindState {
+  return normalizeTableWindState(value) != null
 }
 
 export function parseTableWindsMap(value: unknown): TableWindsMap {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
   const result: TableWindsMap = {}
   for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-    if (isTableWindState(entry)) result[key] = entry
+    const normalized = normalizeTableWindState(entry)
+    if (normalized) result[key] = normalized
   }
   return result
 }
@@ -95,13 +141,14 @@ export function initTableWinds(
   if (order.length !== 4) {
     throw new Error('Table winds require four seated players.')
   }
-  if (!order.includes(starterPlayerId)) {
+  const starterSeat = order.indexOf(starterPlayerId)
+  if (starterSeat < 0) {
     throw new Error('Starter must be seated at the table.')
   }
   return {
     roundWind: 'east',
     dealerPlayerId: starterPlayerId,
-    roundStarterPlayerId: starterPlayerId,
+    roundStarterSeatIndex: starterSeat,
     handNumber: 1,
     seatOrder: [...order],
   }
@@ -169,8 +216,13 @@ export function nextWindState(input: {
       ? input.liveSeatOrder.filter(Boolean).slice(0, 4)
       : input.state.seatOrder
 
+  const starterSeat = clampStarterSeatIndex(
+    input.state.roundStarterSeatIndex,
+    0,
+  )
   const base: TableWindState = {
     ...input.state,
+    roundStarterSeatIndex: starterSeat,
     seatOrder: [...order],
   }
 
@@ -189,8 +241,24 @@ export function nextWindState(input: {
     }
   }
 
-  const dealerIndex = order.indexOf(base.dealerPlayerId)
+  let dealerIndex = order.indexOf(base.dealerPlayerId)
+  // Stale dealer after a roster change — heal from the stored seat snapshot
+  // (not the overwritten live order) so round wind can still advance.
   if (dealerIndex < 0) {
+    const healed = continueWindsAfterRosterChange(input.state, order)
+    if (healed && order.includes(healed.dealerPlayerId)) {
+      const healedOrder =
+        healed.seatOrder.length === 4 &&
+        healed.seatOrder.every((id) => order.includes(id)) &&
+        order.every((id) => healed.seatOrder.includes(id))
+          ? healed.seatOrder
+          : order
+      return nextWindState({
+        ...input,
+        state: healed,
+        liveSeatOrder: healedOrder,
+      })
+    }
     return {
       state: { ...base, handNumber: base.handNumber + 1 },
       rotated: false,
@@ -198,14 +266,14 @@ export function nextWindState(input: {
     }
   }
 
-  const nextDealer = order[(dealerIndex + 1) % 4]!
+  const nextDealerIndex = (dealerIndex + 1) % 4
+  const nextDealer = order[nextDealerIndex]!
   let roundWind = base.roundWind
-  let roundStarterPlayerId = base.roundStarterPlayerId
   let advancedRound = false
 
-  if (nextDealer === base.roundStarterPlayerId) {
+  // Round advances when dealership returns to the starter *chair*.
+  if (nextDealerIndex === starterSeat) {
     roundWind = nextWind(base.roundWind)
-    roundStarterPlayerId = nextDealer
     advancedRound = true
   }
 
@@ -213,7 +281,7 @@ export function nextWindState(input: {
     state: {
       roundWind,
       dealerPlayerId: nextDealer,
-      roundStarterPlayerId,
+      roundStarterSeatIndex: starterSeat,
       handNumber: base.handNumber + 1,
       seatOrder: [...order],
     },
@@ -223,12 +291,35 @@ export function nextWindState(input: {
 }
 
 /**
+ * Place a newcomer in the vacated wind seat instead of appending to the end.
+ * Prefers wind seatOrder; falls back to any prior 4-seat snapshot that still
+ * contains exactly one player missing from the live list.
+ */
+export function seatReplacementOrder(
+  windSeatOrder: string[] | undefined,
+  liveSeats: string[],
+  newPlayerId: string,
+  priorSeats?: string[],
+): string[] {
+  const current = liveSeats.filter(Boolean)
+  if (!newPlayerId) return current.slice(0, 4)
+  if (current.includes(newPlayerId)) return current.slice(0, 4)
+  if (current.length >= 4) return current.slice(0, 4)
+
+  for (const snapshot of [windSeatOrder, priorSeats]) {
+    if (snapshot?.length === 4 && current.length === 3) {
+      const left = snapshot.filter((id) => !current.includes(id))
+      if (left.length === 1) {
+        return snapshot.map((id) => (id === left[0] ? newPlayerId : id))
+      }
+    }
+  }
+  return [...current, newPlayerId].slice(0, 4)
+}
+
+/**
  * After a seat change: keep the current round/hand when possible.
- * - Empty table: clear winds
- * - Table not full: pause (preserve state) so a swap can continue later
- * - One-for-one swap: new player inherits the departed player's wind roles
- * - Dealer still seated: update seat order only
- * - Dealer gone without a clean swap: keep round/hand and assign dealer to a joiner
+ * Round starter is a seat index, so substitutes keep the same cycle chair.
  */
 export function continueWindsAfterRosterChange(
   state: TableWindState | undefined,
@@ -236,12 +327,15 @@ export function continueWindsAfterRosterChange(
 ): TableWindState | null {
   if (!state) return null
   const order = liveSeatOrder.filter(Boolean).slice(0, 4)
+  const starterSeat = clampStarterSeatIndex(state.roundStarterSeatIndex, 0)
 
   // Cleared table — drop winds.
   if (order.length === 0) return null
 
   // Incomplete table — pause winds so a swap can resume the same hand/round.
-  if (order.length !== 4) return state
+  if (order.length !== 4) {
+    return { ...state, roundStarterSeatIndex: starterSeat }
+  }
 
   const previous = state.seatOrder.filter(Boolean)
   const left = previous.filter((id) => !order.includes(id))
@@ -251,21 +345,65 @@ export function continueWindsAfterRosterChange(
     const from = left[0]!
     const to = joined[0]!
     const mapId = (id: string) => (id === from ? to : id)
+    const preserved = previous.map(mapId)
+    // True substitute keeps the vacated chair only when the other three
+    // players stayed in relative order. Table shuffle can also be 1-left /
+    // 1-joined while reshuffling everyone — then trust live seat order.
+    const previousRemaining = previous.filter((id) => id !== from)
+    const liveRemaining = order.filter((id) => id !== to)
+    const remainingOrderKept =
+      previousRemaining.length === liveRemaining.length &&
+      previousRemaining.every((id, index) => id === liveRemaining[index])
+    const seatOrder = remainingOrderKept ? preserved : [...order]
     return {
       ...state,
       dealerPlayerId: mapId(state.dealerPlayerId),
-      roundStarterPlayerId: mapId(state.roundStarterPlayerId),
+      roundStarterSeatIndex: starterSeat,
+      seatOrder,
+    }
+  }
+
+  // Pure seat rearrange (same four players).
+  // - Exactly two seats swapped (focused tap-swap): East follows the chair.
+  // - Larger reshuffle (table shuffler): dealer stays with the person.
+  // Starter chair index never moves with a person.
+  if (left.length === 0 && joined.length === 0 && previous.length === 4) {
+    const diffIndexes: number[] = []
+    for (let index = 0; index < 4; index++) {
+      if (previous[index] !== order[index]) diffIndexes.push(index)
+    }
+    const isPairSwap =
+      diffIndexes.length === 2 &&
+      previous[diffIndexes[0]!] === order[diffIndexes[1]!] &&
+      previous[diffIndexes[1]!] === order[diffIndexes[0]!]
+
+    if (isPairSwap) {
+      const dealerIndex = previous.indexOf(state.dealerPlayerId)
+      const newDealer =
+        dealerIndex >= 0 ? order[dealerIndex]! : state.dealerPlayerId
+      return {
+        ...state,
+        dealerPlayerId: newDealer,
+        roundStarterSeatIndex: starterSeat,
+        seatOrder: [...order],
+      }
+    }
+
+    const dealer = order.includes(state.dealerPlayerId)
+      ? state.dealerPlayerId
+      : (order[starterSeat] ?? order[0]!)
+    return {
+      ...state,
+      dealerPlayerId: dealer,
+      roundStarterSeatIndex: starterSeat,
       seatOrder: [...order],
     }
   }
 
   if (order.includes(state.dealerPlayerId)) {
-    const roundStarter = order.includes(state.roundStarterPlayerId)
-      ? state.roundStarterPlayerId
-      : state.dealerPlayerId
     return {
       ...state,
-      roundStarterPlayerId: roundStarter,
+      roundStarterSeatIndex: starterSeat,
       seatOrder: [...order],
     }
   }
@@ -279,9 +417,7 @@ export function continueWindsAfterRosterChange(
     return {
       ...state,
       dealerPlayerId: newDealer,
-      roundStarterPlayerId: order.includes(state.roundStarterPlayerId)
-        ? state.roundStarterPlayerId
-        : newDealer,
+      roundStarterSeatIndex: starterSeat,
       seatOrder: [...order],
     }
   }
@@ -328,6 +464,10 @@ export function applyTableWindPatch(
 
   const next: TableWindState = {
     ...state,
+    roundStarterSeatIndex: clampStarterSeatIndex(
+      state.roundStarterSeatIndex,
+      0,
+    ),
     seatOrder: [...order],
   }
 
@@ -350,10 +490,6 @@ export function applyTableWindPatch(
       throw new Error('Hand number must be a positive whole number.')
     }
     next.handNumber = patch.handNumber
-  }
-
-  if (!order.includes(next.roundStarterPlayerId)) {
-    next.roundStarterPlayerId = next.dealerPlayerId
   }
 
   return next

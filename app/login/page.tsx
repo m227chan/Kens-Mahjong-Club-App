@@ -45,7 +45,7 @@ export default function LoginPage() {
 
   const handleSignIn = async () => {
     if (!ageConfirmed) {
-      setLocalError('Confirm that you are 13 or older to continue.')
+      setLocalError('Please agree to the terms & conditions and privacy policy to continue.')
       return
     }
     setLocalError(null)
@@ -63,7 +63,7 @@ export default function LoginPage() {
 
   const startTryIt = () => {
     if (!ageConfirmed) {
-      setLocalError('Confirm that you are 13 or older to continue.')
+      setLocalError('Please agree to the terms & conditions and privacy policy to continue.')
       return
     }
     setLocalError(null)
@@ -175,7 +175,16 @@ export default function LoginPage() {
                     onChange={(event) => setAge(event.target.checked)}
                     data-tour="login-age-confirm"
                   />
-                  <span>I confirm I am 13 years of age or older.</span>
+                  <span>
+                    I have read and agree to Mahjong Messiah&apos;s{' '}
+                    <Link href="/terms" onClick={(event) => event.stopPropagation()}>
+                      terms &amp; conditions
+                    </Link>{' '}
+                    and{' '}
+                    <Link href="/privacy" onClick={(event) => event.stopPropagation()}>
+                      privacy policy
+                    </Link>
+                  </span>
                 </label>
                 <button
                   type="button"
@@ -208,10 +217,7 @@ export default function LoginPage() {
                   Try it
                 </button>
                 <p className="login-privacy">
-                  By continuing you agree to the{' '}
-                  <Link href="/terms">Terms of Service</Link> and{' '}
-                  <Link href="/privacy">Privacy Policy</Link>. Your results stay connected to your
-                  account so they&apos;re ready on any device.
+                  Your results stay connected to your account so they&apos;re ready on any device.
                 </p>
               </>
             ) : null}

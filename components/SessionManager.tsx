@@ -34,6 +34,7 @@ import {
   optimisticallyClearTable,
   optimisticallyRemovePlayer,
   optimisticallySeatPlayer,
+  replacePlayerAtSeat,
 } from '@/lib/optimistic-session'
 import { MAX_SESSION_TABLES, MIN_SESSION_TABLES, clampSessionTableCount } from '@/lib/session-layout'
 import {
@@ -1050,29 +1051,69 @@ export default function SessionManager({ clubId, seasonNumber, players: supplied
     if (!swapPickerTableId || !swapPickerPlayer) return
     const sourceTable = swapPickerTableId
     const sourcePlayer = swapPickerPlayer
-    const targetTable = Object.entries(session.tables).find(([, playersOnTable]) => playersOnTable.includes(targetPlayerId))?.[0] ?? null
+    const targetTable =
+      Object.entries(session.tables).find(([, playersOnTable]) =>
+        playersOnTable.includes(targetPlayerId),
+      )?.[0] ?? null
     const targetOnSideline = session.sideline.includes(targetPlayerId)
 
     const nextTables = { ...session.tables }
-    nextTables[sourceTable] = nextTables[sourceTable].filter((id) => id !== sourcePlayer)
-
-    if (targetTable) {
-      nextTables[targetTable] = nextTables[targetTable].filter((id) => id !== targetPlayerId)
-      nextTables[targetTable].push(sourcePlayer)
-    }
 
     if (targetOnSideline) {
-      const nextSideline = session.sideline.filter((id) => id !== targetPlayerId)
-      const nextSidelineWithSource = [...nextSideline, sourcePlayer]
-      nextTables[sourceTable] = [...nextTables[sourceTable], targetPlayerId]
-      await persistSession({ ...session, tables: nextTables, sideline: nextSidelineWithSource })
+      // Keep the vacated chair — do not append and shift everyone down.
+      nextTables[sourceTable] = replacePlayerAtSeat(
+        session.tables[sourceTable] ?? [],
+        sourcePlayer,
+        targetPlayerId,
+      )
+      const nextSideline = [
+        ...session.sideline.filter((id) => id !== targetPlayerId),
+        sourcePlayer,
+      ]
+      await persistSession({
+        ...session,
+        tables: nextTables,
+        sideline: nextSideline,
+      })
       play('tile')
       closeSwapPicker()
       return
     }
 
-    nextTables[sourceTable] = [...nextTables[sourceTable], targetPlayerId]
-    await persistSession({ ...session, tables: nextTables, sideline: session.sideline })
+    if (!targetTable) {
+      closeSwapPicker()
+      return
+    }
+
+    if (targetTable === sourceTable) {
+      const seats = [...(session.tables[sourceTable] ?? [])]
+      const firstIndex = seats.indexOf(sourcePlayer)
+      const secondIndex = seats.indexOf(targetPlayerId)
+      if (firstIndex < 0 || secondIndex < 0) {
+        closeSwapPicker()
+        return
+      }
+      seats[firstIndex] = targetPlayerId
+      seats[secondIndex] = sourcePlayer
+      nextTables[sourceTable] = seats
+    } else {
+      nextTables[sourceTable] = replacePlayerAtSeat(
+        session.tables[sourceTable] ?? [],
+        sourcePlayer,
+        targetPlayerId,
+      )
+      nextTables[targetTable] = replacePlayerAtSeat(
+        session.tables[targetTable] ?? [],
+        targetPlayerId,
+        sourcePlayer,
+      )
+    }
+
+    await persistSession({
+      ...session,
+      tables: nextTables,
+      sideline: session.sideline,
+    })
     play('tile')
     closeSwapPicker()
   }

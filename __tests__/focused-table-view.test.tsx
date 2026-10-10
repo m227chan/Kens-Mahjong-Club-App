@@ -1,57 +1,75 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createGameMock, playMock, tableActionMock, loadAllGamesMock, subscribePlayerStatsMock } = vi.hoisted(() => ({
-  createGameMock: vi.fn().mockResolvedValue({ status: 'synced' }),
+const {
+  createGameMock,
+  playMock,
+  tableActionMock,
+  loadAllGamesMock,
+  subscribePlayerStatsMock,
+  subscribeActiveSessionMock,
+} = vi.hoisted(() => ({
+  createGameMock: vi.fn().mockResolvedValue({ status: "synced" }),
   playMock: vi.fn(),
   tableActionMock: vi.fn(),
   loadAllGamesMock: vi.fn().mockResolvedValue([]),
   subscribePlayerStatsMock: vi.fn(() => () => undefined),
-}))
+  subscribeActiveSessionMock: vi.fn(
+    (_clubId: string, _season: number, callback: any) => () => undefined,
+  ),
+}));
 
 const players = [
-  { id: 'jane', displayName: 'Jane', icon: '🐎', authUid: 'user-1' },
-  { id: 'bob', displayName: 'Bob', icon: '🏆', authUid: null },
-  { id: 'jeff', displayName: 'Jeff', icon: '🎲', authUid: null },
-  { id: 'matt', displayName: 'Matt', icon: '🌙', authUid: null },
-]
+  { id: "jane", displayName: "Jane", icon: "🐎", authUid: "user-1" },
+  { id: "bob", displayName: "Bob", icon: "🏆", authUid: null },
+  { id: "jeff", displayName: "Jeff", icon: "🎲", authUid: null },
+  { id: "matt", displayName: "Matt", icon: "🌙", authUid: null },
+];
 
 const windState = {
-  roundWind: 'east' as const,
-  dealerPlayerId: 'jane',
-  roundStarterPlayerId: 'jane',
+  roundWind: "east" as const,
+  dealerPlayerId: "jane",
+  roundStarterSeatIndex: 0,
   handNumber: 1,
   seatOrder: players.map((player) => player.id),
-}
+};
 
 const session = {
-  id: 'session-1',
+  id: "session-1",
   seasonNumber: 1,
   tableCount: 1,
   participants: players.map((player) => player.id),
-  tables: { '1': players.map((player) => player.id) },
+  tables: { "1": players.map((player) => player.id) },
   sideline: [] as string[],
-  tableWinds: { '1': windState },
+  tableWinds: { "1": windState },
   revision: 1,
-}
+};
 
 const context = {
-  clubId: 'TEST',
-  clubName: 'Test Club',
+  clubId: "TEST",
+  clubName: "Test Club",
   seasonNumber: 1,
   tableNumber: 1,
   session,
   players,
   linkedPlayer: players[0],
-  windRotation: { mode: 'non_dealer_and_draw' as const },
-}
+  windRotation: { mode: "non_dealer_and_draw" as const },
+};
 
-const routerMock = { replace: vi.fn() }
+const routerMock = { replace: vi.fn() };
 
-vi.mock('next/navigation', () => ({ useRouter: () => routerMock }))
-const authUser = { uid: 'user-1' }
+vi.mock("next/navigation", () => ({ useRouter: () => routerMock }));
+const authUser = { uid: "user-1" };
 
-vi.mock('@/contexts/AuthContext', () => ({
+vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({
     user: authUser,
     loading: false,
@@ -59,327 +77,435 @@ vi.mock('@/contexts/AuthContext', () => ({
     signInWithGoogle: vi.fn(),
     signOut: vi.fn(),
   }),
-}))
-vi.mock('@/contexts/SoundContext', () => ({
+}));
+vi.mock("@/contexts/SoundContext", () => ({
   useSound: () => ({ play: playMock }),
-}))
-vi.mock('@/contexts/GameSyncContext', () => ({
+}));
+vi.mock("@/contexts/GameSyncContext", () => ({
   useGameSync: () => ({ saveGame: createGameMock }),
-}))
-vi.mock('@/lib/data', () => ({
+}));
+vi.mock("@/lib/data", () => ({
   requestToJoinClub: vi.fn(),
-  subscribeActiveSession: vi.fn(() => () => undefined),
+  subscribeActiveSession: subscribeActiveSessionMock,
   subscribePlayers: vi.fn(() => () => undefined),
   subscribePlayerStats: subscribePlayerStatsMock,
   subscribeScoringRules: vi.fn(() => () => undefined),
   loadAllGames: loadAllGamesMock,
-}))
-vi.mock('@/lib/guest-table-session', () => ({
+}));
+vi.mock("@/lib/guest-table-session", () => ({
   clearGuestTableSession: vi.fn(),
   exitGuestTableToLogin: vi.fn(),
   guestSessionMatches: vi.fn(() => false),
-}))
-vi.mock('@/lib/table-checkin-client', () => ({
+}));
+vi.mock("@/lib/table-checkin-client", () => ({
   tableAction: tableActionMock,
   generateTableQr: vi.fn(),
   createGuestGame: vi.fn(),
-}))
+}));
 
-import FocusedTableView from '@/components/FocusedTableView'
+import FocusedTableView from "@/components/FocusedTableView";
 
-describe('focused table scoring', () => {
+describe("focused table scoring", () => {
   beforeEach(() => {
-    window.localStorage.setItem('focused-table-layout', 'basic')
+    window.localStorage.setItem("focused-table-layout", "basic");
     tableActionMock.mockImplementation((body: { action: string }) => {
-      if (body.action === 'context') return Promise.resolve(context)
-      if (body.action === 'advanceTableWinds') {
+      if (body.action === "context") return Promise.resolve(context);
+      if (body.action === "advanceTableWinds") {
         return Promise.resolve({
-          status: 'ok',
+          status: "ok",
           session: {
             ...session,
             tableWinds: {
-              '1': {
+              "1": {
                 ...windState,
-                dealerPlayerId: 'bob',
+                dealerPlayerId: "bob",
                 handNumber: 2,
               },
             },
           },
           rotated: true,
-        })
+        });
       }
-      return Promise.resolve({ status: 'ok', session })
-    })
-  })
+      return Promise.resolve({ status: "ok", session });
+    });
+  });
 
   afterEach(() => {
-    cleanup()
-    createGameMock.mockClear()
-    playMock.mockClear()
-    tableActionMock.mockReset()
-    loadAllGamesMock.mockClear()
-    subscribePlayerStatsMock.mockClear()
-    subscribePlayerStatsMock.mockImplementation(() => () => undefined)
-    window.localStorage.clear()
-  })
+    cleanup();
+    createGameMock.mockClear();
+    playMock.mockClear();
+    tableActionMock.mockReset();
+    loadAllGamesMock.mockClear();
+    subscribePlayerStatsMock.mockClear();
+    subscribePlayerStatsMock.mockImplementation(() => () => undefined);
+    subscribeActiveSessionMock.mockReset();
+    subscribeActiveSessionMock.mockImplementation(() => () => undefined);
+    window.localStorage.clear();
+  });
 
-  it('keeps the save action outside the scrolling result form and celebrates a win', async () => {
-    render(<FocusedTableView clubId="TEST" tableNumber={1} />)
+  it("keeps the save action outside the scrolling result form and celebrates a win", async () => {
+    render(<FocusedTableView clubId="TEST" tableNumber={1} />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '+ Record win' }))
-    const dialog = screen.getByRole('dialog', { name: 'Record winner' })
-    const scrollRegion = dialog.querySelector('.focused-result-scroll')
-    const actions = dialog.querySelector('.focused-result-actions')
+    fireEvent.click(
+      await screen.findByRole("button", { name: "+ Record win" }),
+    );
+    const dialog = screen.getByRole("dialog", { name: "Record winner" });
+    const scrollRegion = dialog.querySelector(".focused-result-scroll");
+    const actions = dialog.querySelector(".focused-result-actions");
 
-    expect(dialog.className).toContain('overflow-hidden')
-    expect(scrollRegion?.className).toContain('overflow-y-auto')
-    expect(actions?.parentElement).toBe(dialog)
-    expect(scrollRegion?.contains(actions)).toBe(false)
+    expect(dialog.className).toContain("overflow-hidden");
+    expect(scrollRegion?.className).toContain("overflow-y-auto");
+    expect(actions?.parentElement).toBe(dialog);
+    expect(scrollRegion?.contains(actions)).toBe(false);
 
-    fireEvent.click(within(dialog).getByRole('button', { name: '🐎 Jane' }))
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Self-draw' }))
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Save result' }))
+    fireEvent.click(within(dialog).getByRole("button", { name: "🐎 Jane" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Self-draw" }));
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Save result" }),
+    );
 
-    await waitFor(() => expect(createGameMock).toHaveBeenCalledOnce())
-    expect(await screen.findByText('Jane wins!')).toBeTruthy()
-    expect(playMock).toHaveBeenCalledWith('win')
-  })
+    await waitFor(() => expect(createGameMock).toHaveBeenCalledOnce());
+    expect(await screen.findByText("Jane wins!")).toBeTruthy();
+    expect(playMock).toHaveBeenCalledWith("win");
+  });
 
-  it('uses the same celebration when focused mode records a draw', async () => {
-    render(<FocusedTableView clubId="TEST" tableNumber={1} />)
+  it("uses the same celebration when focused mode records a draw", async () => {
+    render(<FocusedTableView clubId="TEST" tableNumber={1} />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Draw' }))
+    fireEvent.click(await screen.findByRole("button", { name: "Draw" }));
 
-    await waitFor(() => expect(createGameMock).toHaveBeenCalledOnce())
-    expect(await screen.findByText('🤝 Draw recorded')).toBeTruthy()
-    expect(playMock).toHaveBeenCalledWith('draw')
-  })
+    await waitFor(() => expect(createGameMock).toHaveBeenCalledOnce());
+    expect(await screen.findByText("🤝 Draw recorded")).toBeTruthy();
+    expect(playMock).toHaveBeenCalledWith("draw");
+  });
 
-  it('removes a player immediately while the database write is still pending', async () => {
-    let finishMutation: ((value: { status: 'ok'; session: typeof session }) => void) | undefined
+  it("removes a player immediately while the database write is still pending", async () => {
+    let finishMutation:
+      | ((value: { status: "ok"; session: typeof session }) => void)
+      | undefined;
     tableActionMock.mockImplementation((body: { action: string }) => {
-      if (body.action === 'context') return Promise.resolve(context)
-      return new Promise((resolve) => { finishMutation = resolve })
-    })
-    render(<FocusedTableView clubId="TEST" tableNumber={1} />)
+      if (body.action === "context") return Promise.resolve(context);
+      return new Promise((resolve) => {
+        finishMutation = resolve;
+      });
+    });
+    render(<FocusedTableView clubId="TEST" tableNumber={1} />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Remove Jane' }))
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Jane" }));
 
-    expect(screen.queryByRole('button', { name: 'Remove Jane' })).toBeNull()
-    expect(screen.getAllByRole('button', { name: /Add player/ })).toHaveLength(1)
+    expect(screen.queryByRole("button", { name: "Remove Jane" })).toBeNull();
+    expect(screen.getAllByRole("button", { name: /Add player/ })).toHaveLength(
+      1,
+    );
 
     finishMutation?.({
-      status: 'ok',
+      status: "ok",
       session: {
         ...session,
-        tables: { '1': ['bob', 'jeff', 'matt'] },
-        sideline: ['jane'],
+        tables: { "1": ["bob", "jeff", "matt"] },
+        sideline: ["jane"],
         revision: 2,
       },
-    })
-    await waitFor(() => expect(tableActionMock).toHaveBeenCalledWith(expect.objectContaining({ action: 'remove', playerId: 'jane' })))
-  })
+    });
+    await waitFor(() =>
+      expect(tableActionMock).toHaveBeenCalledWith(
+        expect.objectContaining({ action: "remove", playerId: "jane" }),
+      ),
+    );
+  });
 
-  it('lets players continue the same hand after seating a replacement', async () => {
-    window.localStorage.setItem('focused-table-layout', 'wind')
+  it("lets players continue the same hand after seating a replacement", async () => {
+    window.localStorage.setItem("focused-table-layout", "wind");
     const shortSession = {
       ...session,
-      tables: { '1': ['bob', 'jeff', 'matt'] },
-      sideline: ['jane'],
+      tables: { "1": ["bob", "jeff", "matt"] },
+      sideline: ["jane"],
       tableWinds: {
-        '1': {
+        "1": {
           ...windState,
-          roundWind: 'south' as const,
+          roundWind: "south" as const,
           handNumber: 3,
         },
       },
       revision: 2,
-    }
+    };
     const continuedSession = {
       ...session,
-      tables: { '1': ['amy', 'bob', 'jeff', 'matt'] },
-      sideline: ['jane'],
+      tables: { "1": ["amy", "bob", "jeff", "matt"] },
+      sideline: ["jane"],
       tableWinds: {
-        '1': {
-          roundWind: 'south' as const,
-          dealerPlayerId: 'amy',
-          roundStarterPlayerId: 'amy',
+        "1": {
+          roundWind: "south" as const,
+          dealerPlayerId: "amy",
+          roundStarterSeatIndex: 0,
           handNumber: 3,
-          seatOrder: ['amy', 'bob', 'jeff', 'matt'],
+          seatOrder: ["amy", "bob", "jeff", "matt"],
         },
       },
       revision: 3,
-    }
+    };
     const playersWithAmy = [
       ...players,
-      { id: 'amy', displayName: 'Amy', icon: '🌸', authUid: null },
-    ]
-    tableActionMock.mockImplementation((body: { action: string; playerId?: string }) => {
-      if (body.action === 'context') {
-        return Promise.resolve({
-          ...context,
-          players: playersWithAmy,
-          session: shortSession,
-        })
-      }
-      if (body.action === 'seat' && body.playerId === 'amy') {
-        return Promise.resolve({ status: 'ok', session: continuedSession })
-      }
-      return Promise.resolve({ status: 'ok', session: shortSession })
-    })
+      { id: "amy", displayName: "Amy", icon: "🌸", authUid: null },
+    ];
+    tableActionMock.mockImplementation(
+      (body: { action: string; playerId?: string }) => {
+        if (body.action === "context") {
+          return Promise.resolve({
+            ...context,
+            players: playersWithAmy,
+            session: shortSession,
+          });
+        }
+        if (body.action === "seat" && body.playerId === "amy") {
+          return Promise.resolve({ status: "ok", session: continuedSession });
+        }
+        return Promise.resolve({ status: "ok", session: shortSession });
+      },
+    );
 
-    render(<FocusedTableView clubId="TEST" tableNumber={1} />)
+    render(<FocusedTableView clubId="TEST" tableNumber={1} />);
 
-    fireEvent.click(await screen.findByRole('button', { name: /Add player/i }))
-    fireEvent.click(await screen.findByRole('button', { name: /Amy/i }))
+    fireEvent.click(await screen.findByRole("button", { name: /Add player/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Amy/i }));
 
     expect(
-      await screen.findByRole('dialog', { name: 'New player added' }),
-    ).toBeTruthy()
-    expect(screen.getByText(/South round · Hand 3/i)).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Continue this hand' }))
-    expect(screen.queryByRole('dialog', { name: 'New player added' })).toBeNull()
+      await screen.findByRole("dialog", { name: "New player added" }),
+    ).toBeTruthy();
+    expect(screen.getByText(/South round · Hand 3/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Continue this hand" }));
     expect(
-      screen.getByRole('button', { name: /Table wind South\. Adjust winds/i }),
-    ).toBeTruthy()
-  })
+      screen.queryByRole("dialog", { name: "New player added" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /Table wind South\. Adjust winds/i }),
+    ).toBeTruthy();
+  });
 
-  it('lets players manually change the table wind from the wind layout', async () => {
-    window.localStorage.setItem('focused-table-layout', 'wind')
-    tableActionMock.mockImplementation((body: { action: string; patch?: { roundWind?: string } }) => {
-      if (body.action === 'context') return Promise.resolve(context)
-      if (body.action === 'setTableWinds' && body.patch?.roundWind === 'south') {
-        return Promise.resolve({
-          status: 'ok',
-          session: {
-            ...session,
-            tableWinds: {
-              '1': { ...windState, roundWind: 'south' },
+  it("lets players manually change the table wind from the wind layout", async () => {
+    window.localStorage.setItem("focused-table-layout", "wind");
+    tableActionMock.mockImplementation(
+      (body: { action: string; patch?: { roundWind?: string } }) => {
+        if (body.action === "context") return Promise.resolve(context);
+        if (
+          body.action === "setTableWinds" &&
+          body.patch?.roundWind === "south"
+        ) {
+          return Promise.resolve({
+            status: "ok",
+            session: {
+              ...session,
+              tableWinds: {
+                "1": { ...windState, roundWind: "south" },
+              },
+              revision: 2,
             },
-            revision: 2,
-          },
-        })
-      }
-      return Promise.resolve({ status: 'ok', session })
-    })
+          });
+        }
+        return Promise.resolve({ status: "ok", session });
+      },
+    );
 
-    render(<FocusedTableView clubId="TEST" tableNumber={1} />)
+    render(<FocusedTableView clubId="TEST" tableNumber={1} />);
 
     fireEvent.click(
-      await screen.findByRole('button', { name: /Table wind East\. Adjust winds/i }),
-    )
-    const dialog = screen.getByRole('dialog', { name: 'Adjust table winds' })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'South' }))
+      await screen.findByRole("button", {
+        name: /Table wind East\. Adjust winds/i,
+      }),
+    );
+    const dialog = screen.getByRole("dialog", { name: "Adjust table winds" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "South" }));
 
     await waitFor(() =>
       expect(tableActionMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          action: 'setTableWinds',
-          patch: { roundWind: 'south' },
+          action: "setTableWinds",
+          patch: { roundWind: "south" },
         }),
       ),
-    )
-    expect(await screen.findByRole('button', { name: /Table wind South\. Adjust winds/i })).toBeTruthy()
-  })
+    );
+    expect(
+      await screen.findByRole("button", {
+        name: /Table wind South\. Adjust winds/i,
+      }),
+    ).toBeTruthy();
+  });
 
-  it('lets players rearrange seats by tapping two players', async () => {
-    window.localStorage.setItem('focused-table-layout', 'wind')
-    tableActionMock.mockImplementation((body: {
-      action: string
-      playerId?: string
-      otherPlayerId?: string
-    }) => {
-      if (body.action === 'context') return Promise.resolve(context)
-      if (body.action === 'swap') {
+  it("applies a remote table shuffle immediately instead of holding the old roster", async () => {
+    window.localStorage.setItem("focused-table-layout", "wind");
+    const extraPlayers = [
+      ...players,
+      { id: "amy", displayName: "Amy", icon: "🌸", authUid: null },
+      { id: "sam", displayName: "Sam", icon: "🎯", authUid: null },
+    ];
+
+    let pushSession: any = null;
+    subscribeActiveSessionMock.mockImplementation(
+      (_clubId, _season, callback) => {
+        pushSession = callback;
+        return () => undefined;
+      },
+    );
+    tableActionMock.mockImplementation((body: { action: string }) => {
+      if (body.action === "context") {
         return Promise.resolve({
-          status: 'ok',
-          session: {
-            ...session,
-            tables: { '1': ['bob', 'jane', 'jeff', 'matt'] },
-            tableWinds: {
-              '1': {
-                ...windState,
-                seatOrder: ['bob', 'jane', 'jeff', 'matt'],
-              },
-            },
-            revision: 2,
-          },
-        })
+          ...context,
+          players: extraPlayers,
+        });
       }
-      return Promise.resolve({ status: 'ok', session })
-    })
+      return Promise.resolve({ status: "ok", session });
+    });
 
-    render(<FocusedTableView clubId="TEST" tableNumber={1} />)
+    render(<FocusedTableView clubId="TEST" tableNumber={1} />);
+    expect(
+      await screen.findByRole("button", { name: /Seat 1 Jane, East/i }),
+    ).toBeTruthy();
 
-    fireEvent.click(await screen.findByRole('button', { name: /Seat 1 Jane, East/i }))
-    expect(screen.getByText(/Tap another seat to swap places/i)).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: /Seat 2 Bob, South/i }))
+    await waitFor(() => expect(pushSession).toBeTruthy());
+
+    // Wrap the state push in an action/wait block so React renders the update
+    act(() => {
+      pushSession?.({
+        id: "session-1",
+        seasonNumber: 1,
+        tableCount: 1,
+        revision: 2, // must be newer than the context session's revision (1)
+        participants: extraPlayers.map((player) => player.id),
+        tables: { "1": ["amy", "sam", "jeff", "matt"] },
+        sideline: ["jane", "bob"],
+        tableWinds: {
+          "1": {
+            roundWind: "east" as const,
+            dealerPlayerId: "amy",
+            roundStarterSeatIndex: 0,
+            handNumber: 1,
+            seatOrder: ["amy", "sam", "jeff", "matt"],
+          },
+        },
+      });
+    });
+
+    expect(
+      await screen.findByRole("button", { name: /Seat 1 Amy, East/i }),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Seat 2 Sam/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Jane/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Bob/i })).toBeNull();
+  });
+
+  it("lets players rearrange seats by tapping two players", async () => {
+    window.localStorage.setItem("focused-table-layout", "wind");
+    tableActionMock.mockImplementation(
+      (body: { action: string; playerId?: string; otherPlayerId?: string }) => {
+        if (body.action === "context") return Promise.resolve(context);
+        if (body.action === "swap") {
+          return Promise.resolve({
+            status: "ok",
+            session: {
+              ...session,
+              tables: { "1": ["bob", "jane", "jeff", "matt"] },
+              tableWinds: {
+                "1": {
+                  ...windState,
+                  dealerPlayerId: "bob",
+                  roundStarterSeatIndex: 0,
+                  seatOrder: ["bob", "jane", "jeff", "matt"],
+                },
+              },
+              revision: 2,
+            },
+          });
+        }
+        return Promise.resolve({ status: "ok", session });
+      },
+    );
+
+    render(<FocusedTableView clubId="TEST" tableNumber={1} />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Seat 1 Jane, East/i }),
+    );
+    expect(screen.getByText(/Tap another seat to swap places/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Seat 2 Bob, South/i }));
 
     await waitFor(() =>
       expect(tableActionMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          action: 'swap',
-          playerId: 'jane',
-          otherPlayerId: 'bob',
+          action: "swap",
+          playerId: "jane",
+          otherPlayerId: "bob",
         }),
       ),
-    )
-  })
+    );
+    expect(
+      await screen.findByRole("button", {
+        name: /Seat 1 Bob, East, starter seat/i,
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /Seat 2 Jane, South/i }),
+    ).toBeTruthy();
+    expect(screen.getByText(/Starter Seat 1/i)).toBeTruthy();
+  });
 
-  it('keeps all four wind seats visible when the dealer was moved off the table', async () => {
-    window.localStorage.setItem('focused-table-layout', 'wind')
+  it("keeps all four wind seats visible when the dealer was moved off the table", async () => {
+    window.localStorage.setItem("focused-table-layout", "wind");
     const driftedSession = {
       ...session,
-      tables: { '1': ['bob', 'jeff', 'matt', 'amy'] },
+      tables: { "1": ["bob", "jeff", "matt", "amy"] },
       tableWinds: {
-        '1': {
+        "1": {
           ...windState,
-          dealerPlayerId: 'jane',
-          seatOrder: ['jane', 'bob', 'jeff', 'matt'],
+          dealerPlayerId: "jane",
+          seatOrder: ["jane", "bob", "jeff", "matt"],
         },
       },
-    }
+    };
     const healedSession = {
       ...driftedSession,
       tableWinds: {
-        '1': {
-          roundWind: 'east' as const,
-          dealerPlayerId: 'amy',
-          roundStarterPlayerId: 'amy',
+        "1": {
+          roundWind: "east" as const,
+          dealerPlayerId: "amy",
+          roundStarterSeatIndex: 0,
           handNumber: 1,
-          seatOrder: ['bob', 'jeff', 'matt', 'amy'],
+          seatOrder: ["amy", "bob", "jeff", "matt"],
         },
       },
       revision: 2,
-    }
+    };
     const playersWithAmy = [
       ...players,
-      { id: 'amy', displayName: 'Amy', icon: '🌸', authUid: null },
-    ]
-    tableActionMock.mockImplementation((body: { action: string; reconcile?: boolean }) => {
-      if (body.action === 'context') {
-        return Promise.resolve({
-          ...context,
-          players: playersWithAmy,
-          session: driftedSession,
-        })
-      }
-      if (body.action === 'setTableWinds' && body.reconcile) {
-        return Promise.resolve({ status: 'ok', session: healedSession })
-      }
-      return Promise.resolve({ status: 'ok', session: driftedSession })
-    })
+      { id: "amy", displayName: "Amy", icon: "🌸", authUid: null },
+    ];
+    tableActionMock.mockImplementation(
+      (body: { action: string; reconcile?: boolean }) => {
+        if (body.action === "context") {
+          return Promise.resolve({
+            ...context,
+            players: playersWithAmy,
+            session: driftedSession,
+          });
+        }
+        if (body.action === "setTableWinds" && body.reconcile) {
+          return Promise.resolve({ status: "ok", session: healedSession });
+        }
+        return Promise.resolve({ status: "ok", session: driftedSession });
+      },
+    );
 
-    render(<FocusedTableView clubId="TEST" tableNumber={1} />)
+    render(<FocusedTableView clubId="TEST" tableNumber={1} />);
 
-    expect(await screen.findByRole('button', { name: /Seat 1 Bob/i })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Seat 2 Jeff/i })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Seat 3 Matt/i })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Seat 4 Amy/i })).toBeTruthy()
+    expect(
+      await screen.findByRole("button", { name: /Seat 1 Bob/i }),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Seat 2 Jeff/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Seat 3 Matt/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Seat 4 Amy/i })).toBeTruthy();
     await waitFor(() =>
       expect(tableActionMock).toHaveBeenCalledWith(
-        expect.objectContaining({ action: 'setTableWinds', reconcile: true }),
+        expect.objectContaining({ action: "setTableWinds", reconcile: true }),
       ),
-    )
-  })
-})
+    );
+  });
+});

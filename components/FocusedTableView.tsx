@@ -159,6 +159,14 @@ export default function FocusedTableView({
   }, []);
 
   const acceptServerSession = useCallback((next: TableSession | null) => {
+    if (
+      next &&
+      confirmedSessionRef.current &&
+      next.id === confirmedSessionRef.current.id &&
+      Number(next.revision ?? 0) < Number(confirmedSessionRef.current.revision ?? 0)
+    ) {
+      return;
+    }
     confirmedSessionRef.current = next;
     if (pendingTableMutationsRef.current === 0) showSession(next);
   }, [showSession]);
@@ -168,8 +176,21 @@ export default function FocusedTableView({
 
   const ingestRemoteSession = useCallback(
     (next: TableSession | null) => {
+      if (
+        next &&
+        confirmedSessionRef.current &&
+        next.id === confirmedSessionRef.current.id &&
+        Number(next.revision ?? 0) < Number(confirmedSessionRef.current.revision ?? 0)
+      ) {
+        return;
+      }
       const key = String(tableNumber);
       const previous = sessionRef.current;
+      const prevSeats = previous?.tables?.[key] ?? [];
+      const nextSeats = next?.tables?.[key] ?? [];
+      const rosterChanged =
+        prevSeats.length !== nextSeats.length ||
+        prevSeats.some((id, index) => id !== nextSeats[index]);
       const prevWind = previous?.tableWinds?.[key];
       const nextWind = next?.tableWinds?.[key];
       const dealerRotated =
@@ -181,9 +202,31 @@ export default function FocusedTableView({
           prevWind!.handNumber !== nextWind!.handNumber ||
           prevWind!.roundWind !== nextWind!.roundWind);
 
+      // Table shuffle / dashboard reseat: apply immediately. Deferring behind the
+      // dealer-orbit animation leaves other devices stuck on the old lineup.
+      if (rosterChanged) {
+        pendingWindRef.current = null;
+        pendingCelebrationRef.current = null;
+        pendingPostRotateSessionRef.current = null;
+        if (windAnimatingRef.current) {
+          windAnimatingRef.current = false;
+          setWindAnimating(false);
+        }
+        acceptServerSession(next);
+        setScoresTick((tick) => tick + 1);
+        return;
+      }
+
       if (windAnimatingRef.current) {
-        confirmedSessionRef.current = next;
-        if (next) pendingPostRotateSessionRef.current = next;
+        if (
+          !next ||
+          !confirmedSessionRef.current ||
+          next.id !== confirmedSessionRef.current.id ||
+          Number(next.revision ?? 0) >= Number(confirmedSessionRef.current.revision ?? 0)
+        ) {
+          confirmedSessionRef.current = next;
+          if (next) pendingPostRotateSessionRef.current = next;
+        }
         if (windProgressed || !prevWind) setScoresTick((tick) => tick + 1);
         return;
       }
@@ -194,8 +237,14 @@ export default function FocusedTableView({
         previous &&
         next
       ) {
-        confirmedSessionRef.current = next;
-        pendingPostRotateSessionRef.current = next;
+        if (
+          !confirmedSessionRef.current ||
+          next.id !== confirmedSessionRef.current.id ||
+          Number(next.revision ?? 0) >= Number(confirmedSessionRef.current.revision ?? 0)
+        ) {
+          confirmedSessionRef.current = next;
+          pendingPostRotateSessionRef.current = next;
+        }
         windAnimatingRef.current = true;
         setWindAnimating(true);
         setScoresTick((tick) => tick + 1);
@@ -367,7 +416,7 @@ export default function FocusedTableView({
                 tables: next.tables,
                 sideline: next.sideline,
                 tableWinds: next.tableWinds ?? {},
-                revision: 0,
+                revision: Number(next.revision ?? 0),
               }
             : null,
         ),
@@ -438,6 +487,9 @@ export default function FocusedTableView({
           : (occupants[0] ?? windState.dealerPlayerId),
       ).displayName
     : null;
+  const starterSeatLabel = windState
+    ? `Seat ${windState.roundStarterSeatIndex + 1}`
+    : null;
   const starterOpen =
     layoutMode === "wind" &&
     occupants.length === 4 &&
@@ -468,7 +520,7 @@ export default function FocusedTableView({
     if (!healed) return;
     if (
       healed.dealerPlayerId === windState.dealerPlayerId &&
-      healed.roundStarterPlayerId === windState.roundStarterPlayerId &&
+      healed.roundStarterSeatIndex === windState.roundStarterSeatIndex &&
       healed.handNumber === windState.handNumber &&
       healed.roundWind === windState.roundWind &&
       healed.seatOrder.every((id, index) => id === windState.seatOrder[index])
@@ -979,8 +1031,33 @@ export default function FocusedTableView({
   if (loading || !guestReady || !canAccess || !context)
     return (
       <main className="flex min-h-dvh items-center justify-center p-6">
-        <div className="rounded-lg border bg-white p-6 font-bold">
-          Loading focused table…
+        <div className="max-w-sm rounded-lg border bg-white p-6 text-center">
+          {error ? (
+            <>
+              <p className="font-black text-[rgb(var(--ink))]">
+                Unable to load Table {tableNumber}
+              </p>
+              <p className="mt-2 text-sm text-[rgb(var(--muted))]">{error}</p>
+              <button
+                type="button"
+                className="mt-4 min-h-11 rounded-lg bg-[rgb(var(--bamboo))] px-4 text-sm font-bold text-white"
+                onClick={() => {
+                  setError(null);
+                  void loadContext().catch((nextError) =>
+                    setError(
+                      nextError instanceof Error
+                        ? nextError.message
+                        : "Unable to load table.",
+                    ),
+                  );
+                }}
+              >
+                Try again
+              </button>
+            </>
+          ) : (
+            <p className="font-bold">Loading focused table…</p>
+          )}
         </div>
       </main>
     );
@@ -1115,6 +1192,11 @@ export default function FocusedTableView({
                       {WIND_LABELS[windState.roundWind].toUpperCase()} ROUND
                     </button>
                     <span className="focused-wind-hand">Hand {windState.handNumber}</span>
+                    {starterSeatLabel ? (
+                      <span className="focused-wind-starter">
+                        Starter {starterSeatLabel}
+                      </span>
+                    ) : null}
                   </div>
                   <div className="focused-wind-status-dealer">
                     <span className="focused-wind-status-label">Dealer Seat</span>
