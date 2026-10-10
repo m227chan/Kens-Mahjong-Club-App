@@ -20,6 +20,7 @@ export type WindSeatCard = {
   wind: Wind
   score: number
   isDealer: boolean
+  isRoundStarter: boolean
 }
 
 export function buildWindSeatCards(
@@ -39,6 +40,7 @@ export function buildWindSeatCards(
     wind: winds[playerId] ?? 'east',
     score: scoresByPlayer[playerId] ?? 0,
     isDealer: playerId === effectiveDealer,
+    isRoundStarter: seatIndex === windState.roundStarterSeatIndex,
   }))
 }
 
@@ -113,12 +115,15 @@ export default function FocusedWindLayout({
             <button
               key={card.playerId}
               type="button"
-              className={`focused-wind-seat focused-wind-seat--${position}${card.isDealer ? ' is-dealer' : ''}${selectedPlayerId === card.playerId ? ' is-selected' : ''}`}
+              className={`focused-wind-seat focused-wind-seat--${position}${card.isDealer ? ' is-dealer' : ''}${card.isRoundStarter ? ' is-starter' : ''}${selectedPlayerId === card.playerId ? ' is-selected' : ''}`}
               onClick={() => onSeatClick(card.playerId, card.seatIndex)}
               aria-pressed={selectedPlayerId === card.playerId}
-              aria-label={`Seat ${card.seatIndex + 1} ${card.player?.displayName ?? 'Empty'}, ${WIND_LABELS[card.wind]}`}
+              aria-label={`Seat ${card.seatIndex + 1} ${card.player?.displayName ?? 'Empty'}, ${WIND_LABELS[card.wind]}${card.isRoundStarter ? ', starter seat' : ''}`}
             >
               <span className="focused-wind-seat-inner">
+                {card.isRoundStarter ? (
+                  <span className="focused-wind-starter-badge">Starter seat</span>
+                ) : null}
                 <span className="focused-wind-tile focused-wind-tile--art" aria-hidden="true">
                   <StaticMahjongTile id={card.wind} size={40} />
                 </span>

@@ -30,7 +30,7 @@ const FEATURES: {
     kicker: '02 · Fan math',
     title: 'Calculate fan the way the handbook describes it.',
     body: 'Build the finished hand tile by tile. Melds group automatically, mark open or concealed, and watch patterns stack under your club’s house rules—or use Hand helper mid-hand.',
-    beats: ['Thirteen Orphans', 'Detect limit', 'Apply fan'],
+    beats: ['Detect special hands', 'Detect limit', 'Apply fan'],
     videoSrc: '/feature-reels/calculator.mp4?v=3',
   },
   {

@@ -16,7 +16,7 @@ function getPool() {
   if (!connectionString) throw new Error('APP_DATABASE_URL is not configured.')
   // A small per-instance pool is enough for short game transactions and avoids
   // multiplying database connections when the serverless app scales out.
-  pool = new Pool({ connectionString, max: 2, connectionTimeoutMillis: 10_000, idleTimeoutMillis: 30_000, ssl: { rejectUnauthorized: false } })
+  pool = new Pool({ connectionString, max: 4, connectionTimeoutMillis: 10_000, idleTimeoutMillis: 30_000, ssl: { rejectUnauthorized: false } })
   return pool
 }
 

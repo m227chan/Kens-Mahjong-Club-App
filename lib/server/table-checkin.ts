@@ -14,6 +14,7 @@ import {
   isTableWindState,
   nextWindState,
   parseTableWindsMap,
+  seatReplacementOrder,
   type TableWindState,
   type WindOutcome,
   WINDS,
@@ -36,7 +37,34 @@ type MutationAction = 'checkIn' | 'seat' | 'remove' | 'clear' | 'clearAll' | 'sw
 
 const rowId = () => randomBytes(10).toString('hex')
 const STALE_SWEEP_INTERVAL_MS = 60_000
+const SESSION_LOCK_TIMEOUT = '3s'
 let lastStaleSweepAt = 0
+
+/** Fail fast when another session writer is mid-transaction. */
+async function acquireSessionLock(db: PoolClient, clubId: string) {
+  await db.query('select set_config($1, $2, true)', [
+    'lock_timeout',
+    SESSION_LOCK_TIMEOUT,
+  ])
+  try {
+    await db.query('select pg_advisory_xact_lock(hashtext($1))', [
+      `session:${clubId}`,
+    ])
+  } catch (error) {
+    const message = error instanceof Error ? error.message : ''
+    if (/lock timeout|canceling statement due to lock timeout/i.test(message)) {
+      throw new Error(
+        'This table is busy with another update. Wait a moment and try again.',
+      )
+    }
+    if (/statement timeout/i.test(message)) {
+      throw new Error(
+        'This table is busy with another update. Wait a moment and try again.',
+      )
+    }
+    throw error
+  }
+}
 
 function sessionPayload(row: SessionRow | undefined) {
   if (!row) return null
@@ -313,7 +341,9 @@ export async function getTableContext(
   clubId: string,
   tableNumber: number,
 ) {
-  await clearStaleTables(db)
+  // Do not sweep stale tables here — clear_stale_session_tables() can take
+  // FOR UPDATE on the session row, and context polls would hold that lock for
+  // the whole read transaction, blocking seat/swap mutations (4th player adds).
   const normalizedClub = clubId.trim().toUpperCase()
   const normalizedTable = Math.min(99, Math.max(1, Math.floor(tableNumber || 1)))
   const authCaller = caller as AuthCaller
@@ -569,10 +599,10 @@ export async function mutateTable(
         : 'You are not an active member of this club.',
     )
   }
-  await db.query('select pg_advisory_xact_lock(hashtext($1))', [
-    `session:${clubId}`,
-  ])
+  // Sweep before taking the session lock so idle-table cleanup cannot extend
+  // the critical section that seat/swap callers wait on.
   await clearStaleTables(db)
+  await acquireSessionLock(db, clubId)
   let row = (
     await db.query(
       'select * from sessions where club_id=$1 and is_active for update',
@@ -708,7 +738,7 @@ export async function mutateTable(
     if (!state.player_available && input.action !== 'checkIn')
       throw new Error('That roster player is unavailable.')
     const key = String(targetTable)
-    const target = tables[key] ?? []
+    const target = (tables[key] ?? []).filter(Boolean)
     const alreadyAtTarget = target.includes(playerId)
     if (isGuest && !alreadyAtTarget) {
       const seatedElsewhere = Object.entries(tables).some(
@@ -735,7 +765,17 @@ export async function mutateTable(
       tables[tableKey] = tables[tableKey].filter((id) => id !== playerId)
     sideline = sideline.filter((id) => id !== playerId)
     const wasEmpty = tables[key].length === 0
-    tables[key] = [...tables[key], playerId].slice(0, 4)
+    const windSnapshot = parseTableWindsMap(row.table_winds)[key]
+    const priorSeats =
+      !alreadyAtTarget && input.replacePlayerId && target.includes(input.replacePlayerId)
+        ? target
+        : windSnapshot?.seatOrder
+    tables[key] = seatReplacementOrder(
+      windSnapshot?.seatOrder,
+      tables[key] ?? [],
+      playerId,
+      priorSeats,
+    )
     if (!participants.includes(playerId)) participants.push(playerId)
     await markOccupied(db, String(row.id), targetTable, wasEmpty)
   }
@@ -792,9 +832,7 @@ async function lockActiveSession(
   if (isGuest) assertGuestTableScope(authCaller, clubId, targetTable)
   else await requireMember(db, clubId, authCaller.kind === 'member' ? authCaller.uid : (caller as Caller).uid)
 
-  await db.query('select pg_advisory_xact_lock(hashtext($1))', [
-    `session:${clubId}`,
-  ])
+  await acquireSessionLock(db, clubId)
   const row = (
     await db.query(
       'select * from sessions where club_id=$1 and is_active for update',

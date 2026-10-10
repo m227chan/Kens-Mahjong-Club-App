@@ -1,12 +1,13 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { createGameMock, playMock, tableActionMock, loadAllGamesMock, subscribePlayerStatsMock } = vi.hoisted(() => ({
+const { createGameMock, playMock, tableActionMock, loadAllGamesMock, subscribePlayerStatsMock, subscribeActiveSessionMock } = vi.hoisted(() => ({
   createGameMock: vi.fn().mockResolvedValue({ status: 'synced' }),
   playMock: vi.fn(),
   tableActionMock: vi.fn(),
   loadAllGamesMock: vi.fn().mockResolvedValue([]),
   subscribePlayerStatsMock: vi.fn(() => () => undefined),
+  subscribeActiveSessionMock: vi.fn(() => () => undefined),
 }))
 
 const players = [
@@ -19,7 +20,7 @@ const players = [
 const windState = {
   roundWind: 'east' as const,
   dealerPlayerId: 'jane',
-  roundStarterPlayerId: 'jane',
+  roundStarterSeatIndex: 0,
   handNumber: 1,
   seatOrder: players.map((player) => player.id),
 }
@@ -68,7 +69,7 @@ vi.mock('@/contexts/GameSyncContext', () => ({
 }))
 vi.mock('@/lib/data', () => ({
   requestToJoinClub: vi.fn(),
-  subscribeActiveSession: vi.fn(() => () => undefined),
+  subscribeActiveSession: subscribeActiveSessionMock,
   subscribePlayers: vi.fn(() => () => undefined),
   subscribePlayerStats: subscribePlayerStatsMock,
   subscribeScoringRules: vi.fn(() => () => undefined),
@@ -120,6 +121,8 @@ describe('focused table scoring', () => {
     loadAllGamesMock.mockClear()
     subscribePlayerStatsMock.mockClear()
     subscribePlayerStatsMock.mockImplementation(() => () => undefined)
+    subscribeActiveSessionMock.mockReset()
+    subscribeActiveSessionMock.mockImplementation(() => () => undefined)
     window.localStorage.clear()
   })
 
@@ -203,7 +206,7 @@ describe('focused table scoring', () => {
         '1': {
           roundWind: 'south' as const,
           dealerPlayerId: 'amy',
-          roundStarterPlayerId: 'amy',
+          roundStarterSeatIndex: 0,
           handNumber: 3,
           seatOrder: ['amy', 'bob', 'jeff', 'matt'],
         },
@@ -282,6 +285,65 @@ describe('focused table scoring', () => {
     expect(await screen.findByRole('button', { name: /Table wind South\. Adjust winds/i })).toBeTruthy()
   })
 
+  it('applies a remote table shuffle immediately instead of holding the old roster', async () => {
+    window.localStorage.setItem('focused-table-layout', 'wind')
+    const extraPlayers = [
+      ...players,
+      { id: 'amy', displayName: 'Amy', icon: '🌸', authUid: null },
+      { id: 'sam', displayName: 'Sam', icon: '🎯', authUid: null },
+    ]
+    let pushSession: ((next: {
+      id: string
+      seasonNumber: number
+      tableCount: number
+      participants: string[]
+      tables: Record<string, string[]>
+      sideline: string[]
+      tableWinds: typeof session.tableWinds
+    }) => void) | null = null
+
+    subscribeActiveSessionMock.mockImplementation((_clubId, _season, callback) => {
+      pushSession = callback
+      return () => undefined
+    })
+    tableActionMock.mockImplementation((body: { action: string }) => {
+      if (body.action === 'context') {
+        return Promise.resolve({
+          ...context,
+          players: extraPlayers,
+        })
+      }
+      return Promise.resolve({ status: 'ok', session })
+    })
+
+    render(<FocusedTableView clubId="TEST" tableNumber={1} />)
+    expect(await screen.findByRole('button', { name: /Seat 1 Jane, East/i })).toBeTruthy()
+
+    await waitFor(() => expect(pushSession).toBeTruthy())
+    pushSession?.({
+      id: 'session-1',
+      seasonNumber: 1,
+      tableCount: 1,
+      participants: extraPlayers.map((player) => player.id),
+      tables: { '1': ['amy', 'sam', 'jeff', 'matt'] },
+      sideline: ['jane', 'bob'],
+      tableWinds: {
+        '1': {
+          roundWind: 'east' as const,
+          dealerPlayerId: 'amy',
+          roundStarterSeatIndex: 0,
+          handNumber: 1,
+          seatOrder: ['amy', 'sam', 'jeff', 'matt'],
+        },
+      },
+    })
+
+    expect(await screen.findByRole('button', { name: /Seat 1 Amy, East/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Seat 2 Sam/i })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Jane/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Bob/i })).toBeNull()
+  })
+
   it('lets players rearrange seats by tapping two players', async () => {
     window.localStorage.setItem('focused-table-layout', 'wind')
     tableActionMock.mockImplementation((body: {
@@ -299,6 +361,8 @@ describe('focused table scoring', () => {
             tableWinds: {
               '1': {
                 ...windState,
+                dealerPlayerId: 'bob',
+                roundStarterSeatIndex: 0,
                 seatOrder: ['bob', 'jane', 'jeff', 'matt'],
               },
             },
@@ -324,6 +388,9 @@ describe('focused table scoring', () => {
         }),
       ),
     )
+    expect(await screen.findByRole('button', { name: /Seat 1 Bob, East, starter seat/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Seat 2 Jane, South/i })).toBeTruthy()
+    expect(screen.getByText(/Starter Seat 1/i)).toBeTruthy()
   })
 
   it('keeps all four wind seats visible when the dealer was moved off the table', async () => {
@@ -345,9 +412,9 @@ describe('focused table scoring', () => {
         '1': {
           roundWind: 'east' as const,
           dealerPlayerId: 'amy',
-          roundStarterPlayerId: 'amy',
+          roundStarterSeatIndex: 0,
           handNumber: 1,
-          seatOrder: ['bob', 'jeff', 'matt', 'amy'],
+          seatOrder: ['amy', 'bob', 'jeff', 'matt'],
         },
       },
       revision: 2,

@@ -152,6 +152,8 @@ export interface SessionDoc {
   sideline: string[]
   /** Per-table wind / dealer / hand state keyed by table id ("1", "2", …). */
   tableWinds?: Record<string, TableWindState>
+  /** Monotonic session layout version — used to ignore stale realtime snapshots. */
+  revision?: number
   closedAt?: Timestamp | null
 }
 
