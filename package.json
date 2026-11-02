@@ -25,18 +25,18 @@
     "record:feature-reels": "node scripts/record-login-feature-reels.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.117.2",
+    "@supabase/supabase-js": "^2.118.0",
     "embla-carousel-react": "^8.6.0",
     "firebase": "^12.19.0",
     "firebase-admin": "^14.5.0",
-    "next": "^16.3.8",
+    "next": "^16.4.3",
     "openskill": "^5.0.1",
     "pg": "^8.23.1",
     "qrcode": "^1.5.4",
     "react": "^18",
     "react-dom": "^18",
     "recharts": "^2.12.0",
-    "vis-network": "^10.1.2"
+    "vis-network": "^10.1.4"
   },
   "overrides": {
     "baseline-browser-mapping": "2.11.22",
